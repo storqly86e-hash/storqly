@@ -1,10 +1,12 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useStoreEditor } from '@/lib/store'
 import { StoreRenderer } from '@/components/store-renderer'
 import ChatPanel from '@/components/chat-panel'
 import VisualEditor from '@/components/visual-editor'
+import type { Store } from '@/lib/store-schema'
 import {
   Sparkles,
   Layers,
@@ -22,6 +24,9 @@ import {
   AlertTriangle,
   X,
   RotateCcw,
+  Check,
+  Copy,
+  ExternalLink,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -437,12 +442,33 @@ function ResizeHandle({ direction }: { direction: 'left' | 'right' }) {
   )
 }
 
+// ─── Preview Panel (direct Zustand subscription for reliable re-renders) ──
+// This component subscribes to Zustand independently so the preview always
+// re-renders when the store changes, regardless of PanelGroup/Panel
+// internal render behavior.
+
+function PreviewPanel() {
+  const store = useStoreEditor((s) => s.store)
+  const selectedSectionId = useStoreEditor((s) => s.selectedSectionId)
+  const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
+
+  if (!store) return null
+
+  return (
+    <div className="h-full overflow-auto bg-zinc-100">
+      <StoreRenderer
+        store={store}
+        selectedSectionId={selectedSectionId}
+        onSelectSection={setSelectedSectionId}
+      />
+    </div>
+  )
+}
+
 // ─── Editor View ─────────────────────────────────────────────────────
 
 function EditorView() {
   const store = useStoreEditor((s) => s.store)
-  const selectedSectionId = useStoreEditor((s) => s.selectedSectionId)
-  const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
   const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
   const [showLeft, setShowLeft] = useState(true)
   const [showRight, setShowRight] = useState(true)
@@ -477,13 +503,7 @@ function EditorView() {
           {showLeft && showRight && <ResizeHandle direction="left" />}
 
           <Panel id="center" order={2} defaultSize={showLeft && showRight ? 48 : showLeft || showRight ? 72 : 100} minSize={30}>
-            <div className="h-full overflow-auto bg-zinc-100">
-              <StoreRenderer
-                store={store}
-                selectedSectionId={selectedSectionId}
-                onSelectSection={setSelectedSectionId}
-              />
-            </div>
+            <PreviewPanel />
           </Panel>
 
           {showLeft && showRight && <ResizeHandle direction="right" />}
@@ -559,6 +579,8 @@ function EditorToolbar({
   const isPublished = useStoreEditor((s) => s.isPublished)
   const setIsPublished = useStoreEditor((s) => s.setIsPublished)
   const [isSaving, setIsSaving] = useState(false)
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const handleBack = () => {
     reset()
@@ -593,8 +615,13 @@ function EditorToolbar({
       })
       if (!res.ok) throw new Error('Publish failed')
       const data = await res.json()
+      const slug = data.slug
       setIsPublished(true)
-      toast.success(`Published! Live at ${data.slug}.storqly.com`)
+      // Build a real viewable URL using the current origin
+      const baseUrl = window.location.origin
+      const viewUrl = `${baseUrl}/?store=${slug}`
+      setPublishedUrl(viewUrl)
+      toast.success('Store published successfully!')
     } catch {
       toast.error('Failed to publish store')
     } finally {
@@ -602,70 +629,268 @@ function EditorToolbar({
     }
   }
 
+  const handleCopyUrl = useCallback(async () => {
+    if (!publishedUrl) return
+    try {
+      await navigator.clipboard.writeText(publishedUrl)
+      setCopied(true)
+      toast.success('URL copied to clipboard!')
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Fallback for older browsers
+      const textarea = document.createElement('textarea')
+      textarea.value = publishedUrl
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      document.body.removeChild(textarea)
+      setCopied(true)
+      toast.success('URL copied to clipboard!')
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }, [publishedUrl])
+
   return (
-    <div className="flex h-12 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={handleBack}
-          aria-label="Back to home"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="h-5 w-px bg-zinc-800" />
-        <Button
-          variant={showLeft ? 'secondary' : 'ghost'}
-          size="sm"
-          className={`h-8 gap-1.5 ${showLeft ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
-          onClick={() => onToggleLeft((v) => !v)}
-        >
-          <Layers className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Sections</span>
-        </Button>
-        <Button
-          variant={showRight ? 'secondary' : 'ghost'}
-          size="sm"
-          className={`h-8 gap-1.5 ${showRight ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
-          onClick={() => onToggleRight((v) => !v)}
-        >
-          <MessageSquare className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Chat</span>
-        </Button>
+    <>
+      <div className="flex h-12 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            onClick={handleBack}
+            aria-label="Back to home"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="h-5 w-px bg-zinc-800" />
+          <Button
+            variant={showLeft ? 'secondary' : 'ghost'}
+            size="sm"
+            className={`h-8 gap-1.5 ${showLeft ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+            onClick={() => onToggleLeft((v) => !v)}
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Sections</span>
+          </Button>
+          <Button
+            variant={showRight ? 'secondary' : 'ghost'}
+            size="sm"
+            className={`h-8 gap-1.5 ${showRight ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+            onClick={() => onToggleRight((v) => !v)}
+          >
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Chat</span>
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          {publishedUrl && (
+            <div className="mr-2 hidden sm:flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1">
+              <Check className="h-3 w-3 text-emerald-400" />
+              <span className="max-w-[180px] truncate text-xs font-medium text-emerald-300">
+                {publishedUrl}
+              </span>
+              <button
+                onClick={handleCopyUrl}
+                className="ml-1 rounded p-0.5 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors"
+                aria-label="Copy URL"
+              >
+                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+              </button>
+              <a
+                href={publishedUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded p-0.5 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors"
+                aria-label="Open published store"
+              >
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            </div>
+          )}
+          <span className="mr-2 text-xs font-medium text-zinc-500 hidden md:inline truncate max-w-[200px]">
+            {store?.name || 'Untitled Store'}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            <Save className={`h-3.5 w-3.5 ${isSaving ? 'animate-pulse' : ''}`} />
+            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
+            onClick={handlePublish}
+            disabled={isPublishing}
+          >
+            {isPublishing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : isPublished ? (
+              <Eye className="h-3.5 w-3.5" />
+            ) : (
+              <Globe className="h-3.5 w-3.5" />
+            )}
+            <span className="hidden sm:inline">{isPublishing ? 'Publishing...' : isPublished ? 'Published' : 'Publish'}</span>
+          </Button>
+        </div>
       </div>
 
-      <div className="flex items-center gap-1.5">
-        <span className="mr-2 text-xs font-medium text-zinc-500 hidden md:inline truncate max-w-[200px]">
-          {store?.name || 'Untitled Store'}
-        </span>
+      {/* Publish Success Dialog */}
+      <AnimatePresence>
+        {publishedUrl && !isPublishing && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => setPublishedUrl(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="mx-4 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Success icon */}
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15">
+                <Check className="h-7 w-7 text-emerald-400" />
+              </div>
+
+              <h3 className="mb-1 text-center text-lg font-semibold text-zinc-100">
+                Store Published!
+              </h3>
+              <p className="mb-5 text-center text-sm text-zinc-400">
+                Your store is now live and ready to share.
+              </p>
+
+              {/* URL Display */}
+              <div className="mb-5 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-3">
+                <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-zinc-500">Live URL</p>
+                <div className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1 truncate rounded-lg bg-zinc-900 px-3 py-2 font-mono text-sm text-emerald-300">
+                    {publishedUrl}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+                    onClick={handleCopyUrl}
+                    aria-label="Copy URL"
+                  >
+                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                <Button
+                  variant="ghost"
+                  className="flex-1 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                  onClick={() => setPublishedUrl(null)}
+                >
+                  Close
+                </Button>
+                <Button
+                  className="flex-1 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
+                  onClick={() => {
+                    window.open(publishedUrl, '_blank')
+                  }}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  View Live Store
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+  )
+}
+
+// ─── Published Store Viewer (read-only, shown via ?store=slug) ────────
+
+function PublishedStoreViewer({ slug }: { slug: string }) {
+  const [store, setStore] = useState<Store | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const res = await fetch(`/api/store/lookup?slug=${encodeURIComponent(slug)}`)
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}))
+          throw new Error(data.error || `Store not found (${res.status})`)
+        }
+        const data = await res.json()
+        if (!cancelled) setStore(data.store)
+      } catch (err: unknown) {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load store')
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [slug])
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-white">
+        <div className="text-center">
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#a855f7]" />
+          <p className="mt-3 text-sm text-gray-500">Loading store…</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !store) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6">
+        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+          <AlertCircle className="h-8 w-8 text-red-400" />
+        </div>
+        <h2 className="mb-2 text-xl font-semibold text-gray-900">Store Not Found</h2>
+        <p className="mb-6 max-w-sm text-center text-sm text-gray-500">
+          {error || 'This store could not be found or has not been published.'}
+        </p>
         <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={handleSave}
-          disabled={isSaving}
+          variant="outline"
+          onClick={() => window.location.href = '/'}
+          className="gap-2"
         >
-          <Save className={`h-3.5 w-3.5 ${isSaving ? 'animate-pulse' : ''}`} />
-          <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
-        </Button>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
-          onClick={handlePublish}
-          disabled={isPublishing}
-        >
-          {isPublishing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : isPublished ? (
-            <Eye className="h-3.5 w-3.5" />
-          ) : (
-            <Globe className="h-3.5 w-3.5" />
-          )}
-          <span className="hidden sm:inline">{isPublishing ? 'Publishing...' : isPublished ? 'Published' : 'Publish'}</span>
+          <ArrowLeft className="h-4 w-4" />
+          Back to Storqly
         </Button>
       </div>
-    </div>
+    )
+  }
+
+  return (
+    <>
+      <StoreRenderer store={store} />
+      {/* Minimal footer for published stores */}
+      <div className="fixed bottom-3 right-3 z-40">
+        <a
+          href="/"
+          className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-500 shadow-sm backdrop-blur transition-colors hover:border-gray-300 hover:text-gray-700"
+        >
+          <Sparkles className="h-3 w-3" />
+          Built with Storqly
+        </a>
+      </div>
+    </>
   )
 }
 
@@ -673,6 +898,17 @@ function EditorToolbar({
 
 export default function Home() {
   const view = useStoreEditor((s) => s.view)
+  const searchParams = useSearchParams()
+  const storeSlug = searchParams.get('store')
+
+  // If ?store=slug is present, show the published store viewer (read-only)
+  if (storeSlug) {
+    return (
+      <main className="min-h-screen bg-white">
+        <PublishedStoreViewer slug={storeSlug} />
+      </main>
+    )
+  }
 
   return (
     <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>

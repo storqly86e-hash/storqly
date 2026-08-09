@@ -315,3 +315,57 @@ Stage Summary:
 - Zero silent fallbacks
 - Zero HTTP errors (no 502, no 500)
 - All 4 fixes implemented and verified
+
+---
+Task ID: EDIT-PUBLISH-FIX
+Agent: Main
+Task: Fix two critical user-reported issues: (1) edits not applying in preview, (2) publish returning no URL
+
+Work Log:
+- Investigated Issue 1 (edits not applying to preview):
+  - Read all source files: store.ts, visual-editor/index.tsx, chat-panel/index.tsx, store-renderer/index.tsx, page.tsx
+  - Verified react-resizable-panels v3 is NOT memoized (Panel uses forwardRef only, no React.memo)
+  - Verified Zustand v5 subscriptions use useSyncExternalStore (should trigger independent re-renders)
+  - Browser-tested visual edit: changed Hero headline → preview updated immediately ✅
+  - Browser-tested chat edit: "Change the hero headline" → preview updated to "New Hero Headline" ✅
+  - Browser-tested chat edit: "change the hero background color to red" → hero bg became rgb(255,0,0) ✅
+  - Could NOT reproduce the reported issue — both paths work correctly
+  - Applied defensive fix: created PreviewPanel component with direct Zustand subscription inside Panel
+
+- Investigated Issue 2 (publish returning no URL):
+  - CONFIRMED: Publish API returns 200 with {slug, publishedAt}, but frontend only showed a temporary toast
+  - No persistent URL display, no copy button, no way to view published store
+  - The fake subdomain URL (slug.storqly.com) doesn't exist
+
+Fix 1 - Preview Panel Safety:
+- Created PreviewPanel component in page.tsx that subscribes directly to Zustand (store, selectedSectionId, setSelectedSectionId)
+- Replaced inline StoreRenderer in Panel center with <PreviewPanel />
+- This ensures preview always re-renders when store changes, regardless of PanelGroup/Panel render behavior
+
+Fix 2 - Complete Publish Flow:
+- Created GET /api/store/lookup?slug=xxx route to fetch published store from DB
+- Created PublishedStoreViewer component (read-only store view with loading/error states)
+- Added ?store=slug query parameter support to Home component
+- Redesigned EditorToolbar publish flow:
+  - After publish: shows modal dialog with "Store Published!" heading, live URL, copy button, "View Live Store" button
+  - Toolbar shows persistent green URL badge with copy + open link icons
+  - URL format: {origin}/?store={slug} (actually viewable, not a fake subdomain)
+  - Copy button with clipboard API + fallback for older browsers
+  - "View Live Store" opens published store in new tab
+- Published store view: full StoreRenderer in read-only mode, "Built with Storqly" badge, "Back to Storqly" link
+
+Browser Verification (full end-to-end):
+1. Generated "Green Leaf" plant shop (AI, ~30s) ✅
+2. Visual edit: changed Hero headline → preview updated immediately ✅
+3. Chat edits: suggestion chip and custom message both updated preview ✅
+4. Publish: dialog appeared with URL, Copy URL button, View Live Store button ✅
+5. View Live Store: opened ?store=green-leaf, full store rendered read-only ✅
+6. Built with Storqly link → navigated back to landing page ✅
+7. Zero console errors throughout ✅
+8. Zero lint errors ✅
+
+Stage Summary:
+- Issue 1 (edits not applying): Could NOT reproduce, applied defensive fix (direct Zustand subscription in preview panel)
+- Issue 2 (publish no URL): FIXED — full publish flow with modal dialog, persistent URL badge, copy button, and live store viewer
+- Published stores are viewable at /?store={slug} in read-only mode
+- New API endpoint: GET /api/store/lookup?slug=xxx
