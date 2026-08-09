@@ -158,10 +158,21 @@ export async function POST(req: NextRequest) {
     ], { systemPrompt: SYSTEM_PROMPT });
 
     if (result.success && result.content) {
+      // TEMP DIAGNOSTIC: log raw content around parse failure position
       const parsed = tryParseStore(result.content);
       if (parsed.store) {
         console.log(`[Store Generate] AI success on attempt ${result.attempts}. Store: ${parsed.store.name}`);
         return NextResponse.json({ store: parsed.store });
+      }
+      // Log the raw AI content around the failure position for diagnosis
+      const posMatch = parsed.error?.match(/position (\d+)/);
+      if (posMatch) {
+        const pos = parseInt(posMatch[1], 10);
+        const start = Math.max(0, pos - 80);
+        const end = Math.min(result.content.length, pos + 80);
+        console.error(`[DIAG] Raw AI content around pos ${pos}:
+...${result.content.substring(start, end)}...`);
+        console.error(`[DIAG] Full AI response length: ${result.content.length} chars`);
       }
       console.warn(`[Store Generate] AI returned unparseable JSON on attempt ${result.attempts}: ${parsed.error}`);
     } else {
