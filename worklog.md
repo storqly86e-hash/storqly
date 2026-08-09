@@ -151,6 +151,25 @@ Stage Summary:
 - Zero lint errors, clean dev server compilation
 
 ---
+Task ID: FIX-2
+Agent: Main Orchestrator
+Task: Fix 502 Server Error on store generation (JSON parse failures + model truncation)
+
+Work Log:
+- Diagnosed root cause via dev.log: AI returns JSON with literal newlines inside string values
+- Old repairJSON replaced ALL newlines (structural + in-string), breaking JSON
+- Rewrote repairJSON with character-by-character inString state tracking
+- Compressed system prompt from 214 to ~80 lines for faster generation
+- Added 2-tier retry with truncation detection (skip responses <1000 chars)
+- Curl tests: hat shop 41s, clothing store 67s, coffee shop 61s — all OK via gateway
+- Browser verified: generate → visual edit → chat edit → preview sync → back
+- Zero lint errors
+
+Stage Summary:
+- 502 fixed: string-aware JSON repair + retry handles AI model output issues
+- Full core loop browser-verified end-to-end
+
+---
 Task ID: FIX-1
 Agent: Main Orchestrator
 Task: Diagnose and fix silent generation failures

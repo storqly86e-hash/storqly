@@ -1,217 +1,109 @@
 // ========================================
 // Store Generation API
 // ========================================
-// POST /api/store/generate
-// Takes a { prompt: string } body, uses the AI orchestrator to generate
-// a complete store schema, and returns the Store object as JSON.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { executeAI, extractJSON, repairJSON } from '@/lib/ai-orchestrator';
 import type { Store } from '@/lib/store-schema';
 
-// ─── System prompt for store generation ──────────────────────────
-const STORE_GENERATION_SYSTEM_PROMPT = `You are Storqly AI, an expert e-commerce store designer and builder. Your job is to generate a COMPLETE, PRODUCTION-QUALITY e-commerce store configuration based on the user's description.
+// ─── System prompt ──────────────────────────────────────────────
+// Prose style (proven to work) but trimmed for speed.
+// The #1 rule is embedded up front to prevent newlines-in-strings.
+const SYSTEM_PROMPT = `You are Storqly AI, an expert e-commerce store designer.
 
-You MUST respond with a SINGLE valid JSON object matching the Store TypeScript interface exactly. No markdown, no explanation, no extra text — ONLY raw JSON.
+## ABSOLUTE RULES (IF YOU VIOLATE THESE, THE OUTPUT BREAKS):
+1. Return ONE raw JSON object. No markdown fences. No explanation. No commentary.
+2. NEVER put a literal newline, line break, or tab character inside any string value. Every string must be a single line. Use spaces instead of newlines.
+3. Generate fresh UUIDs for all "id" fields.
 
-## Store Interface Requirements
+## Output Schema
 
-The JSON object must have the following top-level fields:
+Return a JSON object with this exact structure:
 
 {
-  "id": "<uuid string — generate a fresh one>",
-  "name": "<store name — descriptive, catchy>",
-  "slug": "<url-safe slug from store name>",
-  "description": "<1-2 sentence store description>",
+  "id": "<uuid>",
+  "name": "<store name>",
+  "slug": "<url-safe slug>",
+  "description": "<1 sentence>",
   "theme": {
-    "colors": {
-      "primary": "<hex color>",
-      "secondary": "<hex color>",
-      "accent": "<hex color>",
-      "background": "<hex color>",
-      "surface": "<hex color>",
-      "text": "<hex color>",
-      "textMuted": "<hex color>",
-      "border": "<hex color>"
-    },
-    "fonts": {
-      "heading": "<font name — e.g. Inter, Playfair Display, Poppins, Merriweather>",
-      "body": "<font name — e.g. Inter, Open Sans, Lato, Source Sans Pro>"
-    },
+    "colors": { "primary": "#hex", "secondary": "#hex", "accent": "#hex", "background": "#hex", "surface": "#hex", "text": "#hex", "textMuted": "#hex", "border": "#hex" },
+    "fonts": { "heading": "Inter", "body": "Inter" },
     "spacing": "normal",
     "borderRadius": "md"
   },
-  "pages": [ /* at least 1 homepage */ ],
-  "products": [ /* at least 4-8 realistic products */ ],
+  "pages": [{ "id": "<uuid>", "name": "Home", "slug": "", "isHomepage": true, "sections": [...] }],
+  "products": [...],
   "published": false,
-  "createdAt": "<ISO 8601 timestamp>",
-  "updatedAt": "<ISO 8601 timestamp>"
+  "createdAt": "<ISO 8601>",
+  "updatedAt": "<ISO 8601>"
 }
 
-## Page Structure
+## Sections
 
-Each page:
-{
-  "id": "<uuid>",
-  "name": "Home",
-  "slug": "",
-  "isHomepage": true,
-  "sections": [ /* ordered array of sections */ ]
-}
+Each section: { "id": "<uuid>", "type": "<type>", "content": { ... }, "style": { "backgroundColor": "<opt hex>", "textColor": "<opt hex>", "paddingY": "md", "paddingX": "md", "maxWidth": "lg", "borderRadius": "none" }, "visible": true }
 
-## Section Types and Content
+Types & contents:
+- hero: { headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg" }
+- featured-products: { headline, subtitle, productIds: ["<ids from products>"], columns: 3, showPrice: true, showAddToCart: true }
+- product-grid: { headline: "All Products", columns: 3, showPrice: true, showAddToCart: true }
+- text-banner: { headline, body, alignment: "center", size: "md" }
+- image-gallery: { images: [{ src: "https://images.unsplash.com/photo-<id>", alt: "" }], columns: 3, gap: "md" }
+- testimonials: { headline, items: [{ id, quote, author, role, rating: 5 }] }
+- newsletter: { headline, subtitle, placeholderText: "Enter your email", buttonText: "Subscribe" }
+- faq: { headline, items: [{ id, question, answer }] }
+- cta: { headline, body, ctaText, ctaLink: "#", style: "solid" }
+- categories: { headline, items: [{ id, name, slug, productCount: 5 }], columns: 3 }
+- rich-text: { html: "<valid HTML>" }
+- spacer: { height: "md" }
+- divider: {}
 
-Each section:
-{
-  "id": "<uuid>",
-  "type": "<one of: hero, featured-products, product-grid, text-banner, image-gallery, testimonials, newsletter, faq, cta, categories, rich-text, spacer, divider>",
-  "content": { /* type-specific content — see below */ },
-  "style": {
-    "backgroundColor": "<optional hex>",
-    "textColor": "<optional hex>",
-    "paddingY": "md",
-    "paddingX": "md",
-    "maxWidth": "lg",
-    "backgroundImage": "<optional url>",
-    "overlay": false,
-    "borderRadius": "none"
-  },
-  "visible": true
-}
+## Products
 
-### Section Content Schemas:
+Each: { id: "<uuid>", name, price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>"], description: "<1-2 sentences, ONE line>", category, variants: [{ id: "<uuid>", name: "Size", options: [{ label: "M", value: "m" }], inStock: true }], featured: false, inStock: true }
 
-**hero**:
-{
-  "headline": "<compelling headline>",
-  "subheadline": "<supporting text>",
-  "ctaText": "<button text — e.g. Shop Now>",
-  "ctaLink": "#products",
-  "alignment": "center",
-  "height": "lg"
-}
+## Requirements
+- 5-7 products with realistic names, prices, descriptions. Mark 2-3 as featured.
+- 6-8 sections on the homepage: hero + featured-products + testimonials + newsletter + cta + extras.
+- Do NOT include header or footer sections (auto-generated).
+- Theme colors must match the brand.`;
 
-**featured-products**:
-{
-  "headline": "<section headline>",
-  "subtitle": "<optional subtitle>",
-  "productIds": ["<ids from products array>"],
-  "columns": 3,
-  "showPrice": true,
-  "showAddToCart": true
-}
+// ─── Minimal retry prompt (fast, asks for less) ─────────────────
+const RETRY_SYSTEM_PROMPT = `You generate e-commerce store JSON. Return raw JSON only. No markdown. Every string value on ONE line — zero newlines inside quotes.
 
-**product-grid**:
-{
-  "headline": "All Products",
-  "columns": 3,
-  "showPrice": true,
-  "showAddToCart": true
-}
+Schema: { id, name, slug, description, theme: { colors: { primary, secondary, accent, background, surface, text, textMuted, border }, fonts: { heading, body }, spacing: "normal", borderRadius: "md" }, pages: [{ id, name: "Home", slug: "", isHomepage: true, sections: [{ id, type, content, style, visible }] }], products: [{ id, name, price, compareAtPrice, images, description, category, variants, featured, inStock }], published: false, createdAt, updatedAt }
 
-**text-banner**:
-{
-  "headline": "<banner headline>",
-  "body": "<optional body text>",
-  "alignment": "center",
-  "size": "md"
-}
+Create 4-5 products and 5-6 sections (hero, featured-products, testimonials, newsletter, cta). Keep descriptions short. Use UUIDs for ids.`;
 
-**image-gallery**:
-{
-  "images": [
-    { "src": "https://images.unsplash.com/photo-<use real unsplash URLs>", "alt": "<description>" }
-  ],
-  "columns": 3,
-  "gap": "md"
-}
+// ─── Helper: try to parse store JSON with repair ───────────────
+function tryParseStore(content: string): { store?: Store; error?: string } {
+  let jsonStr = extractJSON(content);
 
-**testimonials**:
-{
-  "headline": "What Our Customers Say",
-  "items": [
-    { "id": "<uuid>", "quote": "<realistic testimonial>", "author": "<name>", "role": "<title/company>", "rating": 5 }
-  ]
-}
-
-**newsletter**:
-{
-  "headline": "Stay in the Loop",
-  "subtitle": "<optional>",
-  "placeholderText": "Enter your email",
-  "buttonText": "Subscribe"
-}
-
-**faq**:
-{
-  "headline": "Frequently Asked Questions",
-  "items": [
-    { "id": "<uuid>", "question": "<question>", "answer": "<answer>" }
-  ]
-}
-
-**cta**:
-{
-  "headline": "<cta headline>",
-  "body": "<optional body>",
-  "ctaText": "<button text>",
-  "ctaLink": "#",
-  "style": "solid"
-}
-
-**categories**:
-{
-  "headline": "Shop by Category",
-  "items": [
-    { "id": "<uuid>", "name": "<category>", "slug": "<slug>", "productCount": 5 }
-  ],
-  "columns": 3
-}
-
-**rich-text**: { "html": "<valid HTML string>" }
-
-**spacer**: { "height": "md" }
-
-**divider**: { }
-
-## Product Requirements
-
-Each product:
-{
-  "id": "<uuid>",
-  "name": "<realistic product name>",
-  "price": <number — realistic pricing>,
-  "compareAtPrice": <optional number for sale items>,
-  "images": ["https://images.unsplash.com/photo-<use real unsplash URLs>"],
-  "description": "<2-4 sentence description>",
-  "category": "<category matching the store theme>",
-  "variants": [
-    {
-      "id": "<uuid>",
-      "name": "<variant name — e.g. Size, Color>",
-      "options": [{ "label": "<label>", "value": "<value>" }],
-      "inStock": true
+  // Attempt 1: direct parse
+  try {
+    const store = JSON.parse(jsonStr) as Store;
+    if (store.id && store.name && store.theme && Array.isArray(store.pages) && Array.isArray(store.products)) {
+      return { store };
     }
-  ],
-  "featured": <boolean — mark 2-4 as featured>,
-  "inStock": true
+    return { error: 'Incomplete schema.' };
+  } catch { /* continue */ }
+
+  // Attempt 2: repair + parse
+  try {
+    const repaired = repairJSON(jsonStr);
+    console.log('[Store Generate] Attempting JSON repair...');
+    const store = JSON.parse(repaired) as Store;
+    if (store.id && store.name && store.theme && Array.isArray(store.pages) && Array.isArray(store.products)) {
+      console.log('[Store Generate] JSON repaired successfully.');
+      return { store };
+    }
+    return { error: 'Repaired JSON incomplete.' };
+  } catch (repairErr: unknown) {
+    const msg = repairErr instanceof Error ? repairErr.message : String(repairErr);
+    console.error('[Store Generate] JSON parse failed after repair:', msg);
+    console.error('[Store Generate] JSON preview (first 300 chars):', jsonStr.substring(0, 300));
+    return { error: `Invalid JSON: ${msg}` };
+  }
 }
-
-## Design Guidelines
-
-1. **Theme colors must match the brand** — e.g., a luxury jewelry store should use dark/rich colors; a kids' toy store should use bright/playful colors; a coffee shop should use warm browns/creams.
-2. **Create 6-10 realistic products** with meaningful descriptions and categories.
-3. **Build a compelling page** with at minimum: header, hero, featured products, testimonials, newsletter, footer sections. Add more sections for variety.
-4. **Use Unsplash image URLs** that match the products and brand aesthetic (e.g., use real photo IDs from unsplash).
-5. **Product prices should be realistic** for the type of store.
-6. **Section styles should vary** — use different backgrounds, padding, and alignment for visual interest.
-7. **Generate fresh UUIDs** for all id fields (use random strings like "a1b2c3d4-e5f6-7890-abcd-ef1234567890").
-8. **The store must feel complete and professional** — like a real Shopify store.
-
-CRITICAL FORMAT RULES:
-1. Return ONLY the raw JSON object. No markdown fences, no explanation, no commentary.
-2. Do NOT include literal newlines or tabs inside string values — keep all text on one line per value.
-3. Ensure all string values are properly escaped. Product descriptions should be single-line strings.`;
 
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -226,63 +118,61 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const userMessage = `Generate an e-commerce store based on this description:\n\n${prompt.trim()}`;
+    const userMessage = `Generate an e-commerce store: ${prompt.trim()}`;
 
-    const result = await executeAI('store-generation', [
+    // ── Attempt 1: Normal generation ──
+    console.log('[Store Generate] Attempt 1: generating...');
+    const result1 = await executeAI('store-generation', [
       { role: 'user', content: userMessage },
-    ], {
-      systemPrompt: STORE_GENERATION_SYSTEM_PROMPT,
-      timeout: 90_000,
-    });
+    ], { systemPrompt: SYSTEM_PROMPT });
 
-    if (!result.success || !result.content) {
-      return NextResponse.json(
-        { error: result.error || 'AI failed to generate the store.' },
-        { status: 502 }
-      );
-    }
-
-    // Extract JSON from the AI response
-    let jsonStr = extractJSON(result.content);
-
-    // Parse and validate (with repair attempts)
-    let store: Store;
-    // Try 1: direct parse
-    try {
-      store = JSON.parse(jsonStr) as Store;
-    } catch {
-      // Try 2: repair common issues and re-parse
-      try {
-        const repaired = repairJSON(jsonStr);
-        store = JSON.parse(repaired) as Store;
-        console.log('[Store Generate] JSON repaired successfully');
-      } catch (repairErr: unknown) {
-        const msg = repairErr instanceof Error ? repairErr.message : String(repairErr);
-        console.error('[Store Generate] JSON parse error after repair:', msg);
-        // Log first 200 chars of the problematic JSON for debugging
-        console.error('[Store Generate] JSON preview:', jsonStr.substring(0, 200));
-        return NextResponse.json(
-          { error: 'AI returned invalid JSON. Please try again.', details: msg },
-          { status: 502 }
-        );
+    if (result1.success && result1.content) {
+      // Detect obvious truncation — a valid store is always >2000 chars
+      if (result1.content.length < 1000) {
+        console.warn(`[Store Generate] Attempt 1 response suspiciously short (${result1.content.length} chars), likely truncated. Skipping parse, going straight to retry.`);
+      } else {
+        const parsed = tryParseStore(result1.content);
+        if (parsed.store) {
+          console.log(`[Store Generate] OK on attempt 1 (${result1.attempts} AI calls). Store: ${parsed.store.name}`);
+          return NextResponse.json({ store: parsed.store });
+        }
+        console.warn('[Store Generate] Attempt 1 invalid JSON:', parsed.error);
       }
+    } else {
+      console.warn('[Store Generate] Attempt 1 AI failed:', result1.error);
     }
 
-    // Basic validation
-    if (!store.id || !store.name || !store.theme || !Array.isArray(store.pages) || !Array.isArray(store.products)) {
+    // ── Attempt 2: Faster retry with shorter prompt ──
+    console.log('[Store Generate] Attempt 2: retrying with shorter prompt...');
+    const result2 = await executeAI('store-generation', [
+      { role: 'user', content: userMessage },
+    ], { systemPrompt: RETRY_SYSTEM_PROMPT, temperature: 0.3, timeout: 60_000 });
+
+    if (result2.success && result2.content) {
+      if (result2.content.length < 1000) {
+        console.error(`[Store Generate] Attempt 2 also truncated (${result2.content.length} chars).`);
+      } else {
+        const parsed = tryParseStore(result2.content);
+        if (parsed.store) {
+          console.log(`[Store Generate] OK on attempt 2. Store: ${parsed.store.name}`);
+          return NextResponse.json({ store: parsed.store });
+        }
+        console.error('[Store Generate] Attempt 2 also invalid:', parsed.error);
+      }
       return NextResponse.json(
-        { error: 'AI returned an incomplete store schema. Missing required fields (id, name, theme, pages, products).' },
+        { error: 'AI returned invalid data after 2 attempts. Try again.' },
         { status: 502 }
       );
     }
 
-    return NextResponse.json({ store });
+    console.error('[Store Generate] Both attempts failed.', result2.error);
+    return NextResponse.json(
+      { error: result2.error || 'Generation failed after 2 attempts.' },
+      { status: 502 }
+    );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error('[Store Generate] Unexpected error:', msg);
-    return NextResponse.json(
-      { error: 'An unexpected error occurred while generating the store.' },
-      { status: 500 }
-    );
+    console.error('[Store Generate] Unexpected:', msg);
+    return NextResponse.json({ error: 'Unexpected error.' }, { status: 500 });
   }
 }

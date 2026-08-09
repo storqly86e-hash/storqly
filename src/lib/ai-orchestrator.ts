@@ -18,44 +18,27 @@ export interface AIMessage {
 
 // ─── Task configuration ────────────────────────────────────────
 interface TaskConfig {
-  /** Human-readable label */
   label: string;
-  /** Default system prompt template (may be overridden per call) */
-  defaultSystemPrompt?: string;
-  /** Temperature for the primary call */
   temperature?: number;
-  /** Timeout in milliseconds */
   timeout?: number;
-  /** Max tokens */
-  maxTokens?: number;
 }
 
-// Primary configuration per task type.
-// All tasks currently route through GLM via z-ai-web-dev-sdk.
 const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'store-generation': {
-    label: 'Store Generation (GLM)',
+    label: 'Store Generation',
     temperature: 0.7,
-    timeout: 60_000,
+    timeout: 75_000,
   },
   'chat-edit': {
-    label: 'Chat Edit (GLM)',
+    label: 'Chat Edit',
     temperature: 0.5,
     timeout: 30_000,
   },
   'coding-task': {
-    label: 'Coding Task (GLM)',
+    label: 'Coding Task',
     temperature: 0.3,
     timeout: 45_000,
   },
-};
-
-// Failover configuration — when primary attempt fails, retry with these adjustments.
-const FAILOVER_ADJUSTMENTS = {
-  temperature: 0.4,
-  // We prepend additional instructions to the system prompt on failover
-  extraSystemInstruction:
-    '\n\nIMPORTANT: You MUST respond with valid JSON only. Do NOT include any markdown, explanation, or text outside the JSON block. Return raw JSON that can be parsed directly with JSON.parse().',
 };
 
 // ─── Response type ─────────────────────────────────────────────
@@ -63,9 +46,7 @@ export interface AIOrchestratorResult {
   success: boolean;
   content: string | null;
   error?: string;
-  /** Number of attempts made (1 = primary only, 2 = primary + failover) */
   attempts: number;
-  /** Which task config was used */
   taskType: AITaskType;
 }
 
@@ -79,45 +60,94 @@ async function getZAI() {
   return zaiInstance;
 }
 
-// ─── Helper: extract JSON from AI response ──────────────────────
+/**
+ * Extract JSON from AI response.
+ * Tries: direct parse → markdown code block → brace extraction.
+ */
 export function extractJSON(raw: string): string {
   // Try direct parse first
   try {
     JSON.parse(raw);
     return raw;
   } catch {
-    // Try to extract from markdown code block
-    const codeBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-    if (codeBlockMatch) {
-      const extracted = codeBlockMatch[1].trim();
-      try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
-    }
-    // Try to find the first { and last }
-    const firstBrace = raw.indexOf('{');
-    const lastBrace = raw.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const extracted = raw.substring(firstBrace, lastBrace + 1);
-      try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
-    }
-    // Return best-effort extraction even if it might not parse
-    if (firstBrace !== -1 && lastBrace !== -1) {
-      return raw.substring(firstBrace, lastBrace + 1);
-    }
-    return raw;
+    // not valid yet
   }
+
+  // Try markdown code block
+  const codeBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
+  if (codeBlockMatch) {
+    const extracted = codeBlockMatch[1].trim();
+    try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
+  }
+
+  // Brace extraction — find outermost { … }
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const extracted = raw.substring(firstBrace, lastBrace + 1);
+    try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
+    // Return best-effort even if parse failed (repairJSON may fix it)
+    return extracted;
+  }
+
+  return raw;
 }
 
-/** Attempt to repair common JSON issues from AI output */
+/**
+ * Repair common JSON issues from AI output.
+ *
+ * Key fix: only removes newlines that are INSIDE quoted strings,
+ * leaving structural whitespace alone. This handles the #1 cause
+ * of AI JSON parse failures (literal newlines in string values).
+ */
 export function repairJSON(jsonStr: string): string {
-  let repaired = jsonStr;
-  // Replace literal newlines/tabs with spaces (AI sometimes puts them inside strings)
-  repaired = repaired.replace(/[\r\n\t]/g, ' ');
-  // Collapse multiple spaces
+  // ── Pass 1: Remove newlines inside quoted strings ──
+  const chars: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+
+    if (escaped) {
+      chars.push(ch);
+      escaped = false;
+      continue;
+    }
+
+    if (ch === '\\') {
+      chars.push(ch);
+      escaped = true;
+      continue;
+    }
+
+    if (ch === '"') {
+      inString = !inString;
+      chars.push(ch);
+      continue;
+    }
+
+    // Only strip newlines inside strings — structural ones are fine
+    if (inString && (ch === '\n' || ch === '\r' || ch === '\t')) {
+      chars.push(' ');
+      continue;
+    }
+
+    chars.push(ch);
+  }
+
+  let repaired = chars.join('');
+
+  // ── Pass 2: Collapse multi-space runs inside strings ──
+  // (result of replacing newlines with spaces)
   repaired = repaired.replace(/  +/g, ' ');
-  // Remove control characters
+
+  // ── Pass 3: Remove control characters ──
   repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-  // Remove trailing commas before } or ]
+
+  // ── Pass 4: Remove trailing commas before } or ] ──
   repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+
   return repaired;
 }
 
@@ -132,11 +162,10 @@ export async function executeAI(
   }
 ): Promise<AIOrchestratorResult> {
   const config = TASK_CONFIGS[taskType];
-  const systemPrompt = options?.systemPrompt ?? config.defaultSystemPrompt ?? '';
+  const systemPrompt = options?.systemPrompt ?? '';
   const primaryTemp = options?.temperature ?? config.temperature ?? 0.7;
   const timeout = options?.timeout ?? config.timeout ?? 30_000;
 
-  // Build message array — system prompt goes as 'assistant' role per SDK convention
   const buildMessages = (extraSystem?: string): AIMessage[] => {
     const fullSystem = extraSystem
       ? systemPrompt + extraSystem
@@ -145,14 +174,12 @@ export async function executeAI(
     if (fullSystem) {
       msgs.push({ role: 'assistant', content: fullSystem });
     }
-    // Add non-system messages
     for (const m of messages) {
       msgs.push(m);
     }
     return msgs;
   };
 
-  // Attempt helper — wraps a single SDK call with timeout
   const attempt = async (
     temp: number,
     extraSystem?: string
@@ -186,28 +213,21 @@ export async function executeAI(
   try {
     const result = await attempt(primaryTemp);
     if (result) {
-      return {
-        success: true,
-        content: result.content,
-        attempts: 1,
-        taskType,
-      };
+      return { success: true, content: result.content, attempts: 1, taskType };
     }
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.warn(`[AI Orchestrator] Primary attempt failed for ${taskType}: ${errMsg}`);
   }
 
-  // ── Attempt 2: Failover with adjusted params ──────────────────
+  // ── Attempt 2: Failover — lower temp + stronger JSON instructions ──
   try {
-    const result = await attempt(FAILOVER_ADJUSTMENTS.temperature, FAILOVER_ADJUSTMENTS.extraSystemInstruction);
+    const result = await attempt(
+      0.3,
+      '\n\nCRITICAL: Respond with ONLY valid raw JSON. No markdown fences, no explanation. All string values must be on a single line — never use literal newlines inside strings. The output must parse with JSON.parse() with zero errors.'
+    );
     if (result) {
-      return {
-        success: true,
-        content: result.content,
-        attempts: 2,
-        taskType,
-      };
+      return { success: true, content: result.content, attempts: 2, taskType };
     }
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err);
