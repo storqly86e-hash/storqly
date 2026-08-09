@@ -369,3 +369,62 @@ Stage Summary:
 - Issue 2 (publish no URL): FIXED — full publish flow with modal dialog, persistent URL badge, copy button, and live store viewer
 - Published stores are viewable at /?store={slug} in read-only mode
 - New API endpoint: GET /api/store/lookup?slug=xxx
+
+---
+Task ID: SSE-STREAM-FIX
+Agent: Main
+Task: Fix 502 on long/detailed prompts via SSE streaming
+
+Work Log:
+- Reproduced exact user prompt ("Build a modern minimalist skincare brand called Pure Elements..." — 48 words, multiple specific requirements)
+- Dev log showed server returned 200 in 64s but user got 502 — confirmed infrastructure proxy timeout (~60s)
+- Root cause: long prompts produce longer AI output → more JSON malformation → retry needed → total time exceeds proxy timeout
+- Evidence: VedgeFit prompt took 112s, Pure Elements took 66-69s — both would 502 without streaming
+
+Fix 1 - SSE Streaming Backend (generate/route.ts):
+- Converted POST /api/store/generate from JSON response to SSE stream
+- Sends progress events: generating, parsing, retrying, parse_error, fallback
+- Sends heartbeat comment (`: heartbeat\n\n`) every 4s to keep connection alive through any proxy
+- Sends final result as `event: result` with store data
+- Increased AI timeouts: attempt 1 from 60s to 90s to handle longer generation
+- Never returns non-200 status (fallback stores sent as SSE events)
+
+Fix 2 - SSE Streaming Frontend (page.tsx):
+- Replaced `res.json()` with `res.body.getReader()` streaming reader
+- Parses SSE events from stream: progress → update UI, result → setStore, error → showError
+- Falls back to local progress cycling if no SSE events received
+- Real-time progress messages from server ("AI is generating your store (1/3)...", "Parsing AI response...", etc.)
+
+Fix 3 - React Key Warning:
+- Added Fragment + key={section.id} to body.map() in StoreRenderer
+- This was causing Next.js dev error overlay on generated stores
+
+Fix 4 - Caddyfile Hardening:
+- Added flush_interval -1 (no buffering for SSE)
+- Increased timeouts to 600s (read + write)
+- Added dial_timeout 10s
+- Applied same timeouts to @transform_port_query handler
+
+Batch Test Evidence:
+- curl SSE test with exact user prompt: ✅ Pure Elements, 69s, no timeout
+- Browser test with long prompt: ✅ Pure Elements, 66s, no 502
+- VedgeFit (long prompt): ✅ 112s, no timeout (would have 100% 502'd without SSE)
+- Artigiano (long prompt): ✅ 38s attempt 1
+
+Browser Verification (full end-to-end with exact user prompt):
+1. Filled long prompt in textarea ✅
+2. Clicked Generate Store → progress UI shown with SSE messages ✅
+3. "AI is generating your store (1/3)..." displayed — real SSE event, not local fallback ✅
+4. Generation completed without 502, store loaded in editor ✅
+5. Store: Pure Elements with 6 sections, 3 products, sage/cream theme ✅
+6. All editor panels functional: Sections, Preview, Chat ✅
+7. Mobile (375x812): renders correctly ✅
+8. Zero console errors on successful generation ✅
+9. Zero lint errors ✅
+
+Stage Summary:
+- 502 on long prompts: FIXED via SSE streaming with 4s heartbeats
+- Infrastructure proxy timeout (~60s) no longer kills long generations
+- Real-time progress events from server replace fake client-side cycling
+- React key warning fixed to prevent dev error overlay
+- Caddyfile hardened with flush_interval=-1 and 600s timeouts

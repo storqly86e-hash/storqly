@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, Fragment } from 'react';
 import type { Store, Section, StorePage } from '@/lib/store-schema';
 import { renderSection } from './sections';
 
@@ -210,9 +210,11 @@ export function StoreRenderer({
 
       {/* Main content */}
       <main className="flex-1">
-        {body.map((section) =>
-          renderSection({ section, theme, selectedSectionId, onSelectSection, products })
-        )}
+        {body.map((section) => (
+          <Fragment key={section.id}>
+            {renderSection({ section, theme, selectedSectionId, onSelectSection, products })}
+          </Fragment>
+        ))}
         {body.length === 0 && (
           <div className="flex items-center justify-center py-32">
             <div className="text-center">

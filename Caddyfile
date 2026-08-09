@@ -1,28 +1,37 @@
 :81 {
-	@transform_port_query {
-		query XTransformPort=*
-	}
+        @transform_port_query {
+                query XTransformPort=*
+        }
 
-	handle @transform_port_query {
-		reverse_proxy localhost:{query.XTransformPort} {
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+        handle @transform_port_query {
+                reverse_proxy localhost:{query.XTransformPort} {
+                        transport http {
+                                read_timeout 330s
+                                write_timeout 330s
+                        }
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                        flush_interval -1
+                }
+        }
 
-	handle {
-		reverse_proxy localhost:3000 {
-			transport http {
-				# Store generation can retry up to 3 parse attempts,
-				# each with 1 API retry. Worst case ~5 min.
-				read_timeout 330s
-			}
-			header_up Host {host}
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Forwarded-Proto {scheme}
-			header_up X-Real-IP {remote_host}
-		}
-	}
+        handle {
+                reverse_proxy localhost:3000 {
+                        transport http {
+                                # SSE streaming keeps connection alive via heartbeats,
+                                # but these timeouts are safety nets for worst case.
+                                read_timeout 600s
+                                write_timeout 600s
+                                dial_timeout 10s
+                        }
+                        # Flush SSE events immediately — no buffering
+                        flush_interval -1
+                        header_up Host {host}
+                        header_up X-Forwarded-For {remote_host}
+                        header_up X-Forwarded-Proto {scheme}
+                        header_up X-Real-IP {remote_host}
+                }
+        }
 }

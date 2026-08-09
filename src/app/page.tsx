@@ -74,7 +74,7 @@ const features = [
   },
 ]
 
-// ─── Progress Messages (looping) ──────────────────────────────────────
+// ─── Progress Messages (fallback when no SSE progress received) ──
 
 const progressMessages = [
   'Analyzing your store vision...',
@@ -132,27 +132,30 @@ function LandingPage() {
     // Reset state
     setError(null)
     setIsGenerating(true)
-    setGenerationStatus(progressMessages[0])
+    setGenerationStatus('Starting generation...')
     setElapsedSeconds(0)
 
     // Create abort controller for this request
     const controller = new AbortController()
     abortRef.current = controller
 
-    // Cycle through progress messages (looping every ~17.5s)
-    let idx = 0
-    progressTimerRef.current = setInterval(() => {
-      idx = (idx + 1) % progressMessages.length
-      setGenerationStatus(progressMessages[idx])
-    }, 2500)
-
     // Elapsed time counter
     elapsedTimerRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1)
     }, 1000)
 
+    // Fallback progress cycling (used only if SSE progress events stop)
+    let fallbackIdx = 0
+    let receivedSSEProgress = false
+    progressTimerRef.current = setInterval(() => {
+      if (!receivedSSEProgress) {
+        fallbackIdx = (fallbackIdx + 1) % progressMessages.length
+        setGenerationStatus(progressMessages[fallbackIdx])
+      }
+    }, 3000)
+
     try {
-      console.log('[Storqly] Starting store generation for prompt:', trimmed)
+      console.log('[Storqly] Starting SSE store generation for prompt:', trimmed)
 
       const res = await fetch('/api/store/generate', {
         method: 'POST',
@@ -170,19 +173,81 @@ function LandingPage() {
         throw new Error(errorMsg)
       }
 
-      const data = await res.json()
+      // ── Consume SSE stream ──
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response stream received.')
 
-      if (!data.store) {
-        throw new Error('The AI response was missing store data. Please try again.')
+      const decoder = new TextDecoder()
+      let buffer = ''
+      let resolved = false
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse SSE events from buffer
+        // SSE format: "event: <name>\ndata: <json>\n\n" or ": comment\n\n"
+        const lines = buffer.split('\n')
+        // Keep incomplete last line in buffer
+        buffer = lines.pop() || ''
+
+        let currentEvent = ''
+        for (const line of lines) {
+          if (line.startsWith(':')) {
+            // SSE comment (heartbeat) — skip
+            continue
+          }
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim()
+          } else if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6)
+
+            // Handle SSE events
+            if (currentEvent === 'progress') {
+              receivedSSEProgress = true
+              try {
+                const data = JSON.parse(dataStr)
+                setGenerationStatus(data.message || 'Processing...')
+              } catch { /* ignore */ }
+            } else if (currentEvent === 'result') {
+              try {
+                const data = JSON.parse(dataStr)
+                if (!data.store) {
+                  throw new Error('The AI response was missing store data.')
+                }
+                console.log('[Storqly] Store generated via SSE. isFallback:', data._isFallback, 'name:', data.store.name)
+                resolved = true
+                clearTimers()
+
+                if (data._isFallback) {
+                  setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
+                } else {
+                  setStore(data.store)
+                }
+              } catch (parseErr) {
+                const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+                console.error('[Storqly] Failed to parse result event:', msg)
+                throw new Error(msg)
+              }
+            } else if (currentEvent === 'error') {
+              try {
+                const data = JSON.parse(dataStr)
+                throw new Error(data.message || 'Generation failed')
+              } catch (e) {
+                if (e instanceof Error && e.message !== 'Generation failed') throw e
+                throw new Error('Generation failed')
+              }
+            }
+            // Reset event after processing its data
+            currentEvent = ''
+          }
+        }
       }
 
-      console.log('[Storqly] Store generated. isFallback:', data._isFallback, 'name:', data.store.name)
-      clearTimers()
-
-      if (data._isFallback) {
-        setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
-      } else {
-        setStore(data.store)
+      if (!resolved) {
+        throw new Error('Stream ended without a result. The server may have disconnected.')
       }
     } catch (err: unknown) {
       clearTimers()
@@ -190,7 +255,6 @@ function LandingPage() {
       let message = 'Something went wrong. Please try again.'
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          // AbortError is expected when user cancels — don't log as error
           message = 'Generation was cancelled.'
         } else {
           console.error('[Storqly] Generation error:', err)

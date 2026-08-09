@@ -1,10 +1,12 @@
 // ========================================
-// Store Generation API
+// Store Generation API — SSE Streaming
 // ========================================
+// Returns an SSE stream with progress events and final result.
+// Streaming prevents infrastructure proxy timeouts on long AI generations.
 // NEVER returns a non-200 status. If AI fails after all retries,
-// returns a valid starter store with _isFallback flag so the UI can inform the user.
+// sends a valid starter store with _isFallback flag.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { executeAI, extractJSON, repairJSON, aggressiveRepair, iterativeRepair } from '@/lib/ai-orchestrator';
 import type { Store } from '@/lib/store-schema';
 
@@ -14,7 +16,7 @@ const SYSTEM_PROMPT = `You are an e-commerce store builder. Return a SINGLE JSON
 CRITICAL FORMAT RULES:
 1. Return raw JSON ONLY. No markdown fences, no commentary.
 2. NEVER put a literal newline, line break, or tab inside any string value. Every string must be one line.
-3. NEVER use double-quote characters inside any string value. If you need quotation marks inside a string, use single quotes (') instead. For example: description should be "Handcrafted 'gold' ring" not "Handcrafted \"gold\" ring".
+3. NEVER use double-quote characters inside any string value. If you need quotation marks inside a string, use single quotes (') instead. For example: description should be "Handcrafted 'gold' ring" not "Handcrafted \\"gold\\" ring".
 4. Generate fresh UUIDs for all "id" fields.
 
 TOP-LEVEL SCHEMA:
@@ -182,83 +184,130 @@ function tryParseStore(content: string): { store?: Store; error?: string } {
 
 // ─── JSON-parse retry configurations ─────────────────────────────
 const PARSE_RETRY_CONFIGS = [
-  { systemPrompt: SYSTEM_PROMPT, temperature: 0.7, maxRetries: 2, timeout: 60_000, label: 'attempt 1' },
-  { systemPrompt: RETRY_SYSTEM_PROMPT_1, temperature: 0.3, maxRetries: 1, timeout: 45_000, label: 'attempt 2 (stricter prompt)' },
-  { systemPrompt: RETRY_SYSTEM_PROMPT_2, temperature: 0.1, maxRetries: 1, timeout: 45_000, label: 'attempt 3 (minimal prompt)' },
+  { systemPrompt: SYSTEM_PROMPT, temperature: 0.7, maxRetries: 2, timeout: 90_000, label: 'attempt 1' },
+  { systemPrompt: RETRY_SYSTEM_PROMPT_1, temperature: 0.3, maxRetries: 1, timeout: 60_000, label: 'attempt 2 (stricter prompt)' },
+  { systemPrompt: RETRY_SYSTEM_PROMPT_2, temperature: 0.1, maxRetries: 1, timeout: 60_000, label: 'attempt 3 (minimal prompt)' },
 ];
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// ─── POST handler ───────────────────────────────────────────────
+// ─── SSE Helper ──────────────────────────────────────────────────
+function sseEvent(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
+// ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
-  try {
-    const body = await req.json();
-    const { prompt } = body as { prompt?: string };
+  const encoder = new TextEncoder();
 
-    if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-      return NextResponse.json({ error: 'A prompt is required.' }, { status: 400 });
-    }
+  const stream = new ReadableStream({
+    async start(controller) {
+      const send = (event: string, data: unknown) => {
+        try {
+          controller.enqueue(encoder.encode(sseEvent(event, data)));
+        } catch {
+          // Stream already closed (client disconnect)
+        }
+      };
 
-    const userMessage = `Generate an e-commerce store: ${prompt.trim()}`;
-    let lastParseError = 'Unknown';
+      // Heartbeat: send keepalive every 4s to prevent proxy timeouts
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(': heartbeat\n\n'));
+        } catch {
+          clearInterval(heartbeat);
+        }
+      }, 4000);
 
-    // ── JSON-parse-level retry: up to 3 attempts with stricter prompts ──
-    for (let i = 0; i < PARSE_RETRY_CONFIGS.length; i++) {
-      const cfg = PARSE_RETRY_CONFIGS[i];
+      try {
+        const body = await req.json();
+        const { prompt } = body as { prompt?: string };
 
-      if (i > 0) {
-        // Brief pause between parse retries (not a full API backoff — that's inside executeAI)
-        console.log(`[Store Generate] JSON parse failed. Waiting 2s before ${cfg.label}...`);
-        await sleep(2000);
-      } else {
-        console.log(`[Store Generate] Starting AI generation (${cfg.label})...`);
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+          send('error', { message: 'A prompt is required.' });
+          return;
+        }
+
+        const userMessage = `Generate an e-commerce store: ${prompt.trim()}`;
+        let lastParseError = 'Unknown';
+
+        // ── JSON-parse-level retry: up to 3 attempts with stricter prompts ──
+        for (let i = 0; i < PARSE_RETRY_CONFIGS.length; i++) {
+          const cfg = PARSE_RETRY_CONFIGS[i];
+
+          if (i > 0) {
+            console.log(`[Store Generate] JSON parse failed. Waiting 2s before ${cfg.label}...`);
+            send('progress', { stage: 'retrying', attempt: i + 1, total: PARSE_RETRY_CONFIGS.length, message: `Refining generation (${i + 1}/${PARSE_RETRY_CONFIGS.length})...` });
+            await sleep(2000);
+          } else {
+            console.log(`[Store Generate] Starting AI generation (${cfg.label})...`);
+          }
+
+          send('progress', { stage: 'generating', attempt: i + 1, total: PARSE_RETRY_CONFIGS.length, message: `AI is generating your store (${i + 1}/${PARSE_RETRY_CONFIGS.length})...` });
+
+          // Call the AI — executeAI handles API-level retries internally
+          const result = await executeAI('store-generation', [
+            { role: 'user', content: userMessage },
+          ], {
+            systemPrompt: cfg.systemPrompt,
+            temperature: cfg.temperature,
+            timeout: cfg.timeout,
+          });
+
+          if (!result.success || !result.content) {
+            console.warn(`[Store Generate] AI API failed on ${cfg.label}: ${result.error}`);
+            lastParseError = `AI API failed: ${result.error}`;
+            send('progress', { stage: 'api_error', attempt: i + 1, total: PARSE_RETRY_CONFIGS.length, message: `API error on attempt ${i + 1}, retrying...` });
+            continue; // Try next parse attempt
+          }
+
+          // AI returned content — try to parse
+          send('progress', { stage: 'parsing', attempt: i + 1, total: PARSE_RETRY_CONFIGS.length, message: `Parsing AI response (${i + 1}/${PARSE_RETRY_CONFIGS.length})...` });
+
+          const parsed = tryParseStore(result.content);
+          if (parsed.store) {
+            console.log(`[Store Generate] ✅ AI success on ${cfg.label}. Store: ${parsed.store.name}`);
+            send('result', { store: parsed.store, _isFallback: false });
+            return;
+          }
+
+          console.warn(`[Store Generate] JSON unparseable on ${cfg.label}: ${parsed.error}`);
+          lastParseError = parsed.error || 'Unknown parse error';
+          send('progress', { stage: 'parse_error', attempt: i + 1, total: PARSE_RETRY_CONFIGS.length, message: `JSON repair failed on attempt ${i + 1}, retrying with stricter prompt...` });
+        }
+
+        // ── ALL ATTEMPTS FAILED: Return fallback ──
+        console.error(`[Store Generate] ❌ All ${PARSE_RETRY_CONFIGS.length} attempts failed. Last error: ${lastParseError}`);
+        send('progress', { stage: 'fallback', message: 'Creating starter template...' });
+        const fallback = createFallbackStore(prompt.trim());
+        send('result', {
+          store: fallback,
+          _isFallback: true,
+          _fallbackReason: 'AI generation did not return valid data after multiple attempts.',
+        });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[Store Generate] Unexpected error:', msg);
+        const fallback = createFallbackStore('My Store');
+        send('result', {
+          store: fallback,
+          _isFallback: true,
+          _fallbackReason: `Unexpected error: ${msg}`,
+        });
+      } finally {
+        clearInterval(heartbeat);
+        try { controller.close(); } catch { /* already closed */ }
       }
+    },
+  });
 
-      // Call the AI — executeAI handles API-level retries internally
-      const result = await executeAI('store-generation', [
-        { role: 'user', content: userMessage },
-      ], {
-        systemPrompt: cfg.systemPrompt,
-        temperature: cfg.temperature,
-        timeout: cfg.timeout,
-      });
-
-      // Override the internal maxRetries — we manage our own retry loop
-      // (executeAI uses TASK_CONFIGS maxRetries=3, which is fine for API errors)
-
-      if (!result.success || !result.content) {
-        console.warn(`[Store Generate] AI API failed on ${cfg.label}: ${result.error}`);
-        lastParseError = `AI API failed: ${result.error}`;
-        continue; // Try next parse attempt
-      }
-
-      // Try to parse the JSON
-      const parsed = tryParseStore(result.content);
-      if (parsed.store) {
-        console.log(`[Store Generate] ✅ AI success on ${cfg.label}. Store: ${parsed.store.name}`);
-        return NextResponse.json({ store: parsed.store, _isFallback: false });
-      }
-
-      console.warn(`[Store Generate] JSON unparseable on ${cfg.label}: ${parsed.error}`);
-      lastParseError = parsed.error || 'Unknown parse error';
-    }
-
-    // ── ALL ATTEMPTS FAILED: Return fallback ──
-    console.error(`[Store Generate] ❌ All 3 attempts failed. Last error: ${lastParseError}`);
-    const fallback = createFallbackStore(prompt.trim());
-    return NextResponse.json({
-      store: fallback,
-      _isFallback: true,
-      _fallbackReason: 'AI generation did not return valid data after multiple attempts.',
-    });
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error('[Store Generate] Unexpected error:', msg);
-    const fallback = createFallbackStore('My Store');
-    return NextResponse.json({
-      store: fallback,
-      _isFallback: true,
-      _fallbackReason: `Unexpected error: ${msg}`,
-    });
-  }
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no', // Disable nginx buffering
+    },
+  });
 }
