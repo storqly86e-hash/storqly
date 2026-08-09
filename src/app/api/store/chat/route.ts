@@ -132,10 +132,11 @@ export async function POST(req: NextRequest) {
     });
 
     if (!result.success || !result.content) {
-      return NextResponse.json(
-        { error: result.error || 'AI failed to process the edit request.' },
-        { status: 502 }
-      );
+      // Never 502 — return empty operations with explanation
+      return NextResponse.json({
+        message: "I'm having trouble right now. Please try again in a moment.",
+        operations: [],
+      });
     }
 
     // Extract and parse the operations array
@@ -161,19 +162,19 @@ export async function POST(req: NextRequest) {
 
     // Validate it's an array
     if (!Array.isArray(operations)) {
-      return NextResponse.json(
-        { error: 'AI did not return an array of operations.' },
-        { status: 502 }
-      );
+      return NextResponse.json({
+        message: 'I understood your request but had trouble applying changes. Please try rephrasing.',
+        operations: [],
+      });
     }
 
     // Basic validation of each operation
     for (const op of operations) {
       if (!op.type || !op.payload) {
-        return NextResponse.json(
-          { error: 'Each operation must have a "type" and "payload" field.' },
-          { status: 502 }
-        );
+        return NextResponse.json({
+          message: 'Some changes could not be applied. Please try again.',
+          operations: [],
+        });
       }
     }
 

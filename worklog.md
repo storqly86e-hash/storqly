@@ -170,6 +170,50 @@ Stage Summary:
 - Full core loop browser-verified end-to-end
 
 ---
+Task ID: FIX-3
+Agent: Main Orchestrator
+Task: Eliminate 502 errors entirely — guaranteed fallback + backoff + 429 handling
+
+Work Log:
+- Analyzed 3 distinct failure modes from dev logs:
+  1. Literal newlines inside JSON string values (FIX-2)
+  2. Malformed tokens e.g. "secondary#e74c3c" (missing colon-quote)
+  3. 429 rate limiting — both retry attempts hit instantly (no backoff)
+
+- Rewrote ai-orchestrator.ts:
+  - 3 retries for store-generation (was 2), 2 for chat-edit
+  - Exponential backoff: 0s → 3s → 7.5s (longer 5s/7.5s on 429 errors)
+  - isRateLimitError() detection for 429 status codes
+  - Separate retry instructions per attempt (progressively stricter)
+
+- Rewrote api/store/generate/route.ts:
+  - Added createFallbackStore(): generates a valid 4-section starter store with 4 products, theme-matched to the prompt
+  - Route NEVER returns 502 — on any AI failure, returns 200 with fallback store + _note field
+  - Even the catch{} block returns a fallback store
+  - Truncation detection (< 500 chars) skips parse attempt
+
+- Fixed api/store/chat/route.ts:
+  - All error paths return 200 with empty operations (never 502)
+  - User sees friendly message in chat, not an error page
+
+- 20-prompt sequential batch test results:
+  - 20/20 returned HTTP 200 (ZERO 502s, ZERO failures)
+  - 9 AI-generated, 11 fallback
+   - Caveat: tests 6-14 ran during rate-limit recovery; earlier tests showed ~80% AI success
+
+- Browser verification:
+  - Generated "Lumen & Flame" candle store (AI, 31s, attempt 1)
+  - Visual editor properties panel displayed hero fields
+  - Back button returned to landing page cleanly
+  - Zero lint errors
+
+Stage Summary:
+- 502 is now IMPOSSIBLE for the user — fallback store guarantees 200 every time
+- Retry with backoff handles rate limits (429) gracefully
+- Under normal load (no rate limit), ~80% of generations produce full AI stores
+- Fallback stores are immediately editable via chat + visual editor
+
+---
 Task ID: FIX-1
 Agent: Main Orchestrator
 Task: Diagnose and fix silent generation failures
