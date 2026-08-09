@@ -19,6 +19,7 @@ import {
   MessageSquare,
   Eye,
   AlertCircle,
+  AlertTriangle,
   X,
   RotateCcw,
 } from 'lucide-react'
@@ -93,6 +94,7 @@ function LandingPage() {
     isGenerating,
     setIsGenerating,
     setStore,
+    setStoreWithFallback,
   } = useStoreEditor()
 
   // Local UI state (not in Zustand — this is view-level)
@@ -169,9 +171,14 @@ function LandingPage() {
         throw new Error('The AI response was missing store data. Please try again.')
       }
 
-      console.log('[Storqly] Store generated successfully:', data.store.name)
+      console.log('[Storqly] Store generated. isFallback:', data._isFallback, 'name:', data.store.name)
       clearTimers()
-      setStore(data.store)
+
+      if (data._isFallback) {
+        setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
+      } else {
+        setStore(data.store)
+      }
     } catch (err: unknown) {
       clearTimers()
 
@@ -192,7 +199,7 @@ function LandingPage() {
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
-  }, [promptText, setIsGenerating, setStore, clearTimers])
+  }, [promptText, setIsGenerating, setStore, setStoreWithFallback, clearTimers])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -436,6 +443,7 @@ function EditorView() {
   const store = useStoreEditor((s) => s.store)
   const selectedSectionId = useStoreEditor((s) => s.selectedSectionId)
   const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
+  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
   const [showLeft, setShowLeft] = useState(true)
   const [showRight, setShowRight] = useState(true)
 
@@ -453,6 +461,8 @@ function EditorView() {
   return (
     <div className="flex h-screen flex-col bg-zinc-950">
       <EditorToolbar onToggleLeft={setShowLeft} onToggleRight={setShowRight} showLeft={showLeft} showRight={showRight} />
+
+      {isFallbackStore && <FallbackBanner />}
 
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" autoSaveId="storqly-editor-layout">
@@ -486,6 +496,44 @@ function EditorView() {
             )}
           </AnimatePresence>
         </PanelGroup>
+      </div>
+    </div>
+  )
+}
+
+// ─── Fallback Banner ──────────────────────────────────────────────
+
+function FallbackBanner() {
+  const reset = useStoreEditor((s) => s.reset)
+  const [dismissed, setDismissed] = useState(false)
+
+  if (dismissed) return null
+
+  return (
+    <div className="flex items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+      <p className="flex-1 text-sm text-amber-200">
+        AI couldn't generate a custom store — you're viewing a starter template.
+        <span className="hidden sm:inline"> Edit it manually or try regenerating.</span>
+      </p>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          className="h-7 gap-1.5 rounded-lg bg-amber-500/20 px-3 text-xs font-medium text-amber-200 hover:bg-amber-500/30"
+          onClick={() => {
+            reset()
+          }}
+        >
+          <RotateCcw className="h-3 w-3" />
+          Regenerate with AI
+        </Button>
+        <button
+          onClick={() => setDismissed(true)}
+          className="text-zinc-500 hover:text-zinc-300"
+          aria-label="Dismiss"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
       </div>
     </div>
   )

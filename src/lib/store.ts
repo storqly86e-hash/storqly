@@ -43,6 +43,11 @@ interface StoreEditorState {
   moveSection: (pageId: string, fromIndex: number, toIndex: number) => void;
   updateStoreName: (name: string) => void;
 
+  // Whether the current store is a fallback (not AI-generated)
+  isFallbackStore: boolean;
+  fallbackReason: string;
+  setIsFallbackStore: (v: boolean, reason?: string) => void;
+
   // Publish state
   isPublishing: boolean;
   setIsPublishing: (v: boolean) => void;
@@ -60,6 +65,7 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
   store: null,
   setStore: (store) => set({ store, view: 'editor' }),
+  setStoreWithFallback: (store, isFallback, reason) => set({ store, view: 'editor', isFallbackStore: isFallback, fallbackReason: reason || '', isGenerating: false, generationStatus: '' }),
 
   isGenerating: false,
   setIsGenerating: (v) => set({ isGenerating: v }),
@@ -346,6 +352,10 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
     });
   },
 
+  isFallbackStore: false,
+  fallbackReason: '',
+  setIsFallbackStore: (v, reason) => set({ isFallbackStore: v, fallbackReason: reason || '' }),
+
   isPublishing: false,
   setIsPublishing: (v) => set({ isPublishing: v }),
   isPublished: false,
@@ -362,5 +372,7 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
       chatMessages: [],
       isPublishing: false,
       isPublished: false,
+      isFallbackStore: false,
+      fallbackReason: '',
     }),
 }));

@@ -25,8 +25,8 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'store-generation': {
     label: 'Store Generation',
     temperature: 0.7,
-    timeout: 75_000,
-    maxRetries: 3,
+    timeout: 60_000,
+    maxRetries: 2,
   },
   'chat-edit': {
     label: 'Chat Edit',
@@ -98,33 +98,183 @@ export function extractJSON(raw: string): string {
   return raw;
 }
 
-export function repairJSON(jsonStr: string): string {
-  // Pass 1: Remove newlines/tabs inside quoted strings only
+// ─── Safe repairs (cannot break valid JSON) ─────────────────────
+
+function safeRepair(jsonStr: string): string {
+  // Remove newlines/tabs inside quoted strings only
   const chars: string[] = [];
   let inString = false;
   let escaped = false;
-
   for (let i = 0; i < jsonStr.length; i++) {
     const ch = jsonStr[i];
     if (escaped) { chars.push(ch); escaped = false; continue; }
     if (ch === '\\') { chars.push(ch); escaped = true; continue; }
     if (ch === '"') { inString = !inString; chars.push(ch); continue; }
-    if (inString && (ch === '\n' || ch === '\r' || ch === '\t')) {
-      chars.push(' ');
-      continue;
-    }
+    if (inString && (ch === '\n' || ch === '\r' || ch === '\t')) { chars.push(' '); continue; }
     chars.push(ch);
   }
-
   let repaired = chars.join('');
-  // Pass 2: Collapse multi-space
+  // Collapse multi-space
   repaired = repaired.replace(/  +/g, ' ');
-  // Pass 3: Remove control characters
+  // Remove control characters
   repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
-  // Pass 4: Remove trailing commas
+  // Remove trailing commas
   repaired = repaired.replace(/,\s*([}\]])/g, '$1');
-
+  // Close unclosed brackets (truncation)
+  repaired = closeUnclosedBrackets(repaired);
   return repaired;
+}
+
+function closeUnclosedBrackets(str: string): string {
+  let openCurly = 0, openSquare = 0, inStr = false, esc = false;
+  for (const ch of str) {
+    if (esc) { esc = false; continue; }
+    if (ch === '\\') { esc = true; continue; }
+    if (ch === '"') { inStr = !inStr; continue; }
+    if (inStr) continue;
+    if (ch === '{') openCurly++;
+    if (ch === '}') openCurly--;
+    if (ch === '[') openSquare++;
+    if (ch === ']') openSquare--;
+  }
+  let repaired = str;
+  if (inStr) repaired += '"';
+  while (openSquare > 0) { repaired += ']'; openSquare--; }
+  while (openCurly > 0) { repaired += '}'; openCurly--; }
+  return repaired;
+}
+
+/**
+ * Apply a single targeted repair based on the JSON parse error.
+ * Returns the repaired string, or null if the error can't be auto-fixed.
+ */
+function targetedRepair(jsonStr: string, errMsg: string): string | null {
+  const posMatch = errMsg.match(/position (\d+)/);
+  if (!posMatch) return null;
+  const pos = parseInt(posMatch[1], 10);
+  if (pos < 0 || pos >= jsonStr.length) return null;
+
+  const ch = jsonStr[pos];
+
+  // Case 1: "Expected ',' or '}'" — missing comma between object properties
+  if (errMsg.includes("Expected ',' or '}'")) {
+    if (ch === '"') {
+      // Next property starts with " — insert comma before it
+      return jsonStr.substring(0, pos) + ',' + jsonStr.substring(pos);
+    }
+    if (ch === ':') {
+      // AI used : instead of , between properties — replace : with ,
+      return jsonStr.substring(0, pos) + ',' + jsonStr.substring(pos + 1);
+    }
+  }
+
+  // Case 2: "Expected ',' or ']'" — missing comma in array
+  if (errMsg.includes("Expected ',' or ']'")) {
+    if (ch === '"') {
+      return jsonStr.substring(0, pos) + ',' + jsonStr.substring(pos);
+    }
+    if (ch === ':') {
+      return jsonStr.substring(0, pos) + ',' + jsonStr.substring(pos + 1);
+    }
+  }
+
+  // Case 3: "Expected ':' after property name" — missing colon or missing value
+  if (errMsg.includes("Expected ':'")) {
+    if (ch === '"' || ch === ',') {
+      // Key has no value — insert empty string value
+      return jsonStr.substring(0, pos) + ':""' + jsonStr.substring(pos);
+    }
+  }
+
+  // Case 4: "Unexpected non-whitespace character after JSON" — truncate
+  if (errMsg.includes('Unexpected non-whitespace character after JSON')) {
+    // Try truncating at the error position
+    const truncated = jsonStr.substring(0, pos).trimEnd();
+    return closeUnclosedBrackets(truncated);
+  }
+
+  // Case 5: "Expected double-quoted property name" — malformed key
+  if (errMsg.includes('Expected double-quoted property name')) {
+    if (ch !== '"' && ch !== ',' && ch !== '}' && ch !== ']') {
+      // Some garbage character where a key should be — skip it
+      return jsonStr.substring(0, pos) + jsonStr.substring(pos + 1);
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Strategy B: fix unescaped quotes inside string values.
+ * Uses lookahead: a `"` inside a string is only a terminator if
+ * the next non-whitespace char is one of: `: , } ]`.
+ * IMPORTANT: Only used as a fallback strategy, not the primary repair.
+ */
+function fixUnescapedQuotes(jsonStr: string): string {
+  const VALID_TERMINATORS = new Set([':', ',', '}', ']']);
+  const result: string[] = [];
+  let inString = false;
+  let escaped = false;
+  for (let i = 0; i < jsonStr.length; i++) {
+    const ch = jsonStr[i];
+    if (escaped) { result.push(ch); escaped = false; continue; }
+    if (ch === '\\') { result.push(ch); escaped = true; continue; }
+    if (ch === '"') {
+      if (!inString) { inString = true; result.push(ch); }
+      else {
+        let j = i + 1;
+        while (j < jsonStr.length && (jsonStr[j] === ' ' || jsonStr[j] === '\t' || jsonStr[j] === '\n' || jsonStr[j] === '\r')) j++;
+        const nextNonWS = j < jsonStr.length ? jsonStr[j] : null;
+        if (nextNonWS !== null && VALID_TERMINATORS.has(nextNonWS)) {
+          inString = false; result.push(ch);
+        } else if (j >= jsonStr.length) {
+          inString = false; result.push(ch);
+        } else {
+          result.push('\\', '"');
+        }
+      }
+      continue;
+    }
+    result.push(ch);
+  }
+  return result.join('');
+}
+
+/**
+ * Main repair entry point. Tries multiple strategies in order of safety.
+ */
+export function repairJSON(jsonStr: string): string {
+  return safeRepair(jsonStr);
+}
+
+/**
+ * Aggressive repair: tries quote-escaping as a second strategy.
+ */
+export function aggressiveRepair(jsonStr: string): string {
+  let repaired = fixUnescapedQuotes(jsonStr);
+  // Re-apply safe repairs after quote fix
+  repaired = safeRepair(repaired);
+  return repaired;
+}
+
+/**
+ * Iterative position-based repair: parses, gets error, applies targeted fix, retries.
+ * Up to 10 iterations of parse → fix → retry.
+ */
+export function iterativeRepair(jsonStr: string): string {
+  let current = jsonStr;
+  for (let i = 0; i < 10; i++) {
+    try {
+      JSON.parse(current);
+      return current; // Parsed successfully
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const fix = targetedRepair(current, msg);
+      if (!fix) return current; // Can't fix this error
+      current = fix;
+    }
+  }
+  return current;
 }
 
 // ─── Core orchestrator ──────────────────────────────────────────
@@ -182,7 +332,7 @@ export async function executeAI(
   for (let i = 0; i < maxRetries; i++) {
     // Exponential backoff: 0s, 3s, 8s (longer on rate limits)
     if (i > 0) {
-      const baseDelay = isRateLimitError(lastError) ? 5000 : 2000;
+      const baseDelay = isRateLimitError(lastError) ? 15000 : 3000;
       const delay = baseDelay * Math.pow(1.5, i - 1);
       console.warn(`[AI Orchestrator] Waiting ${(delay / 1000).toFixed(1)}s before retry ${i + 1} for ${taskType}...`);
       await sleep(delay);

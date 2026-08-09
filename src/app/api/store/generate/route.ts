@@ -1,20 +1,21 @@
 // ========================================
 // Store Generation API
 // ========================================
-// NEVER returns 502 to the user. If AI fails after all retries,
-// returns a valid starter store that the user can customize.
+// NEVER returns a non-200 status. If AI fails after all retries,
+// returns a valid starter store with _isFallback flag so the UI can inform the user.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { executeAI, extractJSON, repairJSON } from '@/lib/ai-orchestrator';
+import { executeAI, extractJSON, repairJSON, aggressiveRepair, iterativeRepair } from '@/lib/ai-orchestrator';
 import type { Store } from '@/lib/store-schema';
 
-// ─── System prompt ──────────────────────────────────────────────
+// ─── System prompts ─────────────────────────────────────────────
 const SYSTEM_PROMPT = `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
 
 CRITICAL FORMAT RULES:
 1. Return raw JSON ONLY. No markdown fences, no commentary.
 2. NEVER put a literal newline, line break, or tab inside any string value. Every string must be one line.
-3. Generate fresh UUIDs for all "id" fields.
+3. NEVER use double-quote characters inside any string value. If you need quotation marks inside a string, use single quotes (') instead. For example: description should be "Handcrafted 'gold' ring" not "Handcrafted \"gold\" ring".
+4. Generate fresh UUIDs for all "id" fields.
 
 TOP-LEVEL SCHEMA:
 {"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
@@ -34,17 +35,35 @@ SECTION CONTENTS:
 - faq: {headline, items: [{id, question, answer}]}
 - cta: {headline, body, ctaText, ctaLink: "#", style: "solid"}
 - categories: {headline, items: [{id, name, slug, productCount: 5}], columns: 3}
-- rich-text: {html: "<valid HTML>"}
+- rich-text: {html: "<valid HTML without double quotes inside attributes — use single quotes>"}
 - spacer: {height: "md"}
 - divider: {}
 
-PRODUCT: {id: "<uuid>", name, price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>"], description: "<1-2 sentences, ONE line>", category, variants: [{id: "<uuid>", name: "Size", options: [{label: "M", value: "m"}], inStock: true}], featured: false, inStock: true}
+PRODUCT: {id: "<uuid>", name, price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>"], description: "<1-2 sentences, ONE line, use single quotes for emphasis>", category, variants: [{id: "<uuid>", name: "Size", options: [{label: "M", value: "m"}], inStock: true}], featured: false, inStock: true}
 
 REQUIREMENTS:
 - 5-7 products with realistic names, prices, descriptions. Mark 2-3 as featured.
 - 6-8 sections: hero + featured-products + testimonials + newsletter + cta + extras.
 - Do NOT include header or footer sections.
 - Theme colors must match the brand.`;
+
+// Stricter prompt for JSON-parse retry attempts
+const RETRY_SYSTEM_PROMPT_1 = SYSTEM_PROMPT + `
+
+⚠️ YOUR PREVIOUS RESPONSE HAD INVALID JSON.
+You MUST produce PERFECTLY VALID JSON this time.
+- Use single quotes (') for any quoted words inside string values — NEVER double quotes inside strings.
+- No newlines, no tabs, no special characters inside strings.
+- Keep descriptions simple and short.`;
+
+// Even more minimal prompt for last-resort attempt
+const RETRY_SYSTEM_PROMPT_2 = `Return a valid JSON object for an e-commerce store. No markdown. No explanation. Raw JSON only.
+
+RULE: Never put double-quote characters inside any string value. Use single quotes instead.
+
+Schema: {"id":"uuid","name":"Store Name","slug":"store-name","description":"One line","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"Font","body":"Font"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"uuid","name":"Home","slug":"","isHomepage":true,"sections":[{"id":"uuid","type":"hero","content":{"headline":"H","subheadline":"S","ctaText":"Shop Now","ctaLink":"#products","alignment":"center","height":"lg"},"style":{"backgroundColor":"","textColor":"","paddingY":"xl","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true},{"id":"uuid","type":"featured-products","content":{"headline":"Featured","subtitle":"Our best","productIds":["id1","id2"],"columns":3,"showPrice":true,"showAddToCart":true},"style":{"backgroundColor":"","textColor":"","paddingY":"xl","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true},{"id":"uuid","type":"testimonials","content":{"headline":"Reviews","items":[{"id":"uuid","quote":"Great","author":"A","role":"Buyer","rating":5}]},"style":{"backgroundColor":"#f9fafb","textColor":"","paddingY":"xl","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true},{"id":"uuid","type":"newsletter","content":{"headline":"Subscribe","subtitle":"Get offers","placeholderText":"Email","buttonText":"Subscribe"},"style":{"backgroundColor":"#6d28d9","textColor":"#ffffff","paddingY":"xl","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true},{"id":"uuid","type":"cta","content":{"headline":"Shop Now","body":"Browse our collection","ctaText":"View Products","ctaLink":"#products","style":"solid"},"style":{"backgroundColor":"","textColor":"","paddingY":"xl","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}]},{"id":"uuid","name":"About","slug":"about","isHomepage":false,"sections":[]}],"products":[{"id":"uuid","name":"Product 1","price":29.99,"compareAtPrice":null,"images":["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"],"description":"A great product","category":"General","variants":[{"id":"uuid","name":"Size","options":[{"label":"M","value":"m"}],"inStock":true}],"featured":true,"inStock":true}],"published":false,"createdAt":"ISO","updatedAt":"ISO"}
+
+Customize the names, descriptions, colors, and products for the requested store. Include 5-7 products and 6-8 sections. Use single quotes for any quoted words inside strings. No double quotes inside string values.`;
 
 // ─── Fallback: generate a valid starter store without AI ───────
 function createFallbackStore(prompt: string): Store {
@@ -73,24 +92,15 @@ function createFallbackStore(prompt: string): Store {
     description: `A ${name.toLowerCase()} store built with Storqly AI.`,
     theme: {
       colors: {
-        primary: '#6d28d9',
-        secondary: '#ec4899',
-        accent: '#f59e0b',
-        background: '#ffffff',
-        surface: '#f9fafb',
-        text: '#111827',
-        textMuted: '#6b7280',
-        border: '#e5e7eb',
+        primary: '#6d28d9', secondary: '#ec4899', accent: '#f59e0b',
+        background: '#ffffff', surface: '#f9fafb', text: '#111827',
+        textMuted: '#6b7280', border: '#e5e7eb',
       },
       fonts: { heading: 'Inter', body: 'Inter' },
-      spacing: 'normal',
-      borderRadius: 'md',
+      spacing: 'normal', borderRadius: 'md',
     },
     pages: [{
-      id: uid(),
-      name: 'Home',
-      slug: '',
-      isHomepage: true,
+      id: uid(), name: 'Home', slug: '', isHomepage: true,
       sections: [
         { id: uid(), type: 'hero', content: { headline: `Welcome to ${displayName || 'My'} Store`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { backgroundColor: '', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.slice(0, 3).map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { backgroundColor: '', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
@@ -106,38 +116,78 @@ function createFallbackStore(prompt: string): Store {
   };
 }
 
-// ─── Try to parse store JSON ────────────────────────────────────
+// ─── Try to parse store JSON with multi-strategy repair ───────
 function tryParseStore(content: string): { store?: Store; error?: string } {
-  // Skip obviously broken responses (< 500 chars = truncated)
   if (content.length < 500) {
     return { error: `Response too short (${content.length} chars), likely truncated.` };
   }
 
-  let jsonStr = extractJSON(content);
+  const isValid = (s: unknown): s is Store =>
+    !!s && typeof s === 'object' &&
+    'id' in s && 'name' in s && 'theme' in s &&
+    Array.isArray((s as Store).pages) && Array.isArray((s as Store).products);
 
-  // Attempt 1: direct parse
-  try {
-    const store = JSON.parse(jsonStr) as Store;
-    if (store?.id && store?.name && store?.theme && Array.isArray(store.pages) && Array.isArray(store.products)) {
-      return { store };
-    }
-    return { error: 'Incomplete schema.' };
-  } catch { /* continue */ }
+  const tryParse = (str: string): Store | null => {
+    try {
+      const obj = JSON.parse(str);
+      return isValid(obj) ? obj : null;
+    } catch { return null; }
+  };
 
-  // Attempt 2: repair + parse
-  try {
-    const repaired = repairJSON(jsonStr);
-    const store = JSON.parse(repaired) as Store;
-    if (store?.id && store?.name && store?.theme && Array.isArray(store.pages) && Array.isArray(store.products)) {
-      console.log('[Store Generate] JSON repaired successfully.');
-      return { store };
-    }
-    return { error: 'Repaired JSON incomplete.' };
-  } catch (repairErr: unknown) {
-    const msg = repairErr instanceof Error ? repairErr.message : String(repairErr);
-    return { error: `Invalid JSON: ${msg}` };
+  // Strategy 1: Safe repair (newlines, trailing commas, truncation) + extract + parse
+  const safeRepaired = repairJSON(content);
+  let jsonStr = extractJSON(safeRepaired);
+  let store = tryParse(jsonStr);
+  if (store) return { store };
+
+  // Strategy 2: Iterative position-based targeted repair on safe-repaired JSON
+  const iterRepaired = iterativeRepair(jsonStr);
+  store = tryParse(iterRepaired);
+  if (store) {
+    console.log('[Store Generate] JSON fixed via iterative repair.');
+    return { store };
   }
+
+  // Strategy 3: Aggressive repair (unescaped quotes) + extract + iterative
+  const aggrRepaired = aggressiveRepair(content);
+  jsonStr = extractJSON(aggrRepaired);
+  store = tryParse(jsonStr);
+  if (store) {
+    console.log('[Store Generate] JSON fixed via aggressive repair.');
+    return { store };
+  }
+  const iterAggr = iterativeRepair(jsonStr);
+  store = tryParse(iterAggr);
+  if (store) {
+    console.log('[Store Generate] JSON fixed via aggressive + iterative repair.');
+    return { store };
+  }
+
+  // All strategies failed — log diagnostic
+  const lastErr = (() => {
+    try { JSON.parse(iterAggr); return null; }
+    catch (e: unknown) { return e instanceof Error ? e.message : String(e); }
+  })();
+  const posMatch = lastErr?.match(/position (\d+)/);
+  if (posMatch) {
+    const pos = parseInt(posMatch[1], 10);
+    const start = Math.max(0, pos - 50);
+    const end = Math.min(iterAggr.length, pos + 50);
+    console.error(`[DIAG] All repairs failed. Error: ${lastErr}`);
+    console.error(`[DIAG] Around pos ${pos} (len=${iterAggr.length}): ...${iterAggr.substring(start, end)}...`);
+  }
+
+  return { error: `All repair strategies failed. Last: ${lastErr}` };
 }
+
+// ─── JSON-parse retry configurations ─────────────────────────────
+const PARSE_RETRY_CONFIGS = [
+  { systemPrompt: SYSTEM_PROMPT, temperature: 0.7, maxRetries: 2, timeout: 60_000, label: 'attempt 1' },
+  { systemPrompt: RETRY_SYSTEM_PROMPT_1, temperature: 0.3, maxRetries: 1, timeout: 45_000, label: 'attempt 2 (stricter prompt)' },
+  { systemPrompt: RETRY_SYSTEM_PROMPT_2, temperature: 0.1, maxRetries: 1, timeout: 45_000, label: 'attempt 3 (minimal prompt)' },
+];
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -150,48 +200,65 @@ export async function POST(req: NextRequest) {
     }
 
     const userMessage = `Generate an e-commerce store: ${prompt.trim()}`;
+    let lastParseError = 'Unknown';
 
-    // ── Try AI generation (up to 3 attempts with backoff) ──
-    console.log('[Store Generate] Starting AI generation...');
-    const result = await executeAI('store-generation', [
-      { role: 'user', content: userMessage },
-    ], { systemPrompt: SYSTEM_PROMPT });
+    // ── JSON-parse-level retry: up to 3 attempts with stricter prompts ──
+    for (let i = 0; i < PARSE_RETRY_CONFIGS.length; i++) {
+      const cfg = PARSE_RETRY_CONFIGS[i];
 
-    if (result.success && result.content) {
-      // TEMP DIAGNOSTIC: log raw content around parse failure position
+      if (i > 0) {
+        // Brief pause between parse retries (not a full API backoff — that's inside executeAI)
+        console.log(`[Store Generate] JSON parse failed. Waiting 2s before ${cfg.label}...`);
+        await sleep(2000);
+      } else {
+        console.log(`[Store Generate] Starting AI generation (${cfg.label})...`);
+      }
+
+      // Call the AI — executeAI handles API-level retries internally
+      const result = await executeAI('store-generation', [
+        { role: 'user', content: userMessage },
+      ], {
+        systemPrompt: cfg.systemPrompt,
+        temperature: cfg.temperature,
+        timeout: cfg.timeout,
+      });
+
+      // Override the internal maxRetries — we manage our own retry loop
+      // (executeAI uses TASK_CONFIGS maxRetries=3, which is fine for API errors)
+
+      if (!result.success || !result.content) {
+        console.warn(`[Store Generate] AI API failed on ${cfg.label}: ${result.error}`);
+        lastParseError = `AI API failed: ${result.error}`;
+        continue; // Try next parse attempt
+      }
+
+      // Try to parse the JSON
       const parsed = tryParseStore(result.content);
       if (parsed.store) {
-        console.log(`[Store Generate] AI success on attempt ${result.attempts}. Store: ${parsed.store.name}`);
-        return NextResponse.json({ store: parsed.store });
+        console.log(`[Store Generate] ✅ AI success on ${cfg.label}. Store: ${parsed.store.name}`);
+        return NextResponse.json({ store: parsed.store, _isFallback: false });
       }
-      // Log the raw AI content around the failure position for diagnosis
-      const posMatch = parsed.error?.match(/position (\d+)/);
-      if (posMatch) {
-        const pos = parseInt(posMatch[1], 10);
-        const start = Math.max(0, pos - 80);
-        const end = Math.min(result.content.length, pos + 80);
-        console.error(`[DIAG] Raw AI content around pos ${pos}:
-...${result.content.substring(start, end)}...`);
-        console.error(`[DIAG] Full AI response length: ${result.content.length} chars`);
-      }
-      console.warn(`[Store Generate] AI returned unparseable JSON on attempt ${result.attempts}: ${parsed.error}`);
-    } else {
-      console.warn(`[Store Generate] AI failed after ${result.attempts} attempts: ${result.error}`);
+
+      console.warn(`[Store Generate] JSON unparseable on ${cfg.label}: ${parsed.error}`);
+      lastParseError = parsed.error || 'Unknown parse error';
     }
 
-    // ── FALLBACK: Return a valid starter store ──
-    // The user will NEVER see an error. They get a starter store they can customize.
-    console.log('[Store Generate] Using fallback store generation.');
+    // ── ALL ATTEMPTS FAILED: Return fallback ──
+    console.error(`[Store Generate] ❌ All 3 attempts failed. Last error: ${lastParseError}`);
     const fallback = createFallbackStore(prompt.trim());
     return NextResponse.json({
       store: fallback,
-      _note: 'AI generation failed — showing starter template. Use the editor to customize.',
+      _isFallback: true,
+      _fallbackReason: 'AI generation did not return valid data after multiple attempts.',
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Store Generate] Unexpected error:', msg);
-    // Even on unexpected errors, return a fallback
     const fallback = createFallbackStore('My Store');
-    return NextResponse.json({ store: fallback });
+    return NextResponse.json({
+      store: fallback,
+      _isFallback: true,
+      _fallbackReason: `Unexpected error: ${msg}`,
+    });
   }
 }
