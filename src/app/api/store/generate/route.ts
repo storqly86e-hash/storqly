@@ -6,7 +6,7 @@
 // a complete store schema, and returns the Store object as JSON.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { executeAI, extractJSON } from '@/lib/ai-orchestrator';
+import { executeAI, extractJSON, repairJSON } from '@/lib/ai-orchestrator';
 import type { Store } from '@/lib/store-schema';
 
 // ─── System prompt for store generation ──────────────────────────
@@ -208,7 +208,10 @@ Each product:
 7. **Generate fresh UUIDs** for all id fields (use random strings like "a1b2c3d4-e5f6-7890-abcd-ef1234567890").
 8. **The store must feel complete and professional** — like a real Shopify store.
 
-CRITICAL: Return ONLY the raw JSON object. No markdown fences, no explanation, no commentary.`;
+CRITICAL FORMAT RULES:
+1. Return ONLY the raw JSON object. No markdown fences, no explanation, no commentary.
+2. Do NOT include literal newlines or tabs inside string values — keep all text on one line per value.
+3. Ensure all string values are properly escaped. Product descriptions should be single-line strings.`;
 
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -240,19 +243,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract JSON from the AI response
-    const jsonStr = extractJSON(result.content);
+    let jsonStr = extractJSON(result.content);
 
-    // Parse and validate
+    // Parse and validate (with repair attempts)
     let store: Store;
+    // Try 1: direct parse
     try {
       store = JSON.parse(jsonStr) as Store;
-    } catch (parseErr: unknown) {
-      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-      console.error('[Store Generate] JSON parse error:', msg);
-      return NextResponse.json(
-        { error: 'AI returned invalid JSON. Please try again.', details: msg },
-        { status: 502 }
-      );
+    } catch {
+      // Try 2: repair common issues and re-parse
+      try {
+        const repaired = repairJSON(jsonStr);
+        store = JSON.parse(repaired) as Store;
+        console.log('[Store Generate] JSON repaired successfully');
+      } catch (repairErr: unknown) {
+        const msg = repairErr instanceof Error ? repairErr.message : String(repairErr);
+        console.error('[Store Generate] JSON parse error after repair:', msg);
+        // Log first 200 chars of the problematic JSON for debugging
+        console.error('[Store Generate] JSON preview:', jsonStr.substring(0, 200));
+        return NextResponse.json(
+          { error: 'AI returned invalid JSON. Please try again.', details: msg },
+          { status: 502 }
+        );
+      }
     }
 
     // Basic validation

@@ -6,7 +6,7 @@
 // the user's edit command and return ChatEditOperation[].
 
 import { NextRequest, NextResponse } from 'next/server';
-import { executeAI, extractJSON } from '@/lib/ai-orchestrator';
+import { executeAI, extractJSON, repairJSON } from '@/lib/ai-orchestrator';
 import type { Store, ChatMessage, ChatEditOperation } from '@/lib/store-schema';
 
 // ─── Build system prompt with current store context ──────────────
@@ -139,18 +139,24 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract and parse the operations array
-    const jsonStr = extractJSON(result.content);
+    let jsonStr = extractJSON(result.content);
 
     let operations: ChatEditOperation[];
+    // Try direct parse, then repair
     try {
       operations = JSON.parse(jsonStr) as ChatEditOperation[];
-    } catch (parseErr: unknown) {
-      const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-      console.error('[Chat Edit] JSON parse error:', msg);
-      return NextResponse.json(
-        { error: 'AI returned invalid JSON for operations.', details: msg },
-        { status: 502 }
-      );
+    } catch {
+      try {
+        const repaired = repairJSON(jsonStr);
+        operations = JSON.parse(repaired) as ChatEditOperation[];
+      } catch (parseErr: unknown) {
+        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+        console.error('[Chat Edit] JSON parse error:', msg);
+        return NextResponse.json(
+          { message: "I understood your request but had trouble applying the changes. Please try rephrasing.", operations: [] },
+          { status: 200 }
+        );
+      }
     }
 
     // Validate it's an array
@@ -171,7 +177,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ operations });
+    // Generate a human-readable summary
+    const summary = operations.length === 0
+      ? 'No changes needed.'
+      : operations.map(op => {
+          switch (op.type) {
+            case 'update-theme': return 'Updated theme';
+            case 'update-section': return 'Updated a section';
+            case 'add-section': return 'Added a new section';
+            case 'remove-section': return 'Removed a section';
+            case 'reorder-sections': return 'Reordered sections';
+            case 'add-product': return 'Added a product';
+            case 'update-product': return 'Updated a product';
+            case 'remove-product': return 'Removed a product';
+            case 'bulk-update': return 'Applied changes';
+            case 'update-page': return 'Updated page';
+            default: return 'Made a change';
+          }
+        }).join(', ');
+
+    return NextResponse.json({ message: summary, operations });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Chat Edit] Unexpected error:', msg);

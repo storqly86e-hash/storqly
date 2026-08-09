@@ -149,3 +149,58 @@ Stage Summary:
 - Store represented as structured JSON schema (single source of truth)
 - Chat and visual editor both read/write to same Zustand store
 - Zero lint errors, clean dev server compilation
+
+---
+Task ID: FIX-1
+Agent: Main Orchestrator
+Task: Diagnose and fix silent generation failures
+
+Work Log:
+- Tested API directly with curl — API works, returns full store in 50-60s
+- Tested via agent-browser — button click works, generation completes locally
+- Identified root causes of user-facing failure:
+  1. Error handling relied on toast.error() only — invisible in iframe preview panels
+  2. No AbortController on fetch — if request hangs, user stuck forever
+  3. Progress messages cycled in 12.5s then stopped — no feedback for remaining ~48s
+  4. No elapsed time indicator — user has no idea if it is working
+  5. No cancel button — cannot stop a stuck request
+  6. AbortError logged as console.error — triggered Next.js dev error overlay
+  7. AI sometimes returns invalid JSON (literal newlines in strings, trailing commas)
+
+- Fixed page.tsx LandingPage:
+  - Moved error/generation state to local component state (not just Zustand)
+  - Added AbortController with signal passed to fetch
+  - Added Cancel button that calls abort() and resets state
+  - Added elapsed time counter (updates every second)
+  - Made progress messages loop continuously (not stop after one cycle)
+  - Added visible error state in UI (red alert box with error message)
+  - Added Try Again button after errors
+  - Added Dismiss error (X) button
+  - Suppress console.error for AbortError (expected when canceling)
+  - Added console.log for successful generation debugging
+  - Set expected wait time note: "AI is building your store, this may take up to 2 minutes"
+
+- Fixed ai-orchestrator.ts:
+  - Improved extractJSON to validate extracted JSON before returning
+  - Added repairJSON function: removes control chars, trailing commas, newlines/tabs in strings
+  - Extract-and-repair flow handles AI output issues gracefully
+
+- Fixed api/store/generate/route.ts:
+  - Two-pass JSON parsing: direct parse first, then repair and re-parse
+  - Added CRITICAL FORMAT RULES to system prompt (no literal newlines in strings)
+  - Better error logging with JSON preview on failure
+
+- Fixed api/store/chat/route.ts:
+  - Added repairJSON pass for chat operation parsing
+  - Chat JSON parse failures return 200 with empty operations (graceful degradation)
+  - Added human-readable summary message to all successful chat responses
+
+- Removed dead EditorToolbar component (duplicate of EditorToolbarWithState)
+
+Stage Summary:
+- Generation, chat editing, and visual editing all working end-to-end
+- Error states are now visible in the UI (not just toasts)
+- Users can cancel generation and retry on failure
+- Elapsed timer and looping progress messages provide clear feedback during 50-60s AI calls
+- JSON repair handles common AI output issues (trailing commas, control characters, newlines in strings)
+- Zero lint errors, clean dev server

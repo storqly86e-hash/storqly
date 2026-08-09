@@ -89,16 +89,36 @@ export function extractJSON(raw: string): string {
     // Try to extract from markdown code block
     const codeBlockMatch = raw.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
     if (codeBlockMatch) {
-      return codeBlockMatch[1].trim();
+      const extracted = codeBlockMatch[1].trim();
+      try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
     }
     // Try to find the first { and last }
     const firstBrace = raw.indexOf('{');
     const lastBrace = raw.lastIndexOf('}');
     if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      const extracted = raw.substring(firstBrace, lastBrace + 1);
+      try { JSON.parse(extracted); return extracted; } catch { /* continue */ }
+    }
+    // Return best-effort extraction even if it might not parse
+    if (firstBrace !== -1 && lastBrace !== -1) {
       return raw.substring(firstBrace, lastBrace + 1);
     }
     return raw;
   }
+}
+
+/** Attempt to repair common JSON issues from AI output */
+export function repairJSON(jsonStr: string): string {
+  let repaired = jsonStr;
+  // Replace literal newlines/tabs with spaces (AI sometimes puts them inside strings)
+  repaired = repaired.replace(/[\r\n\t]/g, ' ');
+  // Collapse multiple spaces
+  repaired = repaired.replace(/  +/g, ' ');
+  // Remove control characters
+  repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
+  // Remove trailing commas before } or ]
+  repaired = repaired.replace(/,\s*([}\]])/g, '$1');
+  return repaired;
 }
 
 // ─── Core orchestrator function ──────────────────────────────────

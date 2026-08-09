@@ -18,6 +18,9 @@ import {
   PanelLeftOpen,
   MessageSquare,
   Eye,
+  AlertCircle,
+  X,
+  RotateCcw,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -65,13 +68,15 @@ const features = [
   },
 ]
 
-// ─── Progress Messages ────────────────────────────────────────────────
+// ─── Progress Messages (looping) ──────────────────────────────────────
 
 const progressMessages = [
   'Analyzing your store vision...',
   'Generating store layout...',
   'Creating product catalog...',
   'Applying design theme...',
+  'Adding sections and content...',
+  'Polishing the final details...',
   'Almost there...',
 ]
 
@@ -80,81 +85,135 @@ const progressMessages = [
 function LandingPage() {
   const [promptText, setPromptText] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const progressIndexRef = useRef(0)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
 
   const {
     isGenerating,
-    generationStatus,
     setIsGenerating,
-    setGenerationStatus,
     setStore,
   } = useStoreEditor()
+
+  // Local UI state (not in Zustand — this is view-level)
+  const [generationStatus, setGenerationStatus] = useState('')
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+
+  const clearTimers = useCallback(() => {
+    if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+    if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null }
+  }, [])
+
+  const handleCancel = useCallback(() => {
+    abortRef.current?.abort()
+    clearTimers()
+    setIsGenerating(false)
+    setGenerationStatus('')
+    setElapsedSeconds(0)
+    setError(null)
+  }, [clearTimers, setIsGenerating])
 
   const handleGenerate = useCallback(async () => {
     const trimmed = promptText.trim()
     if (!trimmed) {
-      toast.error('Please describe your store to get started.')
+      setError('Please describe your store to get started.')
       textareaRef.current?.focus()
       return
     }
 
+    // Reset state
+    setError(null)
     setIsGenerating(true)
     setGenerationStatus(progressMessages[0])
-    progressIndexRef.current = 0
+    setElapsedSeconds(0)
 
-    // Cycle through progress messages for visual feedback
-    const startProgressCycle = () => {
-      progressIndexRef.current = 0
-      const tick = () => {
-        progressIndexRef.current++
-        if (progressIndexRef.current < progressMessages.length) {
-          setGenerationStatus(progressMessages[progressIndexRef.current])
-          progressTimerRef.current = setTimeout(tick, 2500)
-        }
-      }
-      progressTimerRef.current = setTimeout(tick, 2500)
-    }
-    startProgressCycle()
+    // Create abort controller for this request
+    const controller = new AbortController()
+    abortRef.current = controller
+
+    // Cycle through progress messages (looping every ~17.5s)
+    let idx = 0
+    progressTimerRef.current = setInterval(() => {
+      idx = (idx + 1) % progressMessages.length
+      setGenerationStatus(progressMessages[idx])
+    }, 2500)
+
+    // Elapsed time counter
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1)
+    }, 1000)
 
     try {
+      console.log('[Storqly] Starting store generation for prompt:', trimmed)
+
       const res = await fetch('/api/store/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: trimmed }),
+        signal: controller.signal,
       })
 
       if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}))
-        throw new Error(errorData.error || `Generation failed (${res.status})`)
+        let errorMsg = `Server error (${res.status})`
+        try {
+          const errorData = await res.json()
+          errorMsg = errorData.error || errorMsg
+        } catch { /* ignore parse error */ }
+        throw new Error(errorMsg)
       }
 
       const data = await res.json()
 
-      if (progressTimerRef.current) clearTimeout(progressTimerRef.current)
+      if (!data.store) {
+        throw new Error('The AI response was missing store data. Please try again.')
+      }
 
-      setGenerationStatus('Store generated successfully!')
+      console.log('[Storqly] Store generated successfully:', data.store.name)
+      clearTimers()
       setStore(data.store)
-    } catch (err) {
-      if (progressTimerRef.current) clearTimeout(progressTimerRef.current)
-      const message = err instanceof Error ? err.message : 'Something went wrong'
-      toast.error(message)
+    } catch (err: unknown) {
+      clearTimers()
+
+      let message = 'Something went wrong. Please try again.'
+      if (err instanceof Error) {
+        if (err.name === 'AbortError') {
+          // AbortError is expected when user cancels — don't log as error
+          message = 'Generation was cancelled.'
+        } else {
+          console.error('[Storqly] Generation error:', err)
+          message = err.message
+        }
+      }
+
+      setError(message)
       setIsGenerating(false)
       setGenerationStatus('')
+      setElapsedSeconds(0)
+      toast.error('Store generation failed', { description: message })
     }
-  }, [promptText, setIsGenerating, setGenerationStatus, setStore])
+  }, [promptText, setIsGenerating, setStore, clearTimers])
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (progressTimerRef.current) clearTimeout(progressTimerRef.current)
+      clearTimers()
+      abortRef.current?.abort()
     }
-  }, [])
+  }, [clearTimers])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault()
       handleGenerate()
     }
+  }
+
+  const formatElapsed = (seconds: number) => {
+    if (seconds < 60) return `${seconds}s`
+    const m = Math.floor(seconds / 60)
+    const s = seconds % 60
+    return `${m}:${s.toString().padStart(2, '0')}`
   }
 
   return (
@@ -212,7 +271,7 @@ function LandingPage() {
               <Textarea
                 ref={textareaRef}
                 value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
+                onChange={(e) => { setPromptText(e.target.value); setError(null) }}
                 onKeyDown={handleKeyDown}
                 disabled={isGenerating}
                 placeholder='Describe the store you want to build... (e.g. "A modern minimalist jewelry brand with gold accents, selling handcrafted rings, necklaces, and bracelets")'
@@ -228,36 +287,95 @@ function LandingPage() {
                   to generate
                 </span>
 
-                <Button
-                  onClick={handleGenerate}
-                  disabled={isGenerating || !promptText.trim()}
-                  className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#a855f7]/20 transition-all duration-300 hover:scale-105 hover:shadow-[#a855f7]/30 disabled:opacity-50 disabled:hover:scale-100"
-                >
-                  {isGenerating ? (
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      Generating…
-                    </span>
-                  ) : (
-                    <span className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4" />
-                      Generate Store
-                    </span>
+                <div className="flex items-center gap-2">
+                  {isGenerating && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancel}
+                      className="h-8 gap-1.5 rounded-lg px-3 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                      Cancel
+                    </Button>
                   )}
-                </Button>
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={isGenerating || !promptText.trim()}
+                    className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#a855f7]/20 transition-all duration-300 hover:scale-105 hover:shadow-[#a855f7]/30 disabled:opacity-50 disabled:hover:scale-100"
+                  >
+                    {isGenerating ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Generating…
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4" />
+                        Generate Store
+                      </span>
+                    )}
+                  </Button>
+                </div>
               </div>
             </div>
 
-            {isGenerating && generationStatus && (
-              <motion.p
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 flex items-center justify-center gap-2 text-sm text-zinc-400"
-              >
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a855f7]" />
-                {generationStatus}
-              </motion.p>
-            )}
+            {/* Status feedback area */}
+            <div className="mt-4 min-h-[48px]">
+              <AnimatePresence mode="wait">
+                {isGenerating && !error && (
+                  <motion.div
+                    key="progress"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex flex-col items-center gap-1"
+                  >
+                    <p className="flex items-center gap-2 text-sm text-zinc-400">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a855f7]" />
+                      {generationStatus}
+                    </p>
+                    <p className="text-xs text-zinc-600">
+                      Elapsed: {formatElapsed(elapsedSeconds)} · AI is building your store, this may take up to 2 minutes
+                    </p>
+                  </motion.div>
+                )}
+
+                {error && (
+                  <motion.div
+                    key="error"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className="flex flex-col items-center gap-2"
+                  >
+                    <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-left max-w-lg">
+                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-red-300">Generation failed</p>
+                        <p className="mt-1 text-xs text-red-400/80 leading-relaxed">{error}</p>
+                      </div>
+                      <button
+                        onClick={() => setError(null)}
+                        className="shrink-0 text-zinc-500 hover:text-zinc-300"
+                        aria-label="Dismiss error"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerate}
+                      className="mt-1 gap-1.5 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      <RotateCcw className="h-3 w-3" />
+                      Try Again
+                    </Button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </div>
       </section>
@@ -298,128 +416,6 @@ function LandingPage() {
   )
 }
 
-// ─── Editor Toolbar ──────────────────────────────────────────────────
-
-function EditorToolbar() {
-  const store = useStoreEditor((s) => s.store)
-  const reset = useStoreEditor((s) => s.reset)
-  const isPublishing = useStoreEditor((s) => s.isPublishing)
-  const setIsPublishing = useStoreEditor((s) => s.setIsPublishing)
-  const isPublished = useStoreEditor((s) => s.isPublished)
-  const setIsPublished = useStoreEditor((s) => s.setIsPublished)
-  const [showLeft, setShowLeft] = useState(true)
-  const [showRight, setShowRight] = useState(true)
-  const [isSaving, setIsSaving] = useState(false)
-
-  const handleBack = () => {
-    reset()
-  }
-
-  const handleSave = async () => {
-    if (!store || isSaving) return
-    setIsSaving(true)
-    try {
-      const res = await fetch('/api/store/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store }),
-      })
-      if (!res.ok) throw new Error('Save failed')
-      toast.success('Store saved')
-    } catch {
-      toast.error('Failed to save store')
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const handlePublish = async () => {
-    if (!store || isPublishing) return
-    setIsPublishing(true)
-    try {
-      const res = await fetch('/api/store/publish', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store }),
-      })
-      if (!res.ok) throw new Error('Publish failed')
-      const data = await res.json()
-      setIsPublished(true)
-      toast.success(`Published! Live at ${data.slug}.storqly.com`)
-    } catch {
-      toast.error('Failed to publish store')
-    } finally {
-      setIsPublishing(false)
-    }
-  }
-
-  return (
-    <div className="flex h-12 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={handleBack}
-          aria-label="Back to home"
-        >
-          <ArrowLeft className="h-4 w-4" />
-        </Button>
-        <div className="h-5 w-px bg-zinc-800" />
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={() => setShowLeft((v) => !v)}
-        >
-          {showLeft ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-          <span className="hidden sm:inline">Sections</span>
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={() => setShowRight((v) => !v)}
-        >
-          <MessageSquare className="h-4 w-4" />
-          <span className="hidden sm:inline">Chat</span>
-        </Button>
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        <span className="mr-2 text-xs font-medium text-zinc-500 hidden md:inline">
-          {store?.name || 'Untitled Store'}
-        </span>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          <Save className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Save</span>
-        </Button>
-        <Button
-          size="sm"
-          className="h-8 gap-1.5 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
-          onClick={handlePublish}
-          disabled={isPublishing}
-        >
-          {isPublishing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : isPublished ? (
-            <Eye className="h-3.5 w-3.5" />
-          ) : (
-            <Globe className="h-3.5 w-3.5" />
-          )}
-          <span className="hidden sm:inline">{isPublished ? 'Published' : 'Publish'}</span>
-        </Button>
-      </div>
-    </div>
-  )
-}
-
 // ─── Resize Handle ────────────────────────────────────────────────────
 
 function ResizeHandle({ direction }: { direction: 'left' | 'right' }) {
@@ -456,13 +452,10 @@ function EditorView() {
 
   return (
     <div className="flex h-screen flex-col bg-zinc-950">
-      {/* Toolbar */}
-      <EditorToolbarWithState onToggleLeft={setShowLeft} onToggleRight={setShowRight} showLeft={showLeft} showRight={showRight} />
+      <EditorToolbar onToggleLeft={setShowLeft} onToggleRight={setShowRight} showLeft={showLeft} showRight={showRight} />
 
-      {/* Panels */}
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" autoSaveId="storqly-editor-layout">
-          {/* Left Panel: Visual Editor */}
           <AnimatePresence mode="wait">
             {showLeft && (
               <Panel id="left" order={1} defaultSize={18} minSize={12} maxSize={28}>
@@ -471,28 +464,20 @@ function EditorView() {
             )}
           </AnimatePresence>
 
-          {showLeft && showRight && (
-            <ResizeHandle direction="left" />
-          )}
+          {showLeft && showRight && <ResizeHandle direction="left" />}
 
-          {/* Center: Preview */}
           <Panel id="center" order={2} defaultSize={showLeft && showRight ? 48 : showLeft || showRight ? 72 : 100} minSize={30}>
             <div className="h-full overflow-auto bg-zinc-100">
-              <div className="mx-auto max-w-full">
-                <StoreRenderer
-                  store={store}
-                  selectedSectionId={selectedSectionId}
-                  onSelectSection={setSelectedSectionId}
-                />
-              </div>
+              <StoreRenderer
+                store={store}
+                selectedSectionId={selectedSectionId}
+                onSelectSection={setSelectedSectionId}
+              />
             </div>
           </Panel>
 
-          {showLeft && showRight && (
-            <ResizeHandle direction="right" />
-          )}
+          {showLeft && showRight && <ResizeHandle direction="right" />}
 
-          {/* Right Panel: Chat */}
           <AnimatePresence mode="wait">
             {showRight && (
               <Panel id="right" order={3} defaultSize={22} minSize={16} maxSize={32}>
@@ -506,8 +491,9 @@ function EditorView() {
   )
 }
 
-// Toolbar with state for toggling panels
-function EditorToolbarWithState({
+// ─── Editor Toolbar ──────────────────────────────────────────────────
+
+function EditorToolbar({
   onToggleLeft,
   onToggleRight,
   showLeft,
