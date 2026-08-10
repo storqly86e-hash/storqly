@@ -101,14 +101,26 @@ export function extractJSON(raw: string): string {
 // ─── Safe repairs (cannot break valid JSON) ─────────────────────
 
 function safeRepair(jsonStr: string): string {
-  // Remove newlines/tabs inside quoted strings only
+  // Remove newlines/tabs inside quoted strings only.
+  // Also strip stray backslashes outside strings (AI sometimes produces \\" 
+  // at value-start positions like "alt:\\"Toddler" which should be "alt":"Toddler").
   const chars: string[] = [];
   let inString = false;
   let escaped = false;
   for (let i = 0; i < jsonStr.length; i++) {
     const ch = jsonStr[i];
     if (escaped) { chars.push(ch); escaped = false; continue; }
-    if (ch === '\\') { chars.push(ch); escaped = true; continue; }
+    if (ch === '\\') {
+      if (!inString) {
+        // Backslash outside a string is ALWAYS invalid JSON.
+        // Skip it — the next char (usually ") will be processed normally.
+        continue;
+      }
+      // Inside a string, backslash starts an escape sequence — keep it
+      chars.push(ch);
+      escaped = true;
+      continue;
+    }
     if (ch === '"') { inString = !inString; chars.push(ch); continue; }
     if (inString && (ch === '\n' || ch === '\r' || ch === '\t')) { chars.push(' '); continue; }
     chars.push(ch);
@@ -116,6 +128,10 @@ function safeRepair(jsonStr: string): string {
   let repaired = chars.join('');
   // Collapse multi-space
   repaired = repaired.replace(/  +/g, ' ');
+  // Fix comma-instead-of-colon in objects: "key",value → "key":value
+  // AI sometimes writes "visible",true instead of "visible":true
+  // Only matches when value is not a string (true/false/null/digit) to avoid breaking arrays-of-strings
+  repaired = repaired.replace(/"([^"]+)",\s*(true|false|null|\d)/g, '"$1":$2');
   // Remove control characters
   repaired = repaired.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '');
   // Remove trailing commas
@@ -129,7 +145,11 @@ function closeUnclosedBrackets(str: string): string {
   let openCurly = 0, openSquare = 0, inStr = false, esc = false;
   for (const ch of str) {
     if (esc) { esc = false; continue; }
-    if (ch === '\\') { esc = true; continue; }
+    if (ch === '\\') {
+      if (!inStr) continue; // Skip stray backslashes outside strings
+      esc = true;
+      continue;
+    }
     if (ch === '"') { inStr = !inStr; continue; }
     if (inStr) continue;
     if (ch === '{') openCurly++;
@@ -165,6 +185,33 @@ function targetedRepair(jsonStr: string, errMsg: string): string | null {
     if (ch === ':') {
       // AI used : instead of , between properties — replace : with ,
       return jsonStr.substring(0, pos) + ',' + jsonStr.substring(pos + 1);
+    }
+    // Case 1b: Alphanumeric char where a comma or } is expected.
+    // This often means the opening quote of a string value is missing, e.g.
+    // "label":120ml  →  "label":"120ml"
+    // Look backwards to find the preceding ":" pattern
+    if (/[a-zA-Z0-9]/.test(ch)) {
+      // Find ":" before this position (the key-value separator)
+      const before = jsonStr.substring(Math.max(0, pos - 30), pos);
+      const colonIdx = before.lastIndexOf(':');
+      if (colonIdx !== -1) {
+        const absColonPos = Math.max(0, pos - 30) + colonIdx;
+        // Check that after the colon there's just whitespace until pos
+        const between = jsonStr.substring(absColonPos + 1, pos).trim();
+        if (between === '' || between.length <= 1) {
+          // Insert opening quote after the colon
+          const valueStart = absColonPos + 1;
+          // Find where this value ends (comma, closing brace, or bracket)
+          let valueEnd = pos;
+          while (valueEnd < jsonStr.length) {
+            const vc = jsonStr[valueEnd];
+            if (vc === ',' || vc === '}' || vc === ']') break;
+            valueEnd++;
+          }
+          const value = jsonStr.substring(pos, valueEnd);
+          return jsonStr.substring(0, valueStart) + '"' + value + '"' + jsonStr.substring(valueEnd);
+        }
+      }
     }
   }
 
@@ -218,8 +265,12 @@ function fixUnescapedQuotes(jsonStr: string): string {
   for (let i = 0; i < jsonStr.length; i++) {
     const ch = jsonStr[i];
     if (escaped) { result.push(ch); escaped = false; continue; }
-    if (ch === '\\') { result.push(ch); escaped = true; continue; }
-    if (ch === '"') {
+    if (ch === '\\') {
+      if (!inString) continue; // Skip stray backslashes outside strings
+      result.push(ch);
+      escaped = true;
+      continue;
+    }    if (ch === '"') {
       if (!inString) { inString = true; result.push(ch); }
       else {
         let j = i + 1;
