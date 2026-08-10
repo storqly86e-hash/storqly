@@ -376,6 +376,7 @@ export async function executeAI(
   const attempt = async (temp: number, extraSystem?: string, forceNewClient?: boolean): Promise<{ content: string } | null> => {
     const zai = await getZAI(forceNewClient);
     const msgs = buildMessages(extraSystem);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const completion = await Promise.race([
         zai.chat.completions.create({
@@ -384,15 +385,17 @@ export async function executeAI(
           thinking: { type: 'disabled' },
           ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
         }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error(`AI call timed out after ${timeout}ms`)), timeout)
-        ),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`AI call timed out after ${timeout}ms`)), timeout);
+        }),
       ]);
       const content = completion.choices[0]?.message?.content;
       if (!content || content.trim().length === 0) throw new Error('Empty response');
       return { content: content.trim() };
     } catch (err) {
       throw err;
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   };
 

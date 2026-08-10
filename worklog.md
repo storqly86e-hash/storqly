@@ -39,3 +39,27 @@ Stage Summary:
   - ALL 15 returned HTTP 200 (zero 502 errors)
 - Key improvement: 0% JSON malformation (was ~50%), 0% 502 errors, max time 45s (was 60-126s)
 - The 2 fallbacks were long/specific prompts that exceeded 45s AI timeout — returned valid template store (not 502)
+
+---
+Task ID: 3
+Agent: Main
+Task: Fix 3 issues reported by user (fallback name, chat failure, sections scroll)
+
+Work Log:
+- Issue 1: Already fixed in previous session — extractStoreName() correctly extracts brand names. Verified with exact user prompt: "Build an online store called Marble & Co selling..." → "Marble and Co"
+- Issue 2: Found THREE root causes for chat failure:
+  a) Turbopack parses arrow functions (=>) inside template literals as JSX — breaks compilation entirely
+  b) executeAI timeout never cleaned up (unhandled promise rejection)
+  c) Chat API didn't use json_object mode, so AI returned markdown-wrapped JSON arrays
+- Fixed Turbopack issue by rewriting buildChatSystemPrompt with string concatenation instead of template literals
+- Fixed timeout cleanup with finally{ clearTimeout(timer) }
+- Added responseFormat: json_object to chat-edit calls, updated prompt to return {"operations": [...]} format
+- Added null-safety for store.products in system prompt builder
+- Fixed arrow function in summary generation (used function() instead of arrow)
+- Issue 3: Added overflow-hidden to VisualEditor root div to constrain height chain for ScrollArea
+
+Stage Summary:
+- All 3 issues fixed and verified via Agent Browser
+- Store generation: 200, no errors, renders correctly
+- Chat: "change the headline to Welcome to Our Candle Shop" → Applied successfully in ~1.6s
+- Sections panel: overflow-hidden enables ScrollArea to scroll when sections overflow

@@ -11,75 +11,66 @@ import type { Store, ChatMessage, ChatEditOperation } from '@/lib/store-schema';
 
 // ─── Build system prompt with current store context ──────────────
 function buildChatSystemPrompt(store: Store): string {
-  return `You are Storqly AI, an intelligent store editor. You help users modify their e-commerce store by understanding natural language commands and translating them into precise edit operations.
+  const pagesList = store.pages.map(function(p) {
+    return '  - Page "' + p.name + '" (slug: "' + p.slug + '", homepage: ' + p.isHomepage + ', sections: ' + p.sections.length + ')';
+  }).join('\n');
 
-The user has an existing store. Your job is to understand what they want to change and return a JSON array of operations.
+  const prods = store.products || [];
+  const prodsList = prods.slice(0, 20).map(function(p) {
+    return '  - "' + p.name + '" ($' + p.price + ', category: "' + (p.category || 'none') + '", featured: ' + !!p.featured + ', inStock: ' + p.inStock + ')';
+  }).join('\n');
+  const prodsMore = prods.length > 20 ? '  ... and ' + (prods.length - 20) + ' more products' : '';
 
-## Current Store State
+  const sectsList = store.pages.flatMap(function(p) {
+    return p.sections.map(function(s) {
+      return '  - [Page: "' + p.name + '"] Section "' + s.id + '" (type: ' + s.type + ', visible: ' + s.visible + ')';
+    });
+  }).join('\n');
 
-Store Name: "${store.name}"
-Store Slug: "${store.slug}"
-Description: "${store.description || 'None'}"
+  const themeStr = JSON.stringify(store.theme, null, 2);
 
-### Theme
-${JSON.stringify(store.theme, null, 2)}
-
-### Pages (${store.pages.length})
-${store.pages.map((p) => `  - Page "${p.name}" (slug: "${p.slug}", homepage: ${p.isHomepage}, sections: ${p.sections.length})`).join('\n')}
-
-### Products (${store.products.length})
-${store.products.slice(0, 20).map((p) => `  - "${p.name}" ($${p.price}, category: "${p.category || 'none'}", featured: ${!!p.featured}, inStock: ${p.inStock})`).join('\n')}
-${store.products.length > 20 ? `  ... and ${store.products.length - 20} more products` : ''}
-
-### Sections (across all pages)
-${store.pages.flatMap((p) =>
-  p.sections.map((s) => `  - [Page: "${p.name}"] Section "${s.id}" (type: ${s.type}, visible: ${s.visible})`)
-).join('\n')}
-
-## Available Operation Types
-
-Return a JSON array of operation objects. Each operation has a "type" field and a "payload" field. Valid types:
-
-1. **update-theme**: Change the store theme
-   { "type": "update-theme", "payload": { "colors": { "primary": "#ff0000" }, "fonts": { "heading": "Playfair Display" }, "spacing": "spacious", "borderRadius": "lg" } }
-
-2. **update-section**: Modify an existing section's content and/or style
-   { "type": "update-section", "payload": { "sectionId": "<uuid>", "content": { "headline": "New Headline" }, "style": { "backgroundColor": "#f0f0f0" } } }
-   IMPORTANT: You MUST use the actual sectionId from the store. Look at the sections listed above.
-
-3. **add-section**: Add a new section to a page
-   { "type": "add-section", "payload": { "pageId": "<uuid>", "section": { "id": "<new uuid>", "type": "<section type>", "content": { ... }, "style": { ... }, "visible": true }, "index": <optional number> } }
-
-4. **remove-section**: Remove a section from a page
-   { "type": "remove-section", "payload": { "pageId": "<uuid>", "sectionId": "<uuid>" } }
-
-5. **reorder-sections**: Reorder sections on a page
-   { "type": "reorder-sections", "payload": { "pageId": "<uuid>", "sectionIds": ["<uuid1>", "<uuid2>", ...] } }
-
-6. **add-product**: Add a new product
-   { "type": "add-product", "payload": { "id": "<new uuid>", "name": "...", "price": 29.99, "images": [...], "description": "...", "category": "...", "inStock": true } }
-
-7. **update-product**: Update an existing product
-   { "type": "update-product", "payload": { "productId": "<uuid>", "data": { "name": "New Name", "price": 39.99 } } }
-
-8. **remove-product**: Remove a product
-   { "type": "remove-product", "payload": { "productId": "<uuid>" } }
-
-9. **bulk-update**: Apply multiple top-level store changes at once
-   { "type": "bulk-update", "payload": { "name": "New Store Name", "description": "New description" } }
-
-## Rules
-
-1. Return ONLY a JSON array of operations. No markdown, no explanation.
-2. Generate fresh UUIDs (e.g. "550e8400-e29b-41d4-a716-446655440000") for any new IDs you create.
-3. Use the actual pageId and sectionId values from the current store state above.
-4. When the user asks to change text, update the relevant section content.
-5. When the user asks to change colors/style, use update-theme or update-section with style changes.
-6. Combine multiple related changes into separate operations in the array.
-7. Be precise — only make the changes the user requests.
-8. If a request is ambiguous, make a reasonable interpretation and apply it.
-9. If the user asks a question that doesn't require changes, return an empty array [].
-10. For image URLs, use placeholder URLs like "https://images.unsplash.com/photo-1506744038136-46273834b3fb" with real unsplash photo IDs when possible.`;
+  return 'You are Storqly AI, an intelligent store editor. You help users modify their e-commerce store by understanding natural language commands and translating them into precise edit operations.\n\n' +
+    'The user has an existing store. Your job is to understand what they want to change and return a JSON object with an "operations" array.\n\n' +
+    '## Current Store State\n\n' +
+    'Store Name: "' + store.name + '"\n' +
+    'Store Slug: "' + store.slug + '"\n' +
+    'Description: "' + (store.description || 'None') + '"\n\n' +
+    '### Theme\n' + themeStr + '\n\n' +
+    '### Pages (' + store.pages.length + ')\n' + pagesList + '\n\n' +
+    '### Products (' + prods.length + ')\n' + prodsList + '\n' + prodsMore + '\n\n' +
+    '### Sections (across all pages)\n' + sectsList + '\n\n' +
+    '## Response Format\n\n' +
+    'Return a JSON object: {"operations": [...]} — an array of operation objects.\n' +
+    'Each operation has a "type" field and a "payload" field. Valid types:\n\n' +
+    '1. **update-theme**: Change the store theme\n' +
+    '   { "type": "update-theme", "payload": { "colors": { "primary": "#ff0000" }, "fonts": { "heading": "Playfair Display" }, "spacing": "spacious", "borderRadius": "lg" } }\n\n' +
+    '2. **update-section**: Modify an existing section content and/or style\n' +
+    '   { "type": "update-section", "payload": { "sectionId": "<uuid>", "content": { "headline": "New Headline" }, "style": { "backgroundColor": "#f0f0f0" } } }\n' +
+    '   IMPORTANT: Use the actual sectionId from the store above.\n\n' +
+    '3. **add-section**: Add a new section to a page\n' +
+    '   { "type": "add-section", "payload": { "pageId": "<uuid>", "section": { "id": "<new uuid>", "type": "<section type>", "content": { ... }, "style": { ... }, "visible": true }, "index": <number> } }\n\n' +
+    '4. **remove-section**: Remove a section\n' +
+    '   { "type": "remove-section", "payload": { "pageId": "<uuid>", "sectionId": "<uuid>" } }\n\n' +
+    '5. **reorder-sections**: Reorder sections\n' +
+    '   { "type": "reorder-sections", "payload": { "pageId": "<uuid>", "sectionIds": ["<uuid1>", "<uuid2>"] } }\n\n' +
+    '6. **add-product**: Add a product\n' +
+    '   { "type": "add-product", "payload": { "id": "<new uuid>", "name": "...", "price": 29.99, "images": [...], "description": "...", "category": "...", "inStock": true } }\n\n' +
+    '7. **update-product**: Update a product\n' +
+    '   { "type": "update-product", "payload": { "productId": "<uuid>", "data": { "name": "New Name", "price": 39.99 } } }\n\n' +
+    '8. **remove-product**: Remove a product\n' +
+    '   { "type": "remove-product", "payload": { "productId": "<uuid>" } }\n\n' +
+    '9. **bulk-update**: Multiple top-level store changes\n' +
+    '   { "type": "bulk-update", "payload": { "name": "New Store Name", "description": "New description" } }\n\n' +
+    '## Rules\n\n' +
+    '1. Return ONLY a JSON object {"operations": [...]}. No markdown, no explanation.\n' +
+    '2. Generate fresh UUIDs for any new IDs.\n' +
+    '3. Use actual pageId and sectionId values from the store above.\n' +
+    '4. When the user asks to change text, update the relevant section content.\n' +
+    '5. When the user asks to change colors/style, use update-theme or update-section.\n' +
+    '6. Combine multiple related changes into separate operations in the array.\n' +
+    '7. Be precise — only make the changes the user requests.\n' +
+    '8. If a request is ambiguous, make a reasonable interpretation.\n' +
+    '9. If no changes are needed, return {"operations": []}.';
 }
 
 // ─── POST handler ───────────────────────────────────────────────
@@ -129,6 +120,7 @@ export async function POST(req: NextRequest) {
     const result = await executeAI('chat-edit', messages, {
       systemPrompt,
       timeout: 30_000,
+      responseFormat: 'json_object',
     });
 
     if (!result.success || !result.content) {
@@ -140,7 +132,28 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract and parse the operations array
-    let jsonStr = extractJSON(result.content);
+    let aiContent = result.content;
+    // AI with json_object mode wraps arrays in an object — handle both cases
+    try {
+      const parsed = JSON.parse(aiContent);
+      if (!Array.isArray(parsed)) {
+        // AI returned a JSON object instead of array — look for an operations/operations array inside
+        if (parsed.operations && Array.isArray(parsed.operations)) {
+          aiContent = JSON.stringify(parsed.operations);
+        } else if (parsed.changes && Array.isArray(parsed.changes)) {
+          aiContent = JSON.stringify(parsed.changes);
+        } else {
+          // Try to find any array value in the response
+          const arrayKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+          if (arrayKey) {
+            aiContent = JSON.stringify(parsed[arrayKey]);
+          }
+        }
+      }
+    } catch {
+      // Not valid JSON or already an array string — continue with extractJSON
+    }
+    let jsonStr = extractJSON(aiContent);
 
     let operations: ChatEditOperation[];
     // Try direct parse, then repair
@@ -179,23 +192,27 @@ export async function POST(req: NextRequest) {
     }
 
     // Generate a human-readable summary
-    const summary = operations.length === 0
-      ? 'No changes needed.'
-      : operations.map(op => {
-          switch (op.type) {
-            case 'update-theme': return 'Updated theme';
-            case 'update-section': return 'Updated a section';
-            case 'add-section': return 'Added a new section';
-            case 'remove-section': return 'Removed a section';
-            case 'reorder-sections': return 'Reordered sections';
-            case 'add-product': return 'Added a product';
-            case 'update-product': return 'Updated a product';
-            case 'remove-product': return 'Removed a product';
-            case 'bulk-update': return 'Applied changes';
-            case 'update-page': return 'Updated page';
-            default: return 'Made a change';
-          }
-        }).join(', ');
+    let summary: string;
+    if (operations.length === 0) {
+      summary = 'No changes needed.';
+    } else {
+      const labels: Record<string, string> = {
+        'update-theme': 'Updated theme',
+        'update-section': 'Updated a section',
+        'add-section': 'Added a new section',
+        'remove-section': 'Removed a section',
+        'reorder-sections': 'Reordered sections',
+        'add-product': 'Added a product',
+        'update-product': 'Updated a product',
+        'remove-product': 'Removed a product',
+        'bulk-update': 'Applied changes',
+        'update-page': 'Updated page',
+      };
+      const count = operations.length;
+      const plural = count > 1 ? 's' : '';
+      const parts = operations.map(function(op) { return labels[op.type] || 'Made a change'; });
+      summary = 'Applied ' + count + ' change' + plural + ': ' + parts.join(', ');
+    }
 
     return NextResponse.json({ message: summary, operations });
   } catch (err: unknown) {

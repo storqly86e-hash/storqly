@@ -1,0 +1,2200 @@
+<!DOCTYPE html><html><head><meta charSet="utf-8" data-next-head=""/><meta name="viewport" content="width=device-width" data-next-head=""/><style data-next-hide-fouc="true">body{display:none}</style><noscript data-next-hide-fouc="true"><style>body{display:block}</style></noscript><noscript data-n-css=""></noscript><script src="/_next/static/chunks/node_modules_next_dist_compiled_8ca6b690._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_dist_shared_lib_8bac8163._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_dist_client_5a8a528e._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_dist_b3fb3b5f._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_app_72f3d36f.js" defer=""></script><script src="/_next/static/chunks/%5Bnext%5D_entry_page-loader_ts_742e4b53._.js" defer=""></script><script src="/_next/static/chunks/node_modules_react-dom_4411d9bd._.js" defer=""></script><script src="/_next/static/chunks/node_modules_7f09fef0._.js" defer=""></script><script src="/_next/static/chunks/%5Broot-of-the-server%5D__45f039c3._.js" defer=""></script><script src="/_next/static/chunks/pages__app_2da965e7._.js" defer=""></script><script src="/_next/static/chunks/turbopack-pages__app_0fce199e._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_dist_shared_lib_9a2a7093._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_dist_a183fb77._.js" defer=""></script><script src="/_next/static/chunks/node_modules_next_error_1cfbb379.js" defer=""></script><script src="/_next/static/chunks/%5Bnext%5D_entry_page-loader_ts_43b523b5._.js" defer=""></script><script src="/_next/static/chunks/%5Broot-of-the-server%5D__092393de._.js" defer=""></script><script src="/_next/static/chunks/pages__error_2da965e7._.js" defer=""></script><script src="/_next/static/chunks/turbopack-pages__error_af01c4e3._.js" defer=""></script><script src="/_next/static/development/_ssgManifest.js" defer=""></script><script src="/_next/static/development/_buildManifest.js" defer=""></script><noscript id="__next_css__DO_NOT_USE__"></noscript></head><body><div id="__next"></div><script id="__NEXT_DATA__" type="application/json">{"props":{"pageProps":{"statusCode":500,"hostname":"localhost"}},"page":"/_error","query":{},"buildId":"development","isFallback":false,"err":{"name":"Error","source":"server","message":"./src/app/api/store/chat/route.ts:82:58\nParsing ecmascript source code failed\n   80 | 7. Be precise — only make the changes the user requests.\n   81 | 8. If a request is ambiguous, make a reasonable interpretation.\n\u003e  82 | 9. If no changes are needed, return {\"operations\": []}.`;`;\n      |                                                          ^^\n\u003e  83 | }\n      | ^\n\u003e  84 | \n      | ^\n\u003e  85 | // ─── POST handler ───────────────────────────────────────────────\n      | ^\n\u003e  86 | export async function POST(req: NextRequest) {\n      | ^\n\u003e  87 |   try {\n      | ^\n\u003e  88 |     const body = await req.json();\n      | ^\n\u003e  89 |     const { message, store, history } = body as {\n      | ^\n\u003e  90 |       message?: string;\n      | ^\n\u003e  91 |       store?: Store;\n      | ^\n\u003e  92 |       history?: ChatMessage[];\n      | ^\n\u003e  93 |     };\n      | ^\n\u003e  94 | \n      | ^\n\u003e  95 |     if (!message || typeof message !== 'string' || message.trim().length === 0) {\n      | ^\n\u003e  96 |       return NextResponse.json(\n      | ^\n\u003e  97 |         { error: 'A non-empty \"message\" field is required.' },\n      | ^\n\u003e  98 |         { status: 400 }\n      | ^\n\u003e  99 |       );\n      | ^\n\u003e 100 |     }\n      | ^\n\u003e 101 | \n      | ^\n\u003e 102 |     if (!store || !store.id || !store.name || !store.theme || !Array.isArray(store.pages)) {\n      | ^\n\u003e 103 |       return NextResponse.json(\n      | ^\n\u003e 104 |         { error: 'A valid \"store\" object with id, name, theme, and pages is required.' },\n      | ^\n\u003e 105 |         { status: 400 }\n      | ^\n\u003e 106 |       );\n      | ^\n\u003e 107 |     }\n      | ^\n\u003e 108 | \n      | ^\n\u003e 109 |     const systemPrompt = buildChatSystemPrompt(store);\n      | ^\n\u003e 110 | \n      | ^\n\u003e 111 |     // Build conversation history for context\n      | ^\n\u003e 112 |     const messages: Array\u003c{ role: 'assistant' | 'user'; content: string }\u003e = [];\n      | ^\n\u003e 113 | \n      | ^\n\u003e 114 |     // Include recent history (last 10 messages) for context\n      | ^\n\u003e 115 |     const recentHistory = (history || []).slice(-10);\n      | ^\n\u003e 116 |     for (const msg of recentHistory) {\n      | ^\n\u003e 117 |       // Skip messages that already have operations — they were from previous assistant turns\n      | ^\n\u003e 118 |       if (msg.role === 'user') {\n      | ^\n\u003e 119 |         messages.push({ role: 'user', content: msg.content });\n      | ^\n\u003e 120 |       } else if (msg.role === 'assistant' \u0026\u0026 msg.content) {\n      | ^\n\u003e 121 |         // Only include the assistant's text response, not the operations\n      | ^\n\u003e 122 |         messages.push({ role: 'assistant', content: msg.content });\n      | ^\n\u003e 123 |       }\n      | ^\n\u003e 124 |     }\n      | ^\n\u003e 125 | \n      | ^\n\u003e 126 |     // Add the current user message\n      | ^\n\u003e 127 |     messages.push({ role: 'user', content: message.trim() });\n      | ^\n\u003e 128 | \n      | ^\n\u003e 129 |     const result = await executeAI('chat-edit', messages, {\n      | ^\n\u003e 130 |       systemPrompt,\n      | ^\n\u003e 131 |       timeout: 30_000,\n      | ^\n\u003e 132 |       responseFormat: 'json_object',\n      | ^\n\u003e 133 |     });\n      | ^\n\u003e 134 | \n      | ^\n\u003e 135 |     if (!result.success || !result.content) {\n      | ^\n\u003e 136 |       // Never 502 — return empty operations with explanation\n      | ^\n\u003e 137 |       return NextResponse.json({\n      | ^\n\u003e 138 |         message: \"I'm having trouble right now. Please try again in a moment.\",\n      | ^\n\u003e 139 |         operations: [],\n      | ^\n\u003e 140 |       });\n      | ^\n\u003e 141 |     }\n      | ^\n\u003e 142 | \n      | ^\n\u003e 143 |     // Extract and parse the operations array\n      | ^\n\u003e 144 |     let aiContent = result.content;\n      | ^\n\u003e 145 |     // AI with json_object mode wraps arrays in an object — handle both cases\n      | ^\n\u003e 146 |     try {\n      | ^\n\u003e 147 |       const parsed = JSON.parse(aiContent);\n      | ^\n\u003e 148 |       if (!Array.isArray(parsed)) {\n      | ^\n\u003e 149 |         // AI returned a JSON object instead of array — look for an operations/operations array inside\n      | ^\n\u003e 150 |         if (parsed.operations \u0026\u0026 Array.isArray(parsed.operations)) {\n      | ^\n\u003e 151 |           aiContent = JSON.stringify(parsed.operations);\n      | ^\n\u003e 152 |         } else if (parsed.changes \u0026\u0026 Array.isArray(parsed.changes)) {\n      | ^\n\u003e 153 |           aiContent = JSON.stringify(parsed.changes);\n      | ^\n\u003e 154 |         } else {\n      | ^\n\u003e 155 |           // Try to find any array value in the response\n      | ^\n\u003e 156 |           const arrayKey = Object.keys(parsed).find(k =\u003e Array.isArray(parsed[k]));\n      | ^\n\u003e 157 |           if (arrayKey) {\n      | ^\n\u003e 158 |             aiContent = JSON.stringify(parsed[arrayKey]);\n      | ^\n\u003e 159 |           }\n      | ^\n\u003e 160 |         }\n      | ^\n\u003e 161 |       }\n      | ^\n\u003e 162 |     } catch {\n      | ^\n\u003e 163 |       // Not valid JSON or already an array string — continue with extractJSON\n      | ^\n\u003e 164 |     }\n      | ^\n\u003e 165 |     let jsonStr = extractJSON(aiContent);\n      | ^\n\u003e 166 | \n      | ^\n\u003e 167 |     let operations: ChatEditOperation[];\n      | ^\n\u003e 168 |     // Try direct parse, then repair\n      | ^\n\u003e 169 |     try {\n      | ^\n\u003e 170 |       operations = JSON.parse(jsonStr) as ChatEditOperation[];\n      | ^\n\u003e 171 |     } catch {\n      | ^\n\u003e 172 |       try {\n      | ^\n\u003e 173 |         const repaired = repairJSON(jsonStr);\n      | ^\n\u003e 174 |         operations = JSON.parse(repaired) as ChatEditOperation[];\n      | ^\n\u003e 175 |       } catch (parseErr: unknown) {\n      | ^\n\u003e 176 |         const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);\n      | ^\n\u003e 177 |         console.error('[Chat Edit] JSON parse error:', msg);\n      | ^\n\u003e 178 |         return NextResponse.json(\n      | ^\n\u003e 179 |           { message: \"I understood your request but had trouble applying the changes. Please try rephrasing.\", operations: [] },\n      | ^\n\u003e 180 |           { status: 200 }\n      | ^\n\u003e 181 |         );\n      | ^\n\u003e 182 |       }\n      | ^\n\u003e 183 |     }\n      | ^\n\u003e 184 | \n      | ^\n\u003e 185 |     // Validate it's an array\n      | ^\n\u003e 186 |     if (!Array.isArray(operations)) {\n      | ^\n\u003e 187 |       return NextResponse.json({\n      | ^\n\u003e 188 |         message: 'I understood your request but had trouble applying changes. Please try rephrasing.',\n      | ^\n\u003e 189 |         operations: [],\n      | ^\n\u003e 190 |       });\n      | ^\n\u003e 191 |     }\n      | ^\n\u003e 192 | \n      | ^\n\u003e 193 |     // Basic validation of each operation\n      | ^\n\u003e 194 |     for (const op of operations) {\n      | ^\n\u003e 195 |       if (!op.type || !op.payload) {\n      | ^\n\u003e 196 |         return NextResponse.json({\n      | ^\n\u003e 197 |           message: 'Some changes could not be applied. Please try again.',\n      | ^\n\u003e 198 |           operations: [],\n      | ^\n\u003e 199 |         });\n      | ^\n\u003e 200 |       }\n      | ^\n\u003e 201 |     }\n      | ^\n\u003e 202 | \n      | ^\n\u003e 203 |     // Generate a human-readable summary\n      | ^\n\u003e 204 |     let summary: string;\n      | ^\n\u003e 205 |     if (operations.length === 0) {\n      | ^\n\u003e 206 |       summary = 'No changes needed.';\n      | ^\n\u003e 207 |     } else {\n      | ^\n\u003e 208 |       const labels: Record\u003cstring, string\u003e = {\n      | ^\n\u003e 209 |         'update-theme': 'Updated theme',\n      | ^\n\u003e 210 |         'update-section': 'Updated a section',\n      | ^\n\u003e 211 |         'add-section': 'Added a new section',\n      | ^\n\u003e 212 |         'remove-section': 'Removed a section',\n      | ^\n\u003e 213 |         'reorder-sections': 'Reordered sections',\n      | ^\n\u003e 214 |         'add-product': 'Added a product',\n      | ^\n\u003e 215 |         'update-product': 'Updated a product',\n      | ^\n\u003e 216 |         'remove-product': 'Removed a product',\n      | ^\n\u003e 217 |         'bulk-update': 'Applied changes',\n      | ^\n\u003e 218 |         'update-page': 'Updated page',\n      | ^\n\u003e 219 |       };\n      | ^\n\u003e 220 |       const count = operations.length;\n      | ^\n\u003e 221 |       const plural = count \u003e 1 ? 's' : '';\n      | ^\n\u003e 222 |       const parts = operations.map(function(op) { return labels[op.type] || 'Made a change'; });\n      | ^\n\u003e 223 |       summary = 'Applied ' + count + ' change' + plural + ': ' + parts.join(', ');\n      | ^\n\u003e 224 |     }\n      | ^\n\u003e 225 | \n      | ^\n\u003e 226 |     return NextResponse.json({ message: summary, operations });\n      | ^\n\u003e 227 |   } catch (err: unknown) {\n      | ^\n\u003e 228 |     const msg = err instanceof Error ? err.message : String(err);\n      | ^\n\u003e 229 |     console.error('[Chat Edit] Unexpected error:', msg);\n      | ^\n\u003e 230 |     return NextResponse.json(\n      | ^\n\u003e 231 |       { error: 'An unexpected error occurred while processing the chat edit.' },\n      | ^\n\u003e 232 |       { status: 500 }\n      | ^\n\u003e 233 |     );\n      | ^\n\u003e 234 |   }\n      | ^\n\u003e 235 | }\n      | ^\n\u003e 236 | \n      | ^\n\nUnterminated template\n\n","stack":"Error: ./src/app/api/store/chat/route.ts:82:58\nParsing ecmascript source code failed\n\u001b \u001b  80 |\u001b \u001b7. Be precise — only make the changes the user requests.\u001b\n \u001b  81 |\u001b \u001b8. If a request is ambiguous, make a reasonable interpretation.\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  82 |\u001b \u001b9. If no changes are needed, return {\"operations\": []}.`\u001b\u001b;\u001b\u001b`;\u001b\n \u001b     |\u001b                                                          \u001b\u001b^\u001b\u001b\u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  83 |\u001b \u001b}\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  84 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  85 |\u001b \u001b// ─── POST handler ───────────────────────────────────────────────\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  86 |\u001b \u001bexport async function POST(req: NextRequest) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  87 |\u001b \u001b  try {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  88 |\u001b \u001b    const body = await req.json();\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  89 |\u001b \u001b    const { message, store, history } = body as {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  90 |\u001b \u001b      message?: string;\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  91 |\u001b \u001b      store?: Store;\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  92 |\u001b \u001b      history?: ChatMessage[];\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  93 |\u001b \u001b    };\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  94 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  95 |\u001b \u001b    if (!message || typeof message !== 'string' || message.trim().length === 0) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  96 |\u001b \u001b      return NextResponse.json(\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  97 |\u001b \u001b        { error: 'A non-empty \"message\" field is required.' },\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  98 |\u001b \u001b        { status: 400 }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b  99 |\u001b \u001b      );\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 100 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 101 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 102 |\u001b \u001b    if (!store || !store.id || !store.name || !store.theme || !Array.isArray(store.pages)) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 103 |\u001b \u001b      return NextResponse.json(\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 104 |\u001b \u001b        { error: 'A valid \"store\" object with id, name, theme, and pages is required.' },\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 105 |\u001b \u001b        { status: 400 }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 106 |\u001b \u001b      );\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 107 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 108 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 109 |\u001b \u001b    const systemPrompt = buildChatSystemPrompt(store);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 110 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 111 |\u001b \u001b    // Build conversation history for context\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 112 |\u001b \u001b    const messages: Array\u003c{ role: 'assistant' | 'user'; content: string }\u003e = [];\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 113 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 114 |\u001b \u001b    // Include recent history (last 10 messages) for context\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 115 |\u001b \u001b    const recentHistory = (history || []).slice(-10);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 116 |\u001b \u001b    for (const msg of recentHistory) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 117 |\u001b \u001b      // Skip messages that already have operations — they were from previous assistant turns\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 118 |\u001b \u001b      if (msg.role === 'user') {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 119 |\u001b \u001b        messages.push({ role: 'user', content: msg.content });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 120 |\u001b \u001b      } else if (msg.role === 'assistant' \u0026\u0026 msg.content) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 121 |\u001b \u001b        // Only include the assistant's text response, not the operations\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 122 |\u001b \u001b        messages.push({ role: 'assistant', content: msg.content });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 123 |\u001b \u001b      }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 124 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 125 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 126 |\u001b \u001b    // Add the current user message\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 127 |\u001b \u001b    messages.push({ role: 'user', content: message.trim() });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 128 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 129 |\u001b \u001b    const result = await executeAI('chat-edit', messages, {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 130 |\u001b \u001b      systemPrompt,\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 131 |\u001b \u001b      timeout: 30_000,\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 132 |\u001b \u001b      responseFormat: 'json_object',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 133 |\u001b \u001b    });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 134 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 135 |\u001b \u001b    if (!result.success || !result.content) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 136 |\u001b \u001b      // Never 502 — return empty operations with explanation\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 137 |\u001b \u001b      return NextResponse.json({\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 138 |\u001b \u001b        message: \"I'm having trouble right now. Please try again in a moment.\",\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 139 |\u001b \u001b        operations: [],\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 140 |\u001b \u001b      });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 141 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 142 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 143 |\u001b \u001b    // Extract and parse the operations array\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 144 |\u001b \u001b    let aiContent = result.content;\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 145 |\u001b \u001b    // AI with json_object mode wraps arrays in an object — handle both cases\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 146 |\u001b \u001b    try {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 147 |\u001b \u001b      const parsed = JSON.parse(aiContent);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 148 |\u001b \u001b      if (!Array.isArray(parsed)) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 149 |\u001b \u001b        // AI returned a JSON object instead of array — look for an operations/operations array inside\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 150 |\u001b \u001b        if (parsed.operations \u0026\u0026 Array.isArray(parsed.operations)) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 151 |\u001b \u001b          aiContent = JSON.stringify(parsed.operations);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 152 |\u001b \u001b        } else if (parsed.changes \u0026\u0026 Array.isArray(parsed.changes)) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 153 |\u001b \u001b          aiContent = JSON.stringify(parsed.changes);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 154 |\u001b \u001b        } else {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 155 |\u001b \u001b          // Try to find any array value in the response\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 156 |\u001b \u001b          const arrayKey = Object.keys(parsed).find(k =\u003e Array.isArray(parsed[k]));\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 157 |\u001b \u001b          if (arrayKey) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 158 |\u001b \u001b            aiContent = JSON.stringify(parsed[arrayKey]);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 159 |\u001b \u001b          }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 160 |\u001b \u001b        }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 161 |\u001b \u001b      }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 162 |\u001b \u001b    } catch {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 163 |\u001b \u001b      // Not valid JSON or already an array string — continue with extractJSON\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 164 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 165 |\u001b \u001b    let jsonStr = extractJSON(aiContent);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 166 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 167 |\u001b \u001b    let operations: ChatEditOperation[];\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 168 |\u001b \u001b    // Try direct parse, then repair\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 169 |\u001b \u001b    try {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 170 |\u001b \u001b      operations = JSON.parse(jsonStr) as ChatEditOperation[];\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 171 |\u001b \u001b    } catch {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 172 |\u001b \u001b      try {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 173 |\u001b \u001b        const repaired = repairJSON(jsonStr);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 174 |\u001b \u001b        operations = JSON.parse(repaired) as ChatEditOperation[];\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 175 |\u001b \u001b      } catch (parseErr: unknown) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 176 |\u001b \u001b        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 177 |\u001b \u001b        console.error('[Chat Edit] JSON parse error:', msg);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 178 |\u001b \u001b        return NextResponse.json(\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 179 |\u001b \u001b          { message: \"I understood your request but had trouble applying the changes. Please try rephrasing.\", operations: [] },\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 180 |\u001b \u001b          { status: 200 }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 181 |\u001b \u001b        );\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 182 |\u001b \u001b      }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 183 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 184 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 185 |\u001b \u001b    // Validate it's an array\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 186 |\u001b \u001b    if (!Array.isArray(operations)) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 187 |\u001b \u001b      return NextResponse.json({\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 188 |\u001b \u001b        message: 'I understood your request but had trouble applying changes. Please try rephrasing.',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 189 |\u001b \u001b        operations: [],\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 190 |\u001b \u001b      });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 191 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 192 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 193 |\u001b \u001b    // Basic validation of each operation\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 194 |\u001b \u001b    for (const op of operations) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 195 |\u001b \u001b      if (!op.type || !op.payload) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 196 |\u001b \u001b        return NextResponse.json({\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 197 |\u001b \u001b          message: 'Some changes could not be applied. Please try again.',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 198 |\u001b \u001b          operations: [],\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 199 |\u001b \u001b        });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 200 |\u001b \u001b      }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 201 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 202 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 203 |\u001b \u001b    // Generate a human-readable summary\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 204 |\u001b \u001b    let summary: string;\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 205 |\u001b \u001b    if (operations.length === 0) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 206 |\u001b \u001b      summary = 'No changes needed.';\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 207 |\u001b \u001b    } else {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 208 |\u001b \u001b      const labels: Record\u003cstring, string\u003e = {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 209 |\u001b \u001b        'update-theme': 'Updated theme',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 210 |\u001b \u001b        'update-section': 'Updated a section',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 211 |\u001b \u001b        'add-section': 'Added a new section',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 212 |\u001b \u001b        'remove-section': 'Removed a section',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 213 |\u001b \u001b        'reorder-sections': 'Reordered sections',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 214 |\u001b \u001b        'add-product': 'Added a product',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 215 |\u001b \u001b        'update-product': 'Updated a product',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 216 |\u001b \u001b        'remove-product': 'Removed a product',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 217 |\u001b \u001b        'bulk-update': 'Applied changes',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 218 |\u001b \u001b        'update-page': 'Updated page',\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 219 |\u001b \u001b      };\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 220 |\u001b \u001b      const count = operations.length;\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 221 |\u001b \u001b      const plural = count \u003e 1 ? 's' : '';\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 222 |\u001b \u001b      const parts = operations.map(function(op) { return labels[op.type] || 'Made a change'; });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 223 |\u001b \u001b      summary = 'Applied ' + count + ' change' + plural + ': ' + parts.join(', ');\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 224 |\u001b \u001b    }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 225 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 226 |\u001b \u001b    return NextResponse.json({ message: summary, operations });\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 227 |\u001b \u001b  } catch (err: unknown) {\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 228 |\u001b \u001b    const msg = err instanceof Error ? err.message : String(err);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 229 |\u001b \u001b    console.error('[Chat Edit] Unexpected error:', msg);\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 230 |\u001b \u001b    return NextResponse.json(\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 231 |\u001b \u001b      { error: 'An unexpected error occurred while processing the chat edit.' },\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 232 |\u001b \u001b      { status: 500 }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 233 |\u001b \u001b    );\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 234 |\u001b \u001b  }\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 235 |\u001b \u001b}\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\n\u001b\u001b\u003e\u001b\u001b\u001b 236 |\u001b \u001b\u001b\n \u001b     |\u001b \u001b\u001b^\u001b\u001b\u001b\n\nUnterminated template\n\n\n    at Object.getCompilationErrors (/home/z/my-project/node_modules/next/dist/server/dev/hot-reloader-turbopack.js:1008:59)\n    at DevBundlerService.getCompilationError (/home/z/my-project/node_modules/next/dist/server/lib/dev-bundler-service.js:44:55)\n    at DevServer.getCompilationError (/home/z/my-project/node_modules/next/dist/server/dev/next-dev-server.js:706:42)\n    at DevServer.findPageComponents (/home/z/my-project/node_modules/next/dist/server/dev/next-dev-server.js:676:43)\n    at async DevServer.renderErrorToResponseImpl (/home/z/my-project/node_modules/next/dist/server/base-server.js:1713:26)"},"gip":true,"scriptLoader":[]}</script></body></html>
+HTTP:500 TIME:0.022337s
+ ./src/app/api/store/chat/route.ts:82:58
+Parsing ecmascript source code failed
+ 
+  80 |
+ 
+7. Be precise 
+ only make the changes the user requests.
+
+  81 |
+ 
+8. If a request is ambiguous, make a reasonable interpretation.
+
+
+>
+
+
+  82 |
+ 
+9. If no changes are needed, return {"operations": []}.`
+
+;
+
+`;
+
+     |
+                                                          
+
+^
+
+
+
+^
+
+
+
+>
+
+
+  83 |
+ 
+}
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  84 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  85 |
+ 
+// 
+ POST handler 
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  86 |
+ 
+export async function POST(req: NextRequest) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  87 |
+ 
+  try {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  88 |
+ 
+    const body = await req.json();
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  89 |
+ 
+    const { message, store, history } = body as {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  90 |
+ 
+      message?: string;
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  91 |
+ 
+      store?: Store;
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  92 |
+ 
+      history?: ChatMessage[];
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  93 |
+ 
+    };
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  94 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  95 |
+ 
+    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  96 |
+ 
+      return NextResponse.json(
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  97 |
+ 
+        { error: 'A non-empty "message" field is required.' },
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  98 |
+ 
+        { status: 400 }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+  99 |
+ 
+      );
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 100 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 101 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 102 |
+ 
+    if (!store || !store.id || !store.name || !store.theme || !Array.isArray(store.pages)) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 103 |
+ 
+      return NextResponse.json(
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 104 |
+ 
+        { error: 'A valid "store" object with id, name, theme, and pages is required.' },
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 105 |
+ 
+        { status: 400 }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 106 |
+ 
+      );
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 107 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 108 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 109 |
+ 
+    const systemPrompt = buildChatSystemPrompt(store);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 110 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 111 |
+ 
+    // Build conversation history for context
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 112 |
+ 
+    const messages: Array<{ role: 'assistant' | 'user'; content: string }> = [];
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 113 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 114 |
+ 
+    // Include recent history (last 10 messages) for context
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 115 |
+ 
+    const recentHistory = (history || []).slice(-10);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 116 |
+ 
+    for (const msg of recentHistory) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 117 |
+ 
+      // Skip messages that already have operations 
+ they were from previous assistant turns
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 118 |
+ 
+      if (msg.role === 'user') {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 119 |
+ 
+        messages.push({ role: 'user', content: msg.content });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 120 |
+ 
+      } else if (msg.role === 'assistant' && msg.content) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 121 |
+ 
+        // Only include the assistant's text response, not the operations
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 122 |
+ 
+        messages.push({ role: 'assistant', content: msg.content });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 123 |
+ 
+      }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 124 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 125 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 126 |
+ 
+    // Add the current user message
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 127 |
+ 
+    messages.push({ role: 'user', content: message.trim() });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 128 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 129 |
+ 
+    const result = await executeAI('chat-edit', messages, {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 130 |
+ 
+      systemPrompt,
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 131 |
+ 
+      timeout: 30_000,
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 132 |
+ 
+      responseFormat: 'json_object',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 133 |
+ 
+    });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 134 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 135 |
+ 
+    if (!result.success || !result.content) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 136 |
+ 
+      // Never 502 
+ return empty operations with explanation
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 137 |
+ 
+      return NextResponse.json({
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 138 |
+ 
+        message: "I'm having trouble right now. Please try again in a moment.",
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 139 |
+ 
+        operations: [],
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 140 |
+ 
+      });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 141 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 142 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 143 |
+ 
+    // Extract and parse the operations array
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 144 |
+ 
+    let aiContent = result.content;
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 145 |
+ 
+    // AI with json_object mode wraps arrays in an object 
+ handle both cases
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 146 |
+ 
+    try {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 147 |
+ 
+      const parsed = JSON.parse(aiContent);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 148 |
+ 
+      if (!Array.isArray(parsed)) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 149 |
+ 
+        // AI returned a JSON object instead of array 
+ look for an operations/operations array inside
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 150 |
+ 
+        if (parsed.operations && Array.isArray(parsed.operations)) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 151 |
+ 
+          aiContent = JSON.stringify(parsed.operations);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 152 |
+ 
+        } else if (parsed.changes && Array.isArray(parsed.changes)) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 153 |
+ 
+          aiContent = JSON.stringify(parsed.changes);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 154 |
+ 
+        } else {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 155 |
+ 
+          // Try to find any array value in the response
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 156 |
+ 
+          const arrayKey = Object.keys(parsed).find(k => Array.isArray(parsed[k]));
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 157 |
+ 
+          if (arrayKey) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 158 |
+ 
+            aiContent = JSON.stringify(parsed[arrayKey]);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 159 |
+ 
+          }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 160 |
+ 
+        }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 161 |
+ 
+      }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 162 |
+ 
+    } catch {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 163 |
+ 
+      // Not valid JSON or already an array string 
+ continue with extractJSON
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 164 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 165 |
+ 
+    let jsonStr = extractJSON(aiContent);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 166 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 167 |
+ 
+    let operations: ChatEditOperation[];
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 168 |
+ 
+    // Try direct parse, then repair
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 169 |
+ 
+    try {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 170 |
+ 
+      operations = JSON.parse(jsonStr) as ChatEditOperation[];
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 171 |
+ 
+    } catch {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 172 |
+ 
+      try {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 173 |
+ 
+        const repaired = repairJSON(jsonStr);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 174 |
+ 
+        operations = JSON.parse(repaired) as ChatEditOperation[];
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 175 |
+ 
+      } catch (parseErr: unknown) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 176 |
+ 
+        const msg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 177 |
+ 
+        console.error('[Chat Edit] JSON parse error:', msg);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 178 |
+ 
+        return NextResponse.json(
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 179 |
+ 
+          { message: "I understood your request but had trouble applying the changes. Please try rephrasing.", operations: [] },
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 180 |
+ 
+          { status: 200 }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 181 |
+ 
+        );
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 182 |
+ 
+      }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 183 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 184 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 185 |
+ 
+    // Validate it's an array
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 186 |
+ 
+    if (!Array.isArray(operations)) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 187 |
+ 
+      return NextResponse.json({
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 188 |
+ 
+        message: 'I understood your request but had trouble applying changes. Please try rephrasing.',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 189 |
+ 
+        operations: [],
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 190 |
+ 
+      });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 191 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 192 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 193 |
+ 
+    // Basic validation of each operation
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 194 |
+ 
+    for (const op of operations) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 195 |
+ 
+      if (!op.type || !op.payload) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 196 |
+ 
+        return NextResponse.json({
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 197 |
+ 
+          message: 'Some changes could not be applied. Please try again.',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 198 |
+ 
+          operations: [],
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 199 |
+ 
+        });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 200 |
+ 
+      }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 201 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 202 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 203 |
+ 
+    // Generate a human-readable summary
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 204 |
+ 
+    let summary: string;
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 205 |
+ 
+    if (operations.length === 0) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 206 |
+ 
+      summary = 'No changes needed.';
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 207 |
+ 
+    } else {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 208 |
+ 
+      const labels: Record<string, string> = {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 209 |
+ 
+        'update-theme': 'Updated theme',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 210 |
+ 
+        'update-section': 'Updated a section',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 211 |
+ 
+        'add-section': 'Added a new section',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 212 |
+ 
+        'remove-section': 'Removed a section',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 213 |
+ 
+        'reorder-sections': 'Reordered sections',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 214 |
+ 
+        'add-product': 'Added a product',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 215 |
+ 
+        'update-product': 'Updated a product',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 216 |
+ 
+        'remove-product': 'Removed a product',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 217 |
+ 
+        'bulk-update': 'Applied changes',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 218 |
+ 
+        'update-page': 'Updated page',
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 219 |
+ 
+      };
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 220 |
+ 
+      const count = operations.length;
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 221 |
+ 
+      const plural = count > 1 ? 's' : '';
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 222 |
+ 
+      const parts = operations.map(function(op) { return labels[op.type] || 'Made a change'; });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 223 |
+ 
+      summary = 'Applied ' + count + ' change' + plural + ': ' + parts.join(', ');
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 224 |
+ 
+    }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 225 |
+ 
+
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 226 |
+ 
+    return NextResponse.json({ message: summary, operations });
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 227 |
+ 
+  } catch (err: unknown) {
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 228 |
+ 
+    const msg = err instanceof Error ? err.message : String(err);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 229 |
+ 
+    console.error('[Chat Edit] Unexpected error:', msg);
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 230 |
+ 
+    return NextResponse.json(
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 231 |
+ 
+      { error: 'An unexpected error occurred while processing the chat edit.' },
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 232 |
+ 
+      { status: 500 }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 233 |
+ 
+    );
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 234 |
+ 
+  }
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 235 |
+ 
+}
+
+     |
+ 
+
+^
+
+
+
+>
+
+
+ 236 |
+ 
+
+
+     |
+ 
+
+^
+
+
+Unterminated template
+ POST /api/store/chat 500 in 21ms (compile: 12ms, render: 10ms)

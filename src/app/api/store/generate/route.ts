@@ -68,11 +68,11 @@ REQUIREMENTS:
 function extractStoreName(prompt: string): string {
   let text = prompt.trim();
 
-  // 1. Brand name after "called / named / known as" — capture until a stop word or end
-  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,3})/i);
+  // 1. Brand name after "called / named / known as" — capture 1-2 words after
+  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,2})/i);
   if (calledMatch?.[1]) {
-    // Trim trailing stop words like "selling", "with", "for"
-    let name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring|and)\s*$/i, '').trim();
+    // Trim trailing stop words like "selling", "with", "for", "include"
+    let name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring|and|include|include|products?)\s*$/i, '').trim();
     if (name.length >= 2 && name.length <= 40) return name;
   }
 

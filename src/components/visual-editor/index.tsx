@@ -924,7 +924,7 @@ export function VisualEditor() {
   }
 
   return (
-    <div className="flex h-full bg-zinc-950">
+    <div className="flex h-full overflow-hidden bg-zinc-950">
       {/* Section List Panel */}
       <div
         className={[
