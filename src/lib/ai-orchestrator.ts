@@ -25,8 +25,8 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'store-generation': {
     label: 'Store Generation',
     temperature: 0.7,
-    timeout: 60_000,
-    maxRetries: 2,
+    timeout: 35_000,
+    maxRetries: 1,
   },
   'chat-edit': {
     label: 'Chat Edit',
@@ -343,13 +343,16 @@ export async function executeAI(
     systemPrompt?: string;
     temperature?: number;
     timeout?: number;
+    maxRetries?: number;
+    responseFormat?: 'json_object';
   }
 ): Promise<AIOrchestratorResult> {
   const config = TASK_CONFIGS[taskType];
   const systemPrompt = options?.systemPrompt ?? '';
   const primaryTemp = options?.temperature ?? config.temperature ?? 0.7;
   const timeout = options?.timeout ?? config.timeout ?? 30_000;
-  const maxRetries = config.maxRetries ?? 2;
+  const maxRetries = options?.maxRetries ?? config.maxRetries ?? 2;
+  const useJsonMode = options?.responseFormat === 'json_object';
 
   const buildMessages = (extraSystem?: string): AIMessage[] => {
     const fullSystem = extraSystem ? systemPrompt + extraSystem : systemPrompt;
@@ -362,19 +365,23 @@ export async function executeAI(
   const attempt = async (temp: number, extraSystem?: string): Promise<{ content: string } | null> => {
     const zai = await getZAI();
     const msgs = buildMessages(extraSystem);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
     try {
-      const completion = await zai.chat.completions.create({
-        messages: msgs,
-        temperature: temp,
-        thinking: { type: 'disabled' },
-      });
+      const completion = await Promise.race([
+        zai.chat.completions.create({
+          messages: msgs,
+          temperature: temp,
+          thinking: { type: 'disabled' },
+          ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`AI call timed out after ${timeout}ms`)), timeout)
+        ),
+      ]);
       const content = completion.choices[0]?.message?.content;
       if (!content || content.trim().length === 0) throw new Error('Empty response');
       return { content: content.trim() };
-    } finally {
-      clearTimeout(timer);
+    } catch (err) {
+      throw err;
     }
   };
 
