@@ -64,31 +64,81 @@ REQUIREMENTS:
 - The JSON must have these exact top-level keys: id, name, slug, description, theme, pages, products, published, createdAt, updatedAt.
 - Each page must have a "sections" array with objects that have "id", "type", "content", "style".`;
 
+/** Extract a short, clean store name from the user prompt. */
+function extractStoreName(prompt: string): string {
+  let text = prompt.trim();
+
+  // 1. Brand name after "called / named / known as" — capture until a stop word or end
+  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,3})/i);
+  if (calledMatch?.[1]) {
+    // Trim trailing stop words like "selling", "with", "for"
+    let name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring|and)\s*$/i, '').trim();
+    if (name.length >= 2 && name.length <= 40) return name;
+  }
+
+  // 2. Quoted brand name anywhere in the prompt
+  const quotedMatch = text.match(/["']([^"']{2,40})["']/);
+  if (quotedMatch?.[1]) return quotedMatch[1].trim();
+
+  // 3. Brand name right after "store/shop/boutique/brand" keyword (e.g. "watch store Chronos")
+  const afterType = text.match(/\b(store|shop|boutique|brand)\s+([A-Z][\w&'-]*(?:\s+[A-Z][\w&'-]*){0,2})/);
+  if (afterType?.[2]) {
+    const name = afterType[2].replace(/\s+(selling|with|that|for|using|featuring|and)\s*$/i, '').trim();
+    if (name.length >= 2 && name.length <= 40) return name;
+  }
+
+  // 4. Strip type words and fluff, then find the best title-case sequence
+  text = text
+    .replace(/^(build|create|make|design|set\s+up)\s+(a|an|the|my)\s+/i, '')
+    .replace(/\b(online|e-commerce|ecommerce)\s+(store|shop|boutique)\b/gi, '')
+    .replace(/\b(store|shop|boutique|website|site|brand)\b/gi, '')
+    .replace(/\b(selling|with|that|for|using|featuring|and)\b.*/i, '')
+    .trim();
+
+  // Find the best run of title-case words (at least 2 chars each)
+  const words = text.split(/\s+/).filter(w => w.length >= 2);
+  const isTitle = (w: string) => w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase();
+
+  // Try each starting position and find the longest title-case run
+  let bestRun: string[] = [];
+  let currentRun: string[] = [];
+  for (const w of words) {
+    if (isTitle(w)) {
+      currentRun.push(w.replace(/[^a-zA-Z0-9&'-]/g, ''));
+    } else {
+      if (currentRun.length > bestRun.length) bestRun = currentRun;
+      currentRun = [];
+    }
+  }
+  if (currentRun.length > bestRun.length) bestRun = currentRun;
+
+  if (bestRun.length >= 1) {
+    const candidate = bestRun.slice(0, 3).join(' ');
+    if (candidate.length >= 2 && candidate.length <= 40) return candidate;
+  }
+
+  return 'My Store';
+}
+
 // ─── Fallback: generate a valid starter store without AI ───────
 function createFallbackStore(prompt: string): Store {
-  const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40);
-  const name = prompt
-    .replace(/^build\s+(a|an|the)\s+/i, '')
-    .replace(/\s+store$/i, '')
-    .replace(/\s+shop$/i, '')
-    .trim();
-  const displayName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-
+  const storeName = extractStoreName(prompt);
+  const slug = storeName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 40) || 'my-store';
   const now = new Date().toISOString();
   const uid = () => crypto.randomUUID();
 
   const products = [
-    { id: uid(), name: `${displayName} Classic`, price: 49.99, compareAtPrice: null, images: [`https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600`], description: `Our signature ${name.toLowerCase()} product, crafted with care.`, category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
-    { id: uid(), name: `${displayName} Premium`, price: 89.99, compareAtPrice: null, images: [`https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600`], description: `Premium quality ${name.toLowerCase()} for discerning customers.`, category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
-    { id: uid(), name: `${displayName} Starter`, price: 29.99, compareAtPrice: null, images: [`https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600`], description: `Great value ${name.toLowerCase()} perfect for beginners.`, category: 'Starter', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }], inStock: true }], featured: false, inStock: true },
-    { id: uid(), name: `${displayName} Pro`, price: 129.99, compareAtPrice: 149.99, images: [`https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600`], description: `Professional grade ${name.toLowerCase()} for serious enthusiasts.`, category: 'Pro', variants: [{ id: uid(), name: 'Size', options: [{ label: 'M', value: 'm' }, { label: 'L', value: 'l' }, { label: 'XL', value: 'xl' }], inStock: true }], featured: true, inStock: true },
+    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Our signature product, crafted with care.', category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
+    { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for discerning customers.', category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
+    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Great value, perfect for getting started.', category: 'Starter', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }], inStock: true }], featured: false, inStock: true },
+    { id: uid(), name: 'Pro Collection', price: 129.99, compareAtPrice: 149.99, images: ['https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600'], description: 'Professional grade for serious enthusiasts.', category: 'Pro', variants: [{ id: uid(), name: 'Size', options: [{ label: 'M', value: 'm' }, { label: 'L', value: 'l' }, { label: 'XL', value: 'xl' }], inStock: true }], featured: true, inStock: true },
   ];
 
   return {
     id: uid(),
-    name: `${displayName || 'My'} Store`,
-    slug: slug || 'my-store',
-    description: `A ${name.toLowerCase()} store built with Storqly AI.`,
+    name: storeName,
+    slug,
+    description: 'A store built with Storqly AI.',
     theme: {
       colors: {
         primary: '#6d28d9', secondary: '#ec4899', accent: '#f59e0b',
@@ -101,7 +151,7 @@ function createFallbackStore(prompt: string): Store {
     pages: [{
       id: uid(), name: 'Home', slug: '', isHomepage: true,
       sections: [
-        { id: uid(), type: 'hero', content: { headline: `Welcome to ${displayName || 'My'} Store`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { backgroundColor: '', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
+        { id: uid(), type: 'hero', content: { headline: `Welcome to ${storeName}`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { backgroundColor: '', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.slice(0, 3).map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { backgroundColor: '', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'testimonials', content: { headline: 'What Our Customers Say', items: [{ id: uid(), quote: 'Excellent quality and fast shipping!', author: 'Alex M.', role: 'Verified Buyer', rating: 5 }, { id: uid(), quote: 'Love the products. Will buy again.', author: 'Jordan K.', role: 'Verified Buyer', rating: 5 }] }, style: { backgroundColor: '#f9fafb', textColor: '', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'newsletter', content: { headline: 'Stay Updated', subtitle: 'Get exclusive offers and new arrivals.', placeholderText: 'Enter your email', buttonText: 'Subscribe' }, style: { backgroundColor: '#6d28d9', textColor: '#ffffff', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },

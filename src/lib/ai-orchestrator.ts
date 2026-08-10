@@ -50,18 +50,29 @@ export interface AIOrchestratorResult {
   taskType: AITaskType;
 }
 
-// ─── Singleton ZAI instance ─────────────────────────────────────
+// ─── Singleton ZAI instance with auth recovery ─────────────────
 let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
 
-async function getZAI() {
-  if (!zaiInstance) {
+async function getZAI(forceNew = false): Promise<Awaited<ReturnType<typeof ZAI.create>>> {
+  if (!zaiInstance || forceNew) {
     zaiInstance = await ZAI.create();
   }
   return zaiInstance;
 }
 
+/** Invalidate the ZAI singleton (e.g. on 401 auth errors) */
+function resetZAI() {
+  zaiInstance = null;
+}
+
 /** Sleep helper */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Check if an error is a 401 auth error that needs instance refresh */
+function isAuthError(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized');
+}
 
 /** Check if an error is a rate limit (429) */
 function isRateLimitError(err: unknown): boolean {
@@ -362,8 +373,8 @@ export async function executeAI(
     return msgs;
   };
 
-  const attempt = async (temp: number, extraSystem?: string): Promise<{ content: string } | null> => {
-    const zai = await getZAI();
+  const attempt = async (temp: number, extraSystem?: string, forceNewClient?: boolean): Promise<{ content: string } | null> => {
+    const zai = await getZAI(forceNewClient);
     const msgs = buildMessages(extraSystem);
     try {
       const completion = await Promise.race([
@@ -399,8 +410,15 @@ export async function executeAI(
     const temp = i === 0 ? primaryTemp : Math.max(0.2, primaryTemp - 0.2 * i);
     const extraSystem = RETRY_EXTRA_INSTRUCTIONS[i] || '';
 
+    // On 401 auth errors, reset the ZAI instance to get a fresh token
+    const useFreshClient = i > 0 && isAuthError(lastError);
+    if (useFreshClient) {
+      console.warn(`[AI Orchestrator] Auth error detected — recreating ZAI instance for retry ${i + 1}...`);
+      resetZAI();
+    }
+
     try {
-      const result = await attempt(temp, extraSystem);
+      const result = await attempt(temp, extraSystem, useFreshClient);
       if (result) {
         return { success: true, content: result.content, attempts: i + 1, taskType };
       }
