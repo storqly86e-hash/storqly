@@ -1,0 +1,1107 @@
+     1→#!/usr/bin/env bun
+     2→import fs from 'fs/promises';
+     3→import path from 'path';
+     4→import { fileURLToPath } from 'url';
+     5→import os from 'os';
+     6→// Dynamically import ZAI, supporting global installation (Node.js and Bun)
+     7→async function getZAI() {
+     8→    try {
+     9→        // Try importing from package name (when globally installed)
+    10→        const packageName = 'z-ai-web-dev-sdk';
+    11→        const { default: ZAI } = await import(packageName);
+    12→        return ZAI;
+    13→    }
+    14→    catch (error1) {
+    15→        try {
+    16→            // Try importing directly from global node_modules (container environment fix)
+    17→            const globalPackagePath = '/usr/lib/node_modules/z-ai-web-dev-sdk/dist/index.js';
+    18→            const { default: ZAI } = await import(globalPackagePath);
+    19→            return ZAI;
+    20→        }
+    21→        catch (error2) {
+    22→            try {
+    23→                // Dynamically get global path (supporting Node.js and Bun)
+    24→                const { execSync } = await import('child_process');
+    25→                let globalRoot = '';
+    26→                // Detect runtime environment: check Bun global object or process.versions.bun
+    27→                const isBun = (typeof globalThis.Bun !== 'undefined') ||
+    28→                    (typeof process !== 'undefined' && process.versions.bun);
+    29→                if (isBun) {
+    30→                    // Bun environment: try multiple ways to find global package path
+    31→                    const homeDir = os.homedir();
+    32→                    const possiblePaths = [
+    33→                        path.join(homeDir, '.bun', 'install', 'global'),
+    34→                        path.join(homeDir, '.bun', 'bin', 'node_modules'),
+    35→                        '/usr/local/lib/bun/install/global',
+    36→                    ];
+    37→                    // Try using bun pm cache command to get cache path
+    38→                    try {
+    39→                        const bunCache = execSync('bun pm cache', { encoding: 'utf-8' }).trim();
+    40→                        possiblePaths.unshift(path.join(bunCache, 'global'));
+    41→                    }
+    42→                    catch {
+    43→                        // Ignore error, continue with other paths
+    44→                    }
+    45→                    // Try each possible path
+    46→                    let found = false;
+    47→                    for (const possiblePath of possiblePaths) {
+    48→                        try {
+    49→                            const testPath = path.join(possiblePath, 'z-ai-web-dev-sdk', 'dist', 'index.js');
+    50→                            await fs.access(testPath);
+    51→                            globalRoot = possiblePath;
+    52→                            found = true;
+    53→                            break;
+    54→                        }
+    55→                        catch {
+    56→                            // Continue trying next path
+    57→                        }
+    58→                    }
+    59→                    // If all paths failed, use the first default path
+    60→                    if (!found) {
+    61→                        globalRoot = possiblePaths[0];
+    62→                    }
+    63→                }
+    64→                else {
+    65→                    // Node.js environment: use npm root -g
+    66→                    globalRoot = execSync('npm root -g', { encoding: 'utf-8' }).trim();
+    67→                }
+    68→                // Ensure globalRoot is assigned
+    69→                if (!globalRoot) {
+    70→                    throw new Error('Unable to determine global package path');
+    71→                }
+    72→                const globalPackagePath = path.join(globalRoot, 'z-ai-web-dev-sdk', 'dist', 'index.js');
+    73→                const { default: ZAI } = await import(globalPackagePath);
+    74→                return ZAI;
+    75→            }
+    76→            catch (error3) {
+    77→                // Finally fallback to relative path import (for development)
+    78→                const __filename = fileURLToPath(import.meta.url);
+    79→                const __dirname = path.dirname(__filename);
+    80→                const indexPath = path.resolve(__dirname, './index.js');
+    81→                const { default: ZAI } = await import(indexPath);
+    82→                return ZAI;
+    83→            }
+    84→        }
+    85→    }
+    86→}
+    87→// Generic parameter parsing function
+    88→function parseKeyValueArgs(args) {
+    89→    const result = {};
+    90→    for (let i = 0; i < args.length; i++) {
+    91→        const arg = args[i];
+    92→        if (arg.startsWith('--')) {
+    93→            const key = arg.slice(2);
+    94→            const nextArg = args[i + 1];
+    95→            if (nextArg && !nextArg.startsWith('--')) {
+    96→                result[key] = nextArg;
+    97→                i++;
+    98→            }
+    99→            else {
+   100→                result[key] = 'true';
+   101→            }
+   102→        }
+   103→        else if (arg.startsWith('-') && arg.length === 2) {
+   104→            const key = arg.slice(1);
+   105→            const nextArg = args[i + 1];
+   106→            if (nextArg && !nextArg.startsWith('-')) {
+   107→                result[key] = nextArg;
+   108→                i++;
+   109→            }
+   110→            else {
+   111→                result[key] = 'true';
+   112→            }
+   113→        }
+   114→    }
+   115→    return result;
+   116→}
+   117→// Show main help information
+   118→function showMainHelp() {
+   119→    console.log(`
+   120→Z-AI SDK CLI - Multi-purpose AI Tool
+   121→
+   122→Usage:
+   123→  z-ai <command> [options]
+   124→  z-ai-generate [options]  # Backward compatible: image generation
+   125→
+   126→Commands:
+   127→  chat         Chat completion
+   128→  vision       Vision model chat
+   129→  tts          Text to speech
+   130→  asr          Speech to text
+   131→  image        Image generation
+   132→  image-edit   Image editing
+   133→  image-search Image search (ZAI in-house, returns OSS-hosted URLs)
+   134→  video        Video generation
+   135→  async-result Query async result
+   136→  function     Function invocation
+   137→
+   138→Use "z-ai <command> --help" to view help for specific commands
+   139→`);
+   140→}
+   141→// Show chat completion help
+   142→function showChatHelp() {
+   143→    console.log(`
+   144→Z-AI SDK CLI - Chat Completion
+   145→
+   146→Usage:
+   147→  z-ai chat [options]
+   148→
+   149→Options:
+   150→  --prompt, -p <text>     Required: User message content
+   151→  --system, -s <text>    Optional: System prompt
+   152→  --thinking, -t         Optional: Enable thinking chain (default: disabled)
+   153→  --output, -o <path>     Optional: Output file path (JSON format)
+   154→  --stream                Optional: Stream output
+   155→  --help, -h              Show help information
+   156→
+   157→Examples:
+   158→  z-ai chat --prompt "Hello" --output response.json
+   159→  z-ai chat -p "Explain quantum computing" --system "You are a professional physicist" --thinking
+   160→`);
+   161→}
+   162→// Show vision chat help
+   163→function showVisionHelp() {
+   164→    console.log(`
+   165→Z-AI SDK CLI - Vision Model Chat
+   166→
+   167→Usage:
+   168→  z-ai vision [options]
+   169→
+   170→Options:
+   171→  --prompt, -p <text>        Required: User message content
+   172→  --image, -i <URL or path>  Optional: Image URL or local file path (can be used multiple times)
+   173→  --thinking, -t             Optional: Enable thinking chain (default: disabled)
+   174→  --output, -o <path>         Optional: Output file path (JSON format)
+   175→  --stream                    Optional: Stream output
+   176→  --help, -h                  Show help information
+   177→
+   178→Examples:
+   179→  z-ai vision --prompt "Describe this image" --image "https://example.com/image.jpg"
+   180→  z-ai vision -p "What is this?" -i "./photo.jpg" --thinking -o response.json
+   181→`);
+   182→}
+   183→// Show TTS help
+   184→function showTTSHelp() {
+   185→    console.log(`
+   186→Z-AI SDK CLI - Text to Speech
+   187→
+   188→Usage:
+   189→  z-ai tts [options]
+   190→
+   191→Options:
+   192→  --input, -i <text>       Required: Text to convert
+   193→  --output, -o <path>      Required: Output audio file path
+   194→  --voice, -v <voice>     Optional: Voice type (default: tongtong)
+   195→  --speed, -s <number>    Optional: Speech rate (0.5-2.0, default: 1.0)
+   196→  --format, -f <format>   Optional: Output format (wav, mp3, pcm, default: wav)
+   197→  --stream                 Optional: Stream output
+   198→  --help, -h               Show help information
+   199→
+   200→Examples:
+   201→  z-ai tts --input "Hello, world" --output "./output.wav"
+   202→  z-ai tts -i "Hello World" -o "./hello.mp3" -v "tongtong" -s 1.2
+   203→`);
+   204→}
+   205→// Show ASR help
+   206→function showASRHelp() {
+   207→    console.log(`
+   208→Z-AI SDK CLI - Speech to Text
+   209→
+   210→Usage:
+   211→  z-ai asr [options]
+   212→
+   213→Options:
+   214→  --file, -f <path>        Required: Audio file path (or use --base64)
+   215→  --base64, -b <base64>    Optional: Base64 encoded audio file
+   216→  --output, -o <path>       Optional: Output file path (JSON format)
+   217→  --stream                  Optional: Stream output
+   218→  --help, -h                Show help information
+   219→
+   220→Examples:
+   221→  z-ai asr --file "./audio.wav" --output transcript.json
+   222→  z-ai asr -f "./recording.mp3" -o result.json
+   223→`);
+   224→}
+   225→// Show image generation help
+   226→function showImageHelp() {
+   227→    console.log(`
+   228→Z-AI SDK CLI - Image Generation
+   229→
+   230→Usage:
+   231→  z-ai image [options]
+   232→  z-ai-generate [options]  # Backward compatible
+   233→
+   234→Options:
+   235→  --prompt, -p <text>     Required: Image description text
+   236→  --output, -o <path>     Required: Output image file path (png format)
+   237→  --size, -s <size>       Optional: Image size (default: 1024x1024)
+   238→                         Supported sizes: 1024x1024, 768x1344, 864x1152, 
+   239→                                        1344x768, 1152x864, 1440x720, 720x1440
+   240→  --help, -h              Show help information
+   241→
+   242→Examples:
+   243→  z-ai image --prompt "A cute kitten" --output "./cat.png"
+   244→  z-ai-generate -p "Beautiful landscape" -o "./landscape.png" -s 1344x768
+   245→`);
+   246→}
+   247→// Show image edit help
+   248→function showImageEditHelp() {
+   249→    console.log(`
+   250→Z-AI SDK CLI - Image Editing
+   251→
+   252→Usage:
+   253→  z-ai image-edit [options]
+   254→
+   255→Options:
+   256→  --prompt, -p <text>     Required: Image editing description
+   257→  --image, -i <URL/path>  Required: Original image URL or local file path
+   258→  --output, -o <path>     Required: Output image file path (png format)
+   259→  --size, -s <size>       Optional: Image size (default: 1024x1024)
+   260→                         Supported sizes: 1024x1024, 768x1344, 864x1152,
+   261→                                        1344x768, 1152x864, 1440x720, 720x1440
+   262→  --help, -h              Show help information
+   263→
+   264→Examples:
+   265→  z-ai image-edit --prompt "把背景改成蓝天白云" --image "./photo.png" --output "./edited.png"
+   266→  z-ai image-edit -p "Add a hat to the person" -i "https://example.com/image.png" -o "./result.png"
+   267→`);
+   268→}
+   269→// Show image search help
+   270→function showImageSearchHelp() {
+   271→    console.log(`
+   272→Z-AI SDK CLI - Image Search (ZAI in-house service)
+   273→
+   274→Usage:
+   275→  z-ai image-search [options]
+   276→
+   277→Searches public web images for a natural-language query, re-hosts each hit on
+   278→OSS so the URL is embeddable, and (by default) attaches a short Gemini caption.
+   279→
+   280→Options:
+   281→  --query, -q <text>      Required: natural-language description of the image
+   282→  --count, -c <n>         Optional: number of results, default 10, max ~20
+   283→  --gl <region>           Optional: region code, default cn (cn|us|jp|kr|...)
+   284→  --no-rank               Optional: disable Gemini captioning (faster)
+   285→  --output, -o <path>     Optional: write full JSON response to file
+   286→  --help, -h              Show help information
+   287→
+   288→Examples:
+   289→  z-ai image-search -q "a cute orange tabby kitten playing with yarn"
+   290→  z-ai image-search -q "vintage red sports car" --count 5 --gl us --no-rank
+   291→  z-ai image-search -q "中国传统水墨山水画" -c 8 -o results.json
+   292→`);
+   293→}
+   294→// Show video generation help
+   295→function showVideoHelp() {
+   296→    console.log(`
+   297→Z-AI SDK CLI - Video Generation
+   298→
+   299→Usage:
+   300→  z-ai video [options]
+   301→
+   302→Options:
+   303→  --prompt, -p <text>          Optional: Video description text
+   304→  --image-url, -i <URL>        Optional: Image URL (single image or first/last frame array)
+   305→  --quality, -q <mode>         Optional: Output mode speed or quality (default: speed)
+   306→  --with-audio                 Optional: Generate AI audio (default: false)
+   307→  --size, -s <size>            Optional: Video resolution, e.g. "1920x1080"
+   308→  --fps <fps>                  Optional: Video frame rate 30 or 60 (default: 30)
+   309→  --duration, -d <seconds>     Optional: Video duration in seconds 5 or 10 (default: 5)
+   310→  --model, -m <model>         Optional: Model name
+   311→  --poll                       Optional: Auto-poll until task completes
+   312→  --poll-interval <seconds>    Optional: Polling interval in seconds (default: 5)
+   313→  --max-polls <count>          Optional: Maximum polling count (default: 60)
+   314→  --output, -o <path>          Optional: Output result file path (JSON format)
+   315→  --help, -h                   Show help information
+   316→
+   317→Examples:
+   318→  z-ai video --prompt "A cat is playing with a ball" --poll
+   319→  z-ai video -p "Beautiful landscape" -q quality --size "1920x1080" --fps 60 --poll
+   320→  z-ai video --image-url "https://example.com/image.png" --prompt "Make the scene move" --poll
+   321→`);
+   322→}
+   323→// Show async result query help
+   324→function showAsyncResultHelp() {
+   325→    console.log(`
+   326→Z-AI SDK CLI - Query Async Result
+   327→
+   328→Usage:
+   329→  z-ai async-result [options]
+   330→
+   331→Options:
+   332→  --id, -i <task-id>          Required: Task ID
+   333→  --poll                       Optional: Auto-poll until task completes
+   334→  --poll-interval <seconds>    Optional: Polling interval in seconds (default: 5)
+   335→  --max-polls <count>          Optional: Maximum polling count (default: 60)
+   336→  --output, -o <path>          Optional: Output result file path (JSON format)
+   337→  --help, -h                   Show help information
+   338→
+   339→Examples:
+   340→  z-ai async-result --id "16591731777601843-8059626559669415615"
+   341→  z-ai async-result -i "task-id-123" --poll
+   342→  z-ai async-result --id "task-id-123" --poll --poll-interval 10 --max-polls 30
+   343→`);
+   344→}
+   345→// Show function invocation help
+   346→function showFunctionHelp() {
+   347→    console.log(`
+   348→Z-AI SDK CLI - Function Invocation
+   349→
+   350→Usage:
+   351→  z-ai function [options]
+   352→
+   353→Options:
+   354→  --name, -n <name>        Required: Function name (e.g.: web_search)
+   355→  --args, -a <JSON>        Required: Function arguments (JSON format)
+   356→  --output, -o <path>       Optional: Output file path (JSON format)
+   357→  --help, -h                Show help information
+   358→
+   359→Examples:
+   360→  z-ai function --name "web_search" --args '{"query": "AI", "num": 5}'
+   361→  z-ai function -n web_search -a '{"query": "TypeScript", "num": 3}' -o result.json
+   362→`);
+   363→}
+   364→// Utility functions
+   365→function base64ToBuffer(base64Data) {
+   366→    return Buffer.from(base64Data, 'base64');
+   367→}
+   368→async function saveFile(content, outputPath) {
+   369→    try {
+   370→        const outputDir = path.dirname(outputPath);
+   371→        await fs.mkdir(outputDir, { recursive: true });
+   372→        if (Buffer.isBuffer(content)) {
+   373→            await fs.writeFile(outputPath, content);
+   374→        }
+   375→        else {
+   376→            await fs.writeFile(outputPath, content, 'utf-8');
+   377→        }
+   378→        console.log(`✅ File saved to: ${outputPath}`);
+   379→    }
+   380→    catch (error) {
+   381→        throw new Error(`Failed to save file: ${error}`);
+   382→    }
+   383→}
+   384→async function readFileAsBase64(filePath) {
+   385→    try {
+   386→        const buffer = await fs.readFile(filePath);
+   387→        return buffer.toString('base64');
+   388→    }
+   389→    catch (error) {
+   390→        throw new Error(`Failed to read file: ${error}`);
+   391→    }
+   392→}
+   393→// Handle streaming response (SSE format)
+   394→async function handleStreamResponse(stream, outputPath) {
+   395→    const reader = stream.getReader();
+   396→    const decoder = new TextDecoder();
+   397→    let buffer = '';
+   398→    let fullContent = '';
+   399→    const outputLines = [];
+   400→    try {
+   401→        while (true) {
+   402→            const { done, value } = await reader.read();
+   403→            if (done)
+   404→                break;
+   405→            buffer += decoder.decode(value, { stream: true });
+   406→            const lines = buffer.split('\n');
+   407→            buffer = lines.pop() || ''; // Keep incomplete line
+   408→            for (const line of lines) {
+   409→                if (line.startsWith('data: ')) {
+   410→                    const data = line.slice(6).trim();
+   411→                    if (data === '' || data === '[DONE]')
+   412→                        continue;
+   413→                    try {
+   414→                        const json = JSON.parse(data);
+   415→                        // Process SSE data
+   416→                        if (json.choices && json.choices[0]) {
+   417→                            const choice = json.choices[0];
+   418→                            if (choice.delta && choice.delta.content) {
+   419→                                const content = choice.delta.content;
+   420→                                process.stdout.write(content);
+   421→                                fullContent += content;
+   422→                                outputLines.push(JSON.stringify(json, null, 2));
+   423→                            }
+   424→                        }
+   425→                        else {
+   426→                            // Output JSON directly
+   427→                            outputLines.push(JSON.stringify(json, null, 2));
+   428→                            console.log(JSON.stringify(json, null, 2));
+   429→                        }
+   430→                    }
+   431→                    catch (e) {
+   432→                        // Ignore JSON parsing errors
+   433→                    }
+   434→                }
+   435→            }
+   436→        }
+   437→        // Output newline
+   438→        console.log('');
+   439→        // If output file is specified, save full content
+   440→        if (outputPath) {
+   441→            if (fullContent) {
+   442→                await saveFile(fullContent, outputPath);
+   443→            }
+   444→            else if (outputLines.length > 0) {
+   445→                await saveFile(outputLines.join('\n'), outputPath);
+   446→            }
+   447→        }
+   448→    }
+   449→    catch (error) {
+   450→        console.error('❌ Failed to process streaming response:', error);
+   451→        throw error;
+   452→    }
+   453→    finally {
+   454→        reader.releaseLock();
+   455→    }
+   456→}
+   457→// Handle chat completion command
+   458→async function handleChat(args, client) {
+   459→    const params = parseKeyValueArgs(args);
+   460→    if (params.help || params.h) {
+   461→        showChatHelp();
+   462→        return;
+   463→    }
+   464→    const prompt = params.prompt || params.p;
+   465→    if (!prompt) {
+   466→        console.error('❌ Error: Missing required parameter --prompt');
+   467→        showChatHelp();
+   468→        process.exit(1);
+   469→    }
+   470→    const messages = [];
+   471→    if (params.system || params.s) {
+   472→        messages.push({
+   473→            role: 'system',
+   474→            content: params.system || params.s,
+   475→        });
+   476→    }
+   477→    messages.push({
+   478→        role: 'user',
+   479→        content: prompt,
+   480→    });
+   481→    const body = {
+   482→        messages,
+   483→    };
+   484→    // Handle thinking parameter (boolean flag, enabled if provided, default disabled)
+   485→    if (params.thinking || params.t) {
+   486→        body.thinking = { type: 'enabled' };
+   487→    }
+   488→    else {
+   489→        body.thinking = { type: 'disabled' };
+   490→    }
+   491→    if (params.stream) {
+   492→        body.stream = true;
+   493→    }
+   494→    console.log('🚀 Sending chat request...');
+   495→    const response = await client.chat.completions.create(body);
+   496→    // Handle streaming response
+   497→    if (body.stream && response && typeof response.getReader === 'function') {
+   498→        await handleStreamResponse(response, params.output || params.o);
+   499→        return;
+   500→    }
+   501→    const output = params.output || params.o;
+   502→    if (output) {
+   503→        await saveFile(JSON.stringify(response, null, 2), output);
+   504→    }
+   505→    else {
+   506→        console.log(JSON.stringify(response, null, 2));
+   507→    }
+   508→}
+   509→// Handle vision chat command
+   510→async function handleVision(args, client) {
+   511→    const params = parseKeyValueArgs(args);
+   512→    if (params.help || params.h) {
+   513→        showVisionHelp();
+   514→        return;
+   515→    }
+   516→    const prompt = params.prompt || params.p;
+   517→    if (!prompt) {
+   518→        console.error('❌ Error: Missing required parameter --prompt');
+   519→        showVisionHelp();
+   520→        process.exit(1);
+   521→    }
+   522→    const content = [{ type: 'text', text: prompt }];
+   523→    // Handle image parameters (possibly multiple) - extract from original args
+   524→    for (let i = 0; i < args.length; i++) {
+   525→        const arg = args[i];
+   526→        if (arg === '--image' || arg === '-i') {
+   527→            const imageArg = args[i + 1];
+   528→            if (imageArg && !imageArg.startsWith('-')) {
+   529→                let imageUrl = imageArg;
+   530→                // If it's a local file path, need to convert to base64
+   531→                if (!imageArg.startsWith('http://') && !imageArg.startsWith('https://') && !imageArg.startsWith('data:')) {
+   532→                    // Local file, read as base64
+   533→                    try {
+   534→                        const base64 = await readFileAsBase64(imageArg);
+   535→                        // Determine MIME type based on file extension
+   536→                        const ext = path.extname(imageArg).toLowerCase();
+   537→                        const mimeTypes = {
+   538→                            '.jpg': 'image/jpeg',
+   539→                            '.jpeg': 'image/jpeg',
+   540→                            '.png': 'image/png',
+   541→                            '.gif': 'image/gif',
+   542→                            '.webp': 'image/webp',
+   543→                        };
+   544→                        const mimeType = mimeTypes[ext] || 'image/jpeg';
+   545→                        imageUrl = `data:${mimeType};base64,${base64}`;
+   546→                    }
+   547→                    catch (error) {
+   548→                        console.error(`❌ Unable to read image file: ${imageArg}`);
+   549→                        process.exit(1);
+   550→                    }
+   551→                }
+   552→                content.push({
+   553→                    type: 'image_url',
+   554→                    image_url: { url: imageUrl },
+   555→                });
+   556→                i++; // Skip processed image parameter value
+   557→            }
+   558→        }
+   559→    }
+   560→    const body = {
+   561→        messages: [
+   562→            {
+   563→                role: 'user',
+   564→                content,
+   565→            },
+   566→        ],
+   567→    };
+   568→    // Handle thinking parameter (boolean flag, enabled if provided, default disabled)
+   569→    if (params.thinking || params.t) {
+   570→        body.thinking = { type: 'enabled' };
+   571→    }
+   572→    else {
+   573→        body.thinking = { type: 'disabled' };
+   574→    }
+   575→    if (params.stream) {
+   576→        body.stream = true;
+   577→    }
+   578→    console.log('🚀 Sending vision chat request...');
+   579→    const response = await client.chat.completions.createVision(body);
+   580→    // Handle streaming response
+   581→    if (body.stream && response && typeof response.getReader === 'function') {
+   582→        await handleStreamResponse(response, params.output || params.o);
+   583→        return;
+   584→    }
+   585→    const output = params.output || params.o;
+   586→    if (output) {
+   587→        await saveFile(JSON.stringify(response, null, 2), output);
+   588→    }
+   589→    else {
+   590→        console.log(JSON.stringify(response, null, 2));
+   591→    }
+   592→}
+   593→// Handle TTS command
+   594→async function handleTTS(args, client) {
+   595→    const params = parseKeyValueArgs(args);
+   596→    if (params.help || params.h) {
+   597→        showTTSHelp();
+   598→        return;
+   599→    }
+   600→    const input = params.input || params.i;
+   601→    if (!input) {
+   602→        console.error('❌ Error: Missing required parameter --input');
+   603→        showTTSHelp();
+   604→        process.exit(1);
+   605→    }
+   606→    const output = params.output || params.o;
+   607→    if (!output) {
+   608→        console.error('❌ Error: Missing required parameter --output');
+   609→        showTTSHelp();
+   610→        process.exit(1);
+   611→    }
+   612→    const body = {
+   613→        input,
+   614→    };
+   615→    if (params.voice || params.v) {
+   616→        body.voice = params.voice || params.v;
+   617→    }
+   618→    else {
+   619→        body.voice = 'tongtong';
+   620→    }
+   621→    if (params.speed || params.s) {
+   622→        body.speed = parseFloat(params.speed || params.s);
+   623→    }
+   624→    const format = params.format || params.f || 'wav';
+   625→    body.response_format = format;
+   626→    if (params.stream) {
+   627→        body.stream = true;
+   628→    }
+   629→    console.log('🚀 Generating speech...');
+   630→    const response = await client.audio.tts.create(body);
+   631→    // Handle audio response
+   632→    const contentType = response.headers.get('content-type') || '';
+   633→    // Check if it's a streaming response
+   634→    if (body.stream && (contentType.includes('text/event-stream') || contentType.includes('text/plain'))) {
+   635→        console.error('❌ Streaming response requires special handling, please use streaming processing code');
+   636→        process.exit(1);
+   637→    }
+   638→    // Non-streaming response, get audio data
+   639→    const arrayBuffer = await response.arrayBuffer();
+   640→    const buffer = Buffer.from(new Uint8Array(arrayBuffer));
+   641→    await saveFile(buffer, output);
+   642→    console.log('🎉 Speech generation completed!');
+   643→}
+   644→// Handle ASR command
+   645→async function handleASR(args, client) {
+   646→    const params = parseKeyValueArgs(args);
+   647→    if (params.help || params.h) {
+   648→        showASRHelp();
+   649→        return;
+   650→    }
+   651→    const file = params.file || params.f;
+   652→    const base64 = params.base64 || params.b;
+   653→    if (!file && !base64) {
+   654→        console.error('❌ Error: Missing required parameter --file or --base64');
+   655→        showASRHelp();
+   656→        process.exit(1);
+   657→    }
+   658→    const body = {};
+   659→    if (file) {
+   660→        // Read file and convert to base64
+   661→        try {
+   662→            const fileBase64 = await readFileAsBase64(file);
+   663→            body.file_base64 = fileBase64;
+   664→        }
+   665→        catch (error) {
+   666→            console.error(`❌ Unable to read audio file: ${file}`);
+   667→            process.exit(1);
+   668→        }
+   669→    }
+   670→    else {
+   671→        body.file_base64 = base64;
+   672→    }
+   673→    if (params.stream) {
+   674→        body.stream = true;
+   675→    }
+   676→    console.log('🚀 Recognizing speech...');
+   677→    const response = await client.audio.asr.create(body);
+   678→    const output = params.output || params.o;
+   679→    if (output) {
+   680→        await saveFile(JSON.stringify(response, null, 2), output);
+   681→    }
+   682→    else {
+   683→        console.log(JSON.stringify(response, null, 2));
+   684→    }
+   685→    console.log('🎉 Speech recognition completed!');
+   686→}
+   687→// Handle image generation command
+   688→async function handleImage(args, client) {
+   689→    const params = parseKeyValueArgs(args);
+   690→    if (params.help || params.h) {
+   691→        showImageHelp();
+   692→        return;
+   693→    }
+   694→    const prompt = params.prompt || params.p;
+   695→    if (!prompt) {
+   696→        console.error('❌ Error: Missing required parameter --prompt');
+   697→        showImageHelp();
+   698→        process.exit(1);
+   699→    }
+   700→    const output = params.output || params.o;
+   701→    if (!output) {
+   702→        console.error('❌ Error: Missing required parameter --output');
+   703→        showImageHelp();
+   704→        process.exit(1);
+   705→    }
+   706→    const body = {
+   707→        prompt,
+   708→        size: params.size || params.s || '1024x1024',
+   709→    };
+   710→    const validSizes = ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'];
+   711→    if (!validSizes.includes(body.size)) {
+   712→        throw new Error(`--size must be one of: ${validSizes.join(', ')}`);
+   713→    }
+   714→    console.log(`🎨 Generating image: "${prompt}"`);
+   715→    console.log(`📐 Size: ${body.size}`);
+   716→    const response = await client.images.generations.create(body);
+   717→    if (!response.data || response.data.length === 0) {
+   718→        throw new Error('API did not return image data');
+   719→    }
+   720→    const imageBase64 = response.data[0].base64;
+   721→    await saveFile(base64ToBuffer(imageBase64), output);
+   722→    console.log('🎉 Image generation completed!');
+   723→}
+   724→// Handle image edit command
+   725→async function handleImageEdit(args, client) {
+   726→    const params = parseKeyValueArgs(args);
+   727→    if (params.help || params.h) {
+   728→        showImageEditHelp();
+   729→        return;
+   730→    }
+   731→    const prompt = params.prompt || params.p;
+   732→    if (!prompt) {
+   733→        console.error('❌ Error: Missing required parameter --prompt');
+   734→        showImageEditHelp();
+   735→        process.exit(1);
+   736→    }
+   737→    const image = params.image || params.i;
+   738→    if (!image) {
+   739→        console.error('❌ Error: Missing required parameter --image');
+   740→        showImageEditHelp();
+   741→        process.exit(1);
+   742→    }
+   743→    const output = params.output || params.o;
+   744→    if (!output) {
+   745→        console.error('❌ Error: Missing required parameter --output');
+   746→        showImageEditHelp();
+   747→        process.exit(1);
+   748→    }
+   749→    // Process image: convert local file to base64 data URL
+   750→    let imageUrl = image;
+   751→    if (!image.startsWith('http://') && !image.startsWith('https://') && !image.startsWith('data:')) {
+   752→        try {
+   753→            const base64 = await readFileAsBase64(image);
+   754→            const ext = path.extname(image).toLowerCase();
+   755→            const mimeTypes = {
+   756→                '.jpg': 'image/jpeg',
+   757→                '.jpeg': 'image/jpeg',
+   758→                '.png': 'image/png',
+   759→                '.gif': 'image/gif',
+   760→                '.webp': 'image/webp',
+   761→            };
+   762→            const mimeType = mimeTypes[ext] || 'image/png';
+   763→            imageUrl = `data:${mimeType};base64,${base64}`;
+   764→        }
+   765→        catch (error) {
+   766→            console.error(`❌ Unable to read image file: ${image}`);
+   767→            process.exit(1);
+   768→        }
+   769→    }
+   770→    const body = {
+   771→        prompt,
+   772→        image: imageUrl,
+   773→        size: params.size || params.s || '1024x1024',
+   774→    };
+   775→    const validSizes = ['1024x1024', '768x1344', '864x1152', '1344x768', '1152x864', '1440x720', '720x1440'];
+   776→    if (!validSizes.includes(body.size)) {
+   777→        throw new Error(`--size must be one of: ${validSizes.join(', ')}`);
+   778→    }
+   779→    console.log(`🎨 Editing image: "${prompt}"`);
+   780→    console.log(`📐 Size: ${body.size}`);
+   781→    const response = await client.images.generations.edit(body);
+   782→    if (!response.data || response.data.length === 0) {
+   783→        throw new Error('API did not return image data');
+   784→    }
+   785→    const imageBase64 = response.data[0].base64;
+   786→    await saveFile(base64ToBuffer(imageBase64), output);
+   787→    console.log('🎉 Image editing completed!');
+   788→}
+   789→// Handle image search command
+   790→async function handleImageSearch(args, client) {
+   791→    const params = parseKeyValueArgs(args);
+   792→    if (params.help || params.h) {
+   793→        showImageSearchHelp();
+   794→        return;
+   795→    }
+   796→    const query = params.query || params.q;
+   797→    if (!query) {
+   798→        console.error('❌ Error: Missing required parameter --query');
+   799→        showImageSearchHelp();
+   800→        process.exit(1);
+   801→    }
+   802→    const body = { query };
+   803→    const countRaw = params.count || params.c;
+   804→    if (countRaw !== undefined) {
+   805→        const n = parseInt(countRaw, 10);
+   806→        if (Number.isNaN(n) || n <= 0) {
+   807→            console.error('❌ Error: --count must be a positive integer');
+   808→            process.exit(1);
+   809→        }
+   810→        body.count = n;
+   811→    }
+   812→    if (params.gl) {
+   813→        body.gl = params.gl;
+   814→    }
+   815→    // Captioning is on by default; --no-rank disables it.
+   816→    if (params['no-rank']) {
+   817→        body.rank = false;
+   818→    }
+   819→    else if (params.rank) {
+   820→        body.rank = true;
+   821→    }
+   822→    console.log(`🔎 Searching images: "${query}"`);
+   823→    const response = await client.images.search.create(body);
+   824→    if (response && response.success === false) {
+   825→        console.error(`❌ Image search failed: ${response.error || 'unknown error'}`);
+   826→    }
+   827→    else {
+   828→        const n = response?.results?.length ?? 0;
+   829→        console.log(`✅ Got ${n} image${n === 1 ? '' : 's'}`);
+   830→    }
+   831→    const output = params.output || params.o;
+   832→    if (output) {
+   833→        await saveFile(JSON.stringify(response, null, 2), output);
+   834→    }
+   835→    else {
+   836→        console.log(JSON.stringify(response, null, 2));
+   837→    }
+   838→}
+   839→// Handle video generation command
+   840→async function handleVideo(args, client) {
+   841→    const params = parseKeyValueArgs(args);
+   842→    if (params.help || params.h) {
+   843→        showVideoHelp();
+   844→        return;
+   845→    }
+   846→    const body = {};
+   847→    if (params.prompt || params.p) {
+   848→        body.prompt = params.prompt || params.p;
+   849→    }
+   850→    if (params['image-url'] || params.i) {
+   851→        const imageUrl = params['image-url'] || params.i;
+   852→        // Support array format (comma-separated)
+   853→        if (imageUrl.includes(',')) {
+   854→            body.image_url = imageUrl.split(',').map((url) => url.trim());
+   855→        }
+   856→        else {
+   857→            body.image_url = imageUrl;
+   858→        }
+   859→    }
+   860→    if (params.quality || params.q) {
+   861→        body.quality = params.quality || params.q;
+   862→    }
+   863→    if (params['with-audio']) {
+   864→        body.with_audio = params['with-audio'] === 'true' || params['with-audio'] === '1';
+   865→    }
+   866→    if (params.size || params.s) {
+   867→        body.size = params.size || params.s;
+   868→    }
+   869→    if (params.fps) {
+   870→        const fps = parseInt(params.fps);
+   871→        if (!isNaN(fps)) {
+   872→            body.fps = fps;
+   873→        }
+   874→    }
+   875→    if (params.duration || params.d) {
+   876→        const duration = parseInt(params.duration || params.d);
+   877→        if (!isNaN(duration)) {
+   878→            body.duration = duration;
+   879→        }
+   880→    }
+   881→    if (params.model || params.m) {
+   882→        body.model = params.model || params.m;
+   883→    }
+   884→    console.log('🎬 Creating video generation task...');
+   885→    const task = await client.video.generations.create(body);
+   886→    console.log(`✅ Task created!`);
+   887→    console.log(`📋 Task ID: ${task.id}`);
+   888→    console.log(`📊 Task Status: ${task.task_status}`);
+   889→    if (task.model) {
+   890→        console.log(`🤖 Model: ${task.model}`);
+   891→    }
+   892→    const output = params.output || params.o;
+   893→    if (output) {
+   894→        await saveFile(JSON.stringify(task, null, 2), output);
+   895→    }
+   896→    // If polling is needed, automatically query results
+   897→    if (params.poll) {
+   898→        const pollInterval = parseInt(params['poll-interval'] || '5') * 1000;
+   899→        const maxPolls = parseInt(params['max-polls'] || '60');
+   900→        console.log(`\n🔄 Starting to poll results (interval ${pollInterval / 1000}s, max ${maxPolls} times)...`);
+   901→        let result = await client.async.result.query(task.id);
+   902→        let pollCount = 0;
+   903→        while (result.task_status === 'PROCESSING' && pollCount < maxPolls) {
+   904→            pollCount++;
+   905→            console.log(`⏳ Poll ${pollCount}/${maxPolls}: Status ${result.task_status}, waiting...`);
+   906→            await new Promise(resolve => setTimeout(resolve, pollInterval));
+   907→            result = await client.async.result.query(task.id);
+   908→        }
+   909→        await displayAsyncResult(result, output);
+   910→    }
+   911→    else {
+   912→        console.log(`\n💡 Tip: Use --poll parameter to automatically poll until task completes`);
+   913→        console.log(`   Or use: z-ai async-result --id "${task.id}" --poll`);
+   914→    }
+   915→}
+   916→// Handle async result query command
+   917→async function handleAsyncResult(args, client) {
+   918→    const params = parseKeyValueArgs(args);
+   919→    if (params.help || params.h) {
+   920→        showAsyncResultHelp();
+   921→        return;
+   922→    }
+   923→    const taskId = params.id || params.i;
+   924→    if (!taskId) {
+   925→        console.error('❌ Error: Missing required parameter --id');
+   926→        showAsyncResultHelp();
+   927→        process.exit(1);
+   928→    }
+   929→    const pollInterval = parseInt(params['poll-interval'] || '5') * 1000;
+   930→    const maxPolls = parseInt(params['max-polls'] || '60');
+   931→    console.log(`🔍 Querying task result: ${taskId}`);
+   932→    let result = await client.async.result.query(taskId);
+   933→    // If polling is needed and status is processing
+   934→    if (params.poll && result.task_status === 'PROCESSING') {
+   935→        console.log(`\n🔄 Starting to poll results (interval ${pollInterval / 1000}s, max ${maxPolls} times)...`);
+   936→        let pollCount = 0;
+   937→        while (result.task_status === 'PROCESSING' && pollCount < maxPolls) {
+   938→            pollCount++;
+   939→            console.log(`⏳ Poll ${pollCount}/${maxPolls}: Status ${result.task_status}, waiting...`);
+   940→            await new Promise(resolve => setTimeout(resolve, pollInterval));
+   941→            result = await client.async.result.query(taskId);
+   942→        }
+   943→    }
+   944→    const output = params.output || params.o;
+   945→    await displayAsyncResult(result, output);
+   946→}
+   947→// Display async result
+   948→async function displayAsyncResult(result, output) {
+   949→    console.log(`\n=== Query Result ===`);
+   950→    console.log(`📊 Task Status: ${result.task_status}`);
+   951→    if (result.model) {
+   952→        console.log(`🤖 Model: ${result.model}`);
+   953→    }
+   954→    if (result.request_id) {
+   955→        console.log(`🆔 Request ID: ${result.request_id}`);
+   956→    }
+   957→    if (result.task_status === 'SUCCESS') {
+   958→        // Try to get video URL from multiple possible fields
+   959→        const videoUrl = result.video_result?.[0]?.url ||
+   960→            result.video_url ||
+   961→            result.url ||
+   962→            result.video;
+   963→        if (videoUrl) {
+   964→            console.log(`\n✅ Video generated successfully!`);
+   965→            console.log(`🎬 Video URL: ${videoUrl}`);
+   966→            console.log(`\n💡 Tip: You can open this URL in your browser to view or download the video`);
+   967→        }
+   968→        else {
+   969→            console.log(`\n⚠️  Task completed but video URL not found`);
+   970→            console.log(`Full response:`, JSON.stringify(result, null, 2));
+   971→        }
+   972→    }
+   973→    else if (result.task_status === 'PROCESSING') {
+   974→        console.log(`\n⏳ Task is still processing, please query again later`);
+   975→        if (result.id) {
+   976→            console.log(`Task ID: ${result.id}`);
+   977→        }
+   978→    }
+   979→    else if (result.task_status === 'FAIL') {
+   980→        console.log(`\n❌ Task processing failed`);
+   981→        console.log(`Full response:`, JSON.stringify(result, null, 2));
+   982→    }
+   983→    if (output) {
+   984→        await saveFile(JSON.stringify(result, null, 2), output);
+   985→    }
+   986→    else {
+   987→        console.log(`\nFull response:`, JSON.stringify(result, null, 2));
+   988→    }
+   989→}
+   990→// Handle function invocation command
+   991→async function handleFunction(args, client) {
+   992→    const params = parseKeyValueArgs(args);
+   993→    if (params.help || params.h) {
+   994→        showFunctionHelp();
+   995→        return;
+   996→    }
+   997→    const name = params.name || params.n;
+   998→    if (!name) {
+   999→        console.error('❌ Error: Missing required parameter --name');
+  1000→        showFunctionHelp();
+  1001→        process.exit(1);
+  1002→    }
+  1003→    const argsJson = params.args || params.a;
+  1004→    if (!argsJson) {
+  1005→        console.error('❌ Error: Missing required parameter --args');
+  1006→        showFunctionHelp();
+  1007→        process.exit(1);
+  1008→    }
+  1009→    let functionArgs;
+  1010→    try {
+  1011→        functionArgs = JSON.parse(argsJson);
+  1012→    }
+  1013→    catch (error) {
+  1014→        console.error('❌ Error: --args must be valid JSON format');
+  1015→        process.exit(1);
+  1016→    }
+  1017→    console.log(`🚀 Invoking function: ${name}...`);
+  1018→    const response = await client.functions.invoke(name, functionArgs);
+  1019→    const output = params.output || params.o;
+  1020→    if (output) {
+  1021→        await saveFile(JSON.stringify(response, null, 2), output);
+  1022→    }
+  1023→    else {
+  1024→        console.log(JSON.stringify(response, null, 2));
+  1025→    }
+  1026→    console.log('🎉 Function invocation completed!');
+  1027→}
+  1028→// Check if it's legacy image generation format (backward compatible)
+  1029→function isLegacyImageFormat(args) {
+  1030→    return args.some(arg => arg === '--prompt' || arg === '-p') &&
+  1031→        args.some(arg => arg === '--output' || arg === '-o') &&
+  1032→        !['chat', 'vision', 'tts', 'asr', 'image', 'image-edit', 'image-search', 'video', 'async-result', 'function'].includes(args[0]);
+  1033→}
+  1034→async function main() {
+  1035→    try {
+  1036→        const args = process.argv.slice(2);
+  1037→        // If no arguments or first argument is --help, show main help
+  1038→        if (args.length === 0 || args[0] === '--help' || args[0] === '-h') {
+  1039→            showMainHelp();
+  1040→            return;
+  1041→        }
+  1042→        const command = args[0];
+  1043→        const commandArgs = args.slice(1);
+  1044→        // Backward compatible: if it's legacy image generation format, handle directly
+  1045→        if (isLegacyImageFormat(args)) {
+  1046→            console.log('🚀 Initializing Z-AI SDK...');
+  1047→            const ZAI = await getZAI();
+  1048→            const client = await ZAI.create();
+  1049→            await handleImage(args, client);
+  1050→            return;
+  1051→        }
+  1052→        // Check if it's a valid command
+  1053→        const validCommands = ['chat', 'vision', 'tts', 'asr', 'image', 'image-edit', 'image-search', 'video', 'async-result', 'function'];
+  1054→        if (!validCommands.includes(command)) {
+  1055→            console.error(`❌ Error: Unknown command "${command}"`);
+  1056→            showMainHelp();
+  1057→            process.exit(1);
+  1058→        }
+  1059→        console.log('🚀 Initializing Z-AI SDK...');
+  1060→        const ZAI = await getZAI();
+  1061→        const client = await ZAI.create();
+  1062→        // Execute corresponding handler function based on command
+  1063→        switch (command) {
+  1064→            case 'chat':
+  1065→                await handleChat(commandArgs, client);
+  1066→                break;
+  1067→            case 'vision':
+  1068→                await handleVision(commandArgs, client);
+  1069→                break;
+  1070→            case 'tts':
+  1071→                await handleTTS(commandArgs, client);
+  1072→                break;
+  1073→            case 'asr':
+  1074→                await handleASR(commandArgs, client);
+  1075→                break;
+  1076→            case 'image':
+  1077→                await handleImage(commandArgs, client);
+  1078→                break;
+  1079→            case 'image-edit':
+  1080→                await handleImageEdit(commandArgs, client);
+  1081→                break;
+  1082→            case 'image-search':
+  1083→                await handleImageSearch(commandArgs, client);
+  1084→                break;
+  1085→            case 'video':
+  1086→                await handleVideo(commandArgs, client);
+  1087→                break;
+  1088→            case 'async-result':
+  1089→                await handleAsyncResult(commandArgs, client);
+  1090→                break;
+  1091→            case 'function':
+  1092→                await handleFunction(commandArgs, client);
+  1093→                break;
+  1094→            default:
+  1095→                console.error(`❌ Error: Unknown command "${command}"`);
+  1096→                showMainHelp();
+  1097→                process.exit(1);
+  1098→        }
+  1099→    }
+  1100→    catch (error) {
+  1101→        console.error('❌ Error:', error instanceof Error ? error.message : error);
+  1102→        process.exit(1);
+  1103→    }
+  1104→}
+  1105→// Run main function directly
+  1106→main();
+  1107→
