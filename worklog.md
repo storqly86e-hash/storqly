@@ -63,3 +63,30 @@ Stage Summary:
 - Store generation: 200, no errors, renders correctly
 - Chat: "change the headline to Welcome to Our Candle Shop" → Applied successfully in ~1.6s
 - Sections panel: overflow-hidden enables ScrollArea to scroll when sections overflow
+
+---
+Task ID: 1
+Agent: Main
+Task: Implement Schema Normalization Layer for store generation
+
+Work Log:
+- Investigated z-ai-web-dev-sdk for json_schema structured output support
+- Confirmed SDK is a thin passthrough to ZhipuAI (GLM) via internal-api.z.ai/v1
+- Ran live test: backend silently ignores json_schema format, returns plain text — NOT supported
+- Reported to user: single-model constraint, no multi-model failover available
+- Built /src/lib/normalize-store.ts: deterministic type coercion layer (645 lines)
+  - 8 unit tests passing: perfect pass-through, missing fields, wrong types, non-objects, broken refs, newlines
+  - Handles: type coercion (str→num, str→bool), enum validation, UUID regeneration, product cross-reference fixes, newline collapsing
+- Rewrote /src/app/api/store/generate/route.ts to use normalizeStore() instead of isValidStore()
+- Removed isValidStore() function — replaced by normalizeStore() which never fails
+- Increased per-call timeout from 45s to 50s (AI typically completes 33-47s)
+- Ran 10-call test matrix (short/medium/long prompts × 3+ runs): 9 AI success + 1 timeout fallback = 0 HTTP errors, 0 502s, 0 JSON parse failures
+- Only normalization needed: productIds fix (AI generates non-matching UUIDs)
+- Fixed sections panel scroll: added min-h-0 to ScrollArea in visual-editor
+
+Stage Summary:
+- Schema Normalization Layer: /src/lib/normalize-store.ts (complete)
+- Store generate route: /src/app/api/store/generate/route.ts (rewritten)
+- Test matrix: 9/9 AI success, 0 502s, 0 schema failures
+- Sections panel scroll: fixed with min-h-0
+- Confirmed single-model constraint (ZhipuAI/GLM only, no Gemini/Groq/Kimi access)

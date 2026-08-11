@@ -941,7 +941,7 @@ export function VisualEditor() {
         </div>
 
         {/* Section list with DnD */}
-        <ScrollArea className="flex-1">
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-2">
             <DndContext
               collisionDetection={closestCenter}
