@@ -80,7 +80,13 @@ function buildChatSystemPrompt(store: Store): string {
 function valuesEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (a === null || b === null || a === undefined || b === undefined) return false;
-  if (typeof a === 'string' && typeof b === 'string') return a === b;
+  if (typeof a === 'string' && typeof b === 'string') {
+    // Case-insensitive comparison for hex colors (e.g. #15bca0 === #15BCA0)
+    if (/^#[0-9a-f]{6}$/i.test(a) && /^#[0-9a-f]{6}$/i.test(b)) {
+      return a.toLowerCase() === b.toLowerCase();
+    }
+    return a === b;
+  }
   if (typeof a === 'number' && typeof b === 'number') return a === b;
   if (typeof a === 'boolean' && typeof b === 'boolean') return a === b;
   if (Array.isArray(a) && Array.isArray(b)) {
