@@ -386,7 +386,9 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     right: 'items-end text-right',
   };
 
-  const bgGradient = !style.backgroundImage
+  // Only apply theme gradient as default background when no custom color or image is set.
+  // If style.backgroundColor is set, respect it — don't cover it with a gradient.
+  const bgGradient = !style.backgroundImage && !style.backgroundColor
     ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
     : undefined;
 
@@ -418,13 +420,16 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
       {style.backgroundImage && style.overlay && (
         <div className="absolute inset-0 bg-black/50 pointer-events-none" />
       )}
-      {!style.backgroundImage && (
+      {/* Subtle overlay and decorative elements — only with gradient or image backgrounds */}
+      {!style.backgroundImage && !style.backgroundColor && (
         <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
       )}
-
-      {/* Decorative blurred circles */}
-      <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
-      <div className="absolute bottom-10 left-10 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
+      {!style.backgroundImage && !style.backgroundColor && (
+        <>
+          <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+          <div className="absolute bottom-10 left-10 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
+        </>
+      )}
 
       <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
         <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl">
