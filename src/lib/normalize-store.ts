@@ -463,21 +463,30 @@ function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): 
 /** Fix productIds in featured-products sections to reference actual products */
 function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>): void {
   const validProductIds = new Set(store.products.map((p) => p.id));
+  const allProductIds = store.products.map((p) => p.id);
 
   for (const page of store.pages) {
     for (const section of page.sections) {
       if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
         const before = section.content.productIds.length;
-        // Keep only IDs that reference actual products, or fill with first N product IDs
+        // Keep only IDs that reference actual products
         const validIds = (section.content.productIds as string[]).filter((id) => validProductIds.has(id));
-        if (validIds.length === 0 && store.products.length > 0) {
-          section.content.productIds = store.products.filter((p) => p.featured).slice(0, 3).map((p) => p.id);
-          if (before > 0) {
-            log.log({ field: 'featured-products.productIds', action: 'defaulted', from: `(none matched)`, to: `(${section.content.productIds.length} actual IDs)` });
+
+        // Fill missing slots with other product IDs so all products are shown
+        const usedIds = new Set(validIds);
+        for (const pid of allProductIds) {
+          if (validIds.length >= store.products.length) break;
+          if (!usedIds.has(pid)) {
+            validIds.push(pid);
+            usedIds.add(pid);
           }
-        } else {
-          section.content.productIds = validIds;
         }
+
+        if (validIds.length !== before) {
+          const invalidCount = before - (validIds.length - (store.products.length - before > 0 ? store.products.length - before : 0));
+          log.log({ field: 'featured-products.productIds', action: 'coerced', from: `${before} IDs (some invalid)`, to: `${validIds.length} valid IDs` });
+        }
+        section.content.productIds = validIds;
       }
     }
   }

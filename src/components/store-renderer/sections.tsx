@@ -90,6 +90,17 @@ function stringToColor(str: string, theme: StoreTheme): string {
   return `hsl(${hue}, 35%, 88%)`;
 }
 
+/** Get a contrasting text color for a given background color */
+function contrastTextColor(bgColor: string): string {
+  const hex = bgColor.replace('#', '');
+  if (hex.length !== 6) return '#111827';
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55 ? '#111827' : '#ffffff';
+}
+
 /** Format price */
 function formatPrice(price: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -258,7 +269,7 @@ function ProductCard({
             }`}
             style={{
               backgroundColor: theme.colors.primary,
-              color: '#ffffff',
+              color: contrastTextColor(theme.colors.primary),
             }}
           >
             Add to Cart
@@ -442,7 +453,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           </p>
         )}
         {content.ctaText && (
-          <button className="mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base">
+          <button className="mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base" style={{ color: contrastTextColor('#ffffff') }}>
             {content.ctaText}
             <ArrowRight className="h-4 w-4" />
           </button>
@@ -703,8 +714,8 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
             readOnly
           />
           <button
-            className={`${borderRadius} px-6 py-3 text-sm font-semibold text-white transition-transform hover:scale-[1.02]`}
-            style={{ backgroundColor: theme.colors.primary }}
+            className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+            style={{ backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary) }}
           >
             {content.buttonText}
           </button>
@@ -780,15 +791,14 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
   const btnStyleMap = {
-    solid: { backgroundColor: theme.colors.primary, color: '#ffffff', border: 'none' },
-    outline: { backgroundColor: 'transparent', color: theme.colors.primary, border: `2px solid ${theme.colors.primary}` },
+    solid: { backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary), border: 'none' },
+    outline: { backgroundColor: 'transparent', color: contrastTextColor('#ffffff'), border: `2px solid ${theme.colors.primary}` },
     gradient: {
       background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.secondary})`,
-      color: '#ffffff',
+      color: contrastTextColor(theme.colors.primary),
       border: 'none',
     },
-  };
-  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
+  };  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
 
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
