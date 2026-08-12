@@ -19,7 +19,7 @@ Locked features MUST NOT be modified, refactored, or touched as a side effect of
 | Feature | Status | Verified By | Commit |
 |---------|--------|-------------|--------|
 | Landing page design/branding | ❌ NOT YET | — | — |
-| Store generation reliability (long + short prompts) | ❌ NOT YET (long prompt still failing) | — | — |
+| Store generation reliability (long + short prompts) | ❌ NOT YET (needs re-verification with demanding prompts) | — | — |
 | Visual editor customization | ❌ NOT YET (needs re-verification) | — | — |
 | Chat editor customization | ❌ NOT YET (needs re-verification) | — | — |
 | Dual-sync (visual + chat together) | ❌ NOT YET | — | — |
@@ -186,4 +186,25 @@ Work Log:
 Stage Summary:
 - Commits: 9a6abf0 (renderer fix), 4fe198a (hex comparison safety)
 - Both visual and chat customization paths now work
+- Publish flow untouched (LOCKED)
+
+---
+Task ID: 4
+Agent: Main
+Task: Hard-enforce section/product caps to prevent 502 on demanding prompts
+
+Work Log:
+- Confirmed caps were soft suggestions only (system prompt said 'EXACTLY N' but AI could be talked out of it by insistent user prompts)
+- Root cause: demanding prompt (8 sections, 5 categories) caused AI to attempt larger output → 50s+ generation → proxy 502 timeout
+- Implemented 3-layer defense:
+  1. sanitizePrompt() in route.ts: strips explicit count requests (N>4 sections, N>3 products), collapses colon-delimited lists with 5+ items, drops orphaned demand sentences
+  2. System prompt: changed 'EXACTLY N' to 'ABSOLUTE CAPS — HARD LIMITS, not suggestions' with instruction to ignore user count requests
+  3. enforceOutputCaps() in normalize-store.ts: hard truncation safety net (products→3, sections→4), runs before fixProductReferences
+- Temperature lowered from 0.7 to 0.6 for more deterministic adherence
+
+Stage Summary:
+- Commit: 4ba0b57
+- Aurora Home prompt (8 sections, 5 categories): 287→81 chars sanitized, 502→200, 50s+ timeout→19s success
+- Two consecutive runs: 19.1s and 18.5s, both 3 products + 4 sections
+- Normal prompts (short, medium) completely unaffected by sanitizer
 - Publish flow untouched (LOCKED)
