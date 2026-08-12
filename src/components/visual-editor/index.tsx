@@ -621,7 +621,7 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
   );
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full flex-col min-h-0">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-2">
@@ -637,7 +637,7 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
         </button>
       </div>
 
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-5 p-4">
           {/* Section type badge */}
           <div className="flex items-center gap-2">
@@ -982,7 +982,7 @@ export function VisualEditor() {
 
       {/* Properties Panel */}
       {selectedSection && (
-        <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 border-r border-zinc-800">
+        <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 min-h-0 border-r border-zinc-800">
           <PropertiesPanel section={selectedSection} pageId={pageId} />
         </div>
       )}
