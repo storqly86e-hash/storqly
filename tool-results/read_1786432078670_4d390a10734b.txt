@@ -1,0 +1,895 @@
+   100→   100→
+   101→   101→// ── Section types available to add (exclude header/footer from user adds) ─
+   102→   102→
+   103→   103→const ADDABLE_SECTION_TYPES: SectionType[] = [
+   104→   104→  'hero',
+   105→   105→  'featured-products',
+   106→   106→  'text-banner',
+   107→   107→  'image-gallery',
+   108→   108→  'testimonials',
+   109→   109→  'newsletter',
+   110→   110→  'faq',
+   111→   111→  'cta',
+   112→   112→  'categories',
+   113→   113→  'spacer',
+   114→   114→  'divider',
+   115→   115→  'rich-text',
+   116→   116→];
+   117→   117→
+   118→   118→// ── Default content factories ───────────────────────────────────────
+   119→   119→
+   120→   120→function getDefaultContent(type: SectionType): Record<string, unknown> {
+   121→   121→  switch (type) {
+   122→   122→    case 'hero':
+   123→   123→      return {
+   124→   124→        headline: 'New Hero Section',
+   125→   125→        subheadline: 'Add your subheadline here',
+   126→   126→        ctaText: 'Shop Now',
+   127→   127→        alignment: 'center',
+   128→   128→        height: 'md',
+   129→   129→      };
+   130→   130→    case 'featured-products':
+   131→   131→      return {
+   132→   132→        headline: 'Featured Products',
+   133→   133→        subtitle: 'Check out our best sellers',
+   134→   134→        productIds: [],
+   135→   135→        columns: 4,
+   136→   136→        showPrice: true,
+   137→   137→        showAddToCart: true,
+   138→   138→      };
+   139→   139→    case 'product-grid':
+   140→   140→      return {
+   141→   141→        headline: 'All Products',
+   142→   142→        columns: 4,
+   143→   143→        showPrice: true,
+   144→   144→        showAddToCart: true,
+   145→   145→      };
+   146→   146→    case 'text-banner':
+   147→   147→      return {
+   148→   148→        headline: 'Announcement',
+   149→   149→        body: 'Add your announcement text here',
+   150→   150→        alignment: 'center',
+   151→   151→        size: 'md',
+   152→   152→      };
+   153→   153→    case 'image-gallery':
+   154→   154→      return { images: [], columns: 3, gap: 'md' };
+   155→   155→    case 'testimonials':
+   156→   156→      return {
+   157→   157→        headline: 'What Our Customers Say',
+   158→   158→        items: [
+   159→   159→          {
+   160→   160→            id: crypto.randomUUID(),
+   161→   161→            quote: 'Amazing products and fast delivery!',
+   162→   162→            author: 'Jane Doe',
+   163→   163→            role: 'Happy Customer',
+   164→   164→            rating: 5,
+   165→   165→          },
+   166→   166→        ],
+   167→   167→      };
+   168→   168→    case 'newsletter':
+   169→   169→      return {
+   170→   170→        headline: 'Stay in the Loop',
+   171→   171→        subtitle: 'Subscribe for exclusive deals and updates',
+   172→   172→        placeholderText: 'Enter your email',
+   173→   173→        buttonText: 'Subscribe',
+   174→   174→      };
+   175→   175→    case 'faq':
+   176→   176→      return {
+   177→   177→        headline: 'Frequently Asked Questions',
+   178→   178→        items: [
+   179→   179→          {
+   180→   180→            id: crypto.randomUUID(),
+   181→   181→            question: 'How long does shipping take?',
+   182→   182→            answer: 'Standard shipping takes 3-5 business days.',
+   183→   183→          },
+   184→   184→        ],
+   185→   185→      };
+   186→   186→    case 'cta':
+   187→   187→      return {
+   188→   188→        headline: 'Ready to Get Started?',
+   189→   189→        body: 'Join thousands of satisfied customers today.',
+   190→   190→        ctaText: 'Get Started',
+   191→   191→        style: 'solid',
+   192→   192→      };
+   193→   193→    case 'categories':
+   194→   194→      return {
+   195→   195→        headline: 'Shop by Category',
+   196→   196→        items: [],
+   197→   197→        columns: 4,
+   198→   198→      };
+   199→   199→    case 'spacer':
+   200→   200→      return { height: 'md' };
+   201→   201→    case 'divider':
+   202→   202→      return {};
+   203→   203→    case 'rich-text':
+   204→   204→      return { html: '<p>Add your content here...</p>' };
+   205→   205→    case 'header':
+   206→   206→      return {
+   207→   207→        storeName: 'My Store',
+   208→   208→        showSearch: true,
+   209→   209→        showCart: true,
+   210→   210→        menuItems: [
+   211→   211→          { label: 'Home', link: '/' },
+   212→   212→          { label: 'Shop', link: '/shop' },
+   213→   213→          { label: 'Contact', link: '/contact' },
+   214→   214→        ],
+   215→   215→      };
+   216→   216→    case 'footer':
+   217→   217→      return {
+   218→   218→        storeName: 'My Store',
+   219→   219→        tagline: 'Quality products, delivered fast.',
+   220→   220→        columns: [
+   221→   221→          {
+   222→   222→            title: 'Quick Links',
+   223→   223→            links: [
+   224→   224→              { label: 'Home', link: '/' },
+   225→   225→              { label: 'Shop', link: '/shop' },
+   226→   226→            ],
+   227→   227→          },
+   228→   228→        ],
+   229→   229→        copyrightText: `© ${new Date().getFullYear()} My Store. All rights reserved.`,
+   230→   230→      };
+   231→   231→    default:
+   232→   232→      return {};
+   233→   233→  }
+   234→   234→}
+   235→   235→
+   236→   236→function createDefaultSection(type: SectionType): Section {
+   237→   237→  return {
+   238→   238→    id: crypto.randomUUID(),
+   239→   239→    type,
+   240→   240→    content: getDefaultContent(type),
+   241→   241→    style: {},
+   242→   242→    visible: true,
+   243→   243→  };
+   244→   244→}
+   245→   245→
+   246→   246→// ── Sortable section item ───────────────────────────────────────────
+   247→   247→
+   248→   248→interface SortableSectionItemProps {
+   249→   249→  section: Section;
+   250→   250→  isSelected: boolean;
+   251→   251→  onSelect: () => void;
+   252→   252→  onToggleVisibility: () => void;
+   253→   253→  onDelete: () => void;
+   254→   254→}
+   255→   255→
+   256→   256→function SortableSectionItem({
+   257→   257→  section,
+   258→   258→  isSelected,
+   259→   259→  onSelect,
+   260→   260→  onToggleVisibility,
+   261→   261→  onDelete,
+   262→   262→}: SortableSectionItemProps) {
+   263→   263→  const {
+   264→   264→    attributes,
+   265→   265→    listeners,
+   266→   266→    setNodeRef,
+   267→   267→    transform,
+   268→   268→    transition,
+   269→   269→    isDragging,
+   270→   270→  } = useSortable({ id: section.id });
+   271→   271→
+   272→   272→  const style = {
+   273→   273→    transform: CSS.Transform.toString(transform),
+   274→   274→    transition,
+   275→   275→  };
+   276→   276→
+   277→   277→  const Icon = SECTION_TYPE_ICONS[section.type];
+   278→   278→  const label = SECTION_TYPE_LABELS[section.type];
+   279→   279→
+   280→   280→  return (
+   281→   281→    <div
+   282→   282→      ref={setNodeRef}
+   283→   283→      style={style}
+   284→   284→      className={[
+   285→   285→        'group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors',
+   286→   286→        isDragging
+   287→   287→          ? 'z-50 bg-zinc-700/80 shadow-xl ring-1 ring-white/10'
+   288→   288→          : isSelected
+   289→   289→            ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/40'
+   290→   290→            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
+   291→   291→      ].join(' ')}
+   292→   292→      onClick={onSelect}
+   293→   293→    >
+   294→   294→      {/* Drag handle */}
+   295→   295→      <button
+   296→   296→        className="flex-shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400 active:cursor-grabbing focus:outline-none"
+   297→   297→        {...attributes}
+   298→   298→        {...listeners}
+   299→   299→        onClick={(e) => e.stopPropagation()}
+   300→   300→        aria-label="Drag to reorder"
+   301→   301→      >
+   302→   302→        <GripVertical className="h-4 w-4" />
+   303→   303→      </button>
+   304→   304→
+   305→   305→      {/* Icon */}
+   306→   306→      <Icon className="h-4 w-4 flex-shrink-0 opacity-60" />
+   307→   307→
+   308→   308→      {/* Label */}
+   309→   309→      <span className="flex-1 truncate font-medium">{label}</span>
+   310→   310→
+   311→   311→      {/* Visibility toggle */}
+   312→   312→      <button
+   313→   313→        className="flex-shrink-0 rounded p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 focus:outline-none"
+   314→   314→        onClick={(e) => {
+   315→   315→          e.stopPropagation();
+   316→   316→          onToggleVisibility();
+   317→   317→        }}
+   318→   318→        aria-label={section.visible ? 'Hide section' : 'Show section'}
+   319→   319→      >
+   320→   320→        {section.visible ? (
+   321→   321→          <Eye className="h-3.5 w-3.5" />
+   322→   322→        ) : (
+   323→   323→          <EyeOff className="h-3.5 w-3.5" />
+   324→   324→        )}
+   325→   325→      </button>
+   326→   326→
+   327→   327→      {/* Delete */}
+   328→   328→      <button
+   329→   329→        className="flex-shrink-0 rounded p-1 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 transition-opacity focus:outline-none"
+   330→   330→        onClick={(e) => {
+   331→   331→          e.stopPropagation();
+   332→   332→          onDelete();
+   333→   333→        }}
+   334→   334→        aria-label="Delete section"
+   335→   335→      >
+   336→   336→        <Trash2 className="h-3.5 w-3.5" />
+   337→   337→      </button>
+   338→   338→    </div>
+   339→   339→  );
+   340→   340→}
+   341→   341→
+   342→   342→// ── Add Section Popover ─────────────────────────────────────────────
+   343→   343→
+   344→   344→function AddSectionPopover({
+   345→   345→  onAdd,
+   346→   346→}: {
+   347→   347→  onAdd: (type: SectionType) => void;
+   348→   348→}) {
+   349→   349→  const [open, setOpen] = useState(false);
+   350→   350→
+   351→   351→  return (
+   352→   352→    <Popover open={open} onOpenChange={setOpen}>
+   353→   353→      <PopoverTrigger asChild>
+   354→   354→        <Button
+   355→   355→          variant="ghost"
+   356→   356→          size="sm"
+   357→   357→          className="w-full justify-start gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+   358→   358→        >
+   359→   359→          <Plus className="h-4 w-4" />
+   360→   360→          Add Section
+   361→   361→          <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-50" />
+   362→   362→        </Button>
+   363→   363→      </PopoverTrigger>
+   364→   364→      <PopoverContent
+   365→   365→        className="w-56 rounded-xl border-zinc-800 bg-zinc-900 p-1.5"
+   366→   366→        side="top"
+   367→   367→        align="start"
+   368→   368→        sideOffset={4}
+   369→   369→      >
+   370→   370→        <div className="grid gap-0.5">
+   371→   371→          {ADDABLE_SECTION_TYPES.map((type) => {
+   372→   372→            const Icon = SECTION_TYPE_ICONS[type];
+   373→   373→            const label = SECTION_TYPE_LABELS[type];
+   374→   374→            return (
+   375→   375→              <button
+   376→   376→                key={type}
+   377→   377→                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors text-left w-full focus:outline-none"
+   378→   378→                onClick={() => {
+   379→   379→                  onAdd(type);
+   380→   380→                  setOpen(false);
+   381→   381→                }}
+   382→   382→              >
+   383→   383→                <Icon className="h-4 w-4 text-zinc-500" />
+   384→   384→                {label}
+   385→   385→              </button>
+   386→   386→            );
+   387→   387→          })}
+   388→   388→        </div>
+   389→   389→      </PopoverContent>
+   390→   390→    </Popover>
+   391→   391→  );
+   392→   392→}
+   393→   393→
+   394→   394→// ── Content Field Renderer ───────────────────────────────────────────
+   395→   395→
+   396→   396→function ContentFieldRenderer({
+   397→   397→  keyName,
+   398→   398→  value,
+   399→   399→  onChange,
+   400→   400→  depth = 0,
+   401→   401→}: {
+   402→   402→  keyName: string;
+   403→   403→  value: unknown;
+   404→   404→  onChange: (key: string, value: unknown) => void;
+   405→   405→  depth?: number;
+   406→   406→}) {
+   407→   407→  const label = keyName
+   408→   408→    .replace(/([A-Z])/g, ' $1')
+   409→   409→    .replace(/^./, (s) => s.toUpperCase())
+   410→   410→    .trim();
+   411→   411→
+   412→   412→  if (value === null || value === undefined) {
+   413→   413→    return null;
+   414→   414→  }
+   415→   415→
+   416→   416→  if (typeof value === 'string') {
+   417→   417→    if (keyName === 'html' && value.includes('<')) {
+   418→   418→      return (
+   419→   419→        <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   420→   420→          <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   421→   421→          <Textarea
+   422→   422→            value={value}
+   423→   423→            onChange={(e) => onChange(keyName, e.target.value)}
+   424→   424→            rows={4}
+   425→   425→            className="bg-zinc-800 border-zinc-700 text-zinc-100 text-xs font-mono resize-none"
+   426→   426→          />
+   427→   427→        </div>
+   428→   428→      );
+   429→   429→    }
+   430→   430→    return (
+   431→   431→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   432→   432→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   433→   433→        <Input
+   434→   434→          value={value}
+   435→   435→          onChange={(e) => onChange(keyName, e.target.value)}
+   436→   436→          className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+   437→   437→        />
+   438→   438→      </div>
+   439→   439→    );
+   440→   440→  }
+   441→   441→
+   442→   442→  if (typeof value === 'number') {
+   443→   443→    return (
+   444→   444→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   445→   445→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   446→   446→        <Input
+   447→   447→          type="number"
+   448→   448→          value={value}
+   449→   449→          onChange={(e) => onChange(keyName, Number(e.target.value))}
+   450→   450→          className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+   451→   451→        />
+   452→   452→      </div>
+   453→   453→    );
+   454→   454→  }
+   455→   455→
+   456→   456→  if (typeof value === 'boolean') {
+   457→   457→    return (
+   458→   458→      <div
+   459→   459→        key={keyName}
+   460→   460→        className={`flex items-center justify-between ${depth > 0 ? 'ml-4' : ''}`}
+   461→   461→      >
+   462→   462→        <Label className="text-xs text-zinc-400">{label}</Label>
+   463→   463→        <Switch
+   464→   464→          checked={value}
+   465→   465→          onCheckedChange={(checked) => onChange(keyName, checked)}
+   466→   466→        />
+   467→   467→      </div>
+   468→   468→    );
+   469→   469→  }
+   470→   470→
+   471→   471→  if (Array.isArray(value)) {
+   472→   472→    return (
+   473→   473→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   474→   474→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   475→   475→        <div className="rounded-lg bg-zinc-800/60 border border-zinc-700/50 px-3 py-2 text-xs text-zinc-500">
+   476→   476→          {value.length} item{value.length !== 1 ? 's' : ''}
+   477→   477→        </div>
+   478→   478→      </div>
+   479→   479→    );
+   480→   480→  }
+   481→   481→
+   482→   482→  if (typeof value === 'object') {
+   483→   483→    const obj = value as Record<string, unknown>;
+   484→   484→    const keys = Object.keys(obj);
+   485→   485→
+   486→   486→    const allPrimitive = keys.every(
+   487→   487→      (k) =>
+   488→   488→        typeof obj[k] === 'string' ||
+   489→   489→        typeof obj[k] === 'number' ||
+   490→   490→        typeof obj[k] === 'boolean' ||
+   491→   491→        obj[k] === null ||
+   492→   492→        obj[k] === undefined
+   493→   493→    );
+   494→   494→
+   495→   495→    if (allPrimitive && keys.length > 0) {
+   496→   496→      return (
+   497→   497→        <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   498→   498→          <p className="text-xs font-medium text-zinc-300 mb-2 mt-1">{label}</p>
+   499→   499→          <div className="space-y-3 border-l border-zinc-700/50 pl-3 ml-1">
+   500→   500→            {keys.map((k) => (
+   501→   501→              <ContentFieldRenderer
+   502→   502→                key={k}
+   503→   503→                keyName={k}
+   504→   504→                value={obj[k]}
+   505→   505→                onChange={(subKey, subVal) => {
+   506→   506→                  onChange(keyName, { ...obj, [subKey]: subVal });
+   507→   507→                }}
+   508→   508→                depth={depth + 1}
+   509→   509→              />
+   510→   510→            ))}
+   511→   511→          </div>
+   512→   512→        </div>
+   513→   513→      );
+   514→   514→    }
+   515→   515→
+   516→   516→    return (
+   517→   517→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   518→   518→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   519→   519→        <Textarea
+   520→   520→          value={JSON.stringify(value, null, 2)}
+   521→   521→          readOnly
+   522→   522→          rows={3}
+   523→   523→          className="bg-zinc-800/60 border-zinc-700/50 text-zinc-500 text-xs font-mono resize-none"
+   524→   524→        />
+   525→   525→      </div>
+   526→   526→    );
+   527→   527→  }
+   528→   528→
+   529→   529→  return null;
+   530→   530→}
+   531→   531→
+   532→   532→// ── Properties Panel ────────────────────────────────────────────────
+   533→   533→
+   534→   534→interface PropertiesPanelProps {
+   535→   535→  section: Section;
+   536→   536→  pageId: string;
+   537→   537→}
+   538→   538→
+   539→   539→function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
+   540→   540→  const {
+   541→   541→    updateSectionContent,
+   542→   542→    updateSectionStyle,
+   543→   543→    removeSection,
+   544→   544→    setSelectedSectionId,
+   545→   545→    store,
+   546→   546→    setStore,
+   547→   547→  } = useStoreEditor();
+   548→   548→
+   549→   549→  const [localStyle, setLocalStyle] = useState<SectionStyle>(section.style);
+   550→   550→
+   551→   551→  // Sync style from store when section changes
+   552→   552→  if (section.style !== localStyle) {
+   553→   553→    setLocalStyle(section.style);
+   554→   554→  }
+   555→   555→
+   556→   556→  const handleContentChange = useCallback(
+   557→   557→    (key: string, value: unknown) => {
+   558→   558→      updateSectionContent(pageId, section.id, { [key]: value });
+   559→   559→    },
+   560→   560→    [pageId, section.id, updateSectionContent]
+   561→   561→  );
+   562→   562→
+   563→   563→  const handleStyleChange = useCallback(
+   564→   564→    (patch: Partial<SectionStyle>) => {
+   565→   565→      const updated = { ...localStyle, ...patch };
+   566→   566→      setLocalStyle(updated);
+   567→   567→      updateSectionStyle(pageId, section.id, patch);
+   568→   568→    },
+   569→   569→    [pageId, section.id, localStyle, updateSectionStyle]
+   570→   570→  );
+   571→   571→
+   572→   572→  const handleDelete = useCallback(() => {
+   573→   573→    removeSection(pageId, section.id);
+   574→   574→    setSelectedSectionId(null);
+   575→   575→    toast.success('Section deleted');
+   576→   576→  }, [pageId, section.id, removeSection, setSelectedSectionId]);
+   577→   577→
+   578→   578→  const handleVisibilityToggle = useCallback(() => {
+   579→   579→    if (!store) return;
+   580→   580→    const updatedStore = {
+   581→   581→      ...store,
+   582→   582→      updatedAt: new Date().toISOString(),
+   583→   583→      pages: store.pages.map((page) => ({
+   584→   584→        ...page,
+   585→   585→        sections: page.sections.map((s) =>
+   586→   586→          s.id === section.id ? { ...s, visible: !s.visible } : s
+   587→   587→        ),
+   588→   588→      })),
+   589→   589→    };
+   590→   590→    setStore(updatedStore);
+   591→   591→  }, [store, section.id, setStore]);
+   592→   592→
+   593→   593→  const Icon = SECTION_TYPE_ICONS[section.type];
+   594→   594→  const typeLabel = SECTION_TYPE_LABELS[section.type];
+   595→   595→
+   596→   596→  const renderSelect = (
+   597→   597→    lbl: string,
+   598→   598→    value: string | undefined,
+   599→   599→    options: { label: string; value: string }[],
+   600→   600→    onChange: (val: string) => void
+   601→   601→  ) => (
+   602→   602→    <div>
+   603→   603→      <Label className="text-xs text-zinc-400 mb-1.5 block">{lbl}</Label>
+   604→   604→      <Select value={value ?? ''} onValueChange={onChange}>
+   605→   605→        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm">
+   606→   606→          <SelectValue />
+   607→   607→        </SelectTrigger>
+   608→   608→        <SelectContent className="bg-zinc-900 border-zinc-700">
+   609→   609→          {options.map((opt) => (
+   610→   610→            <SelectItem
+   611→   611→              key={opt.value}
+   612→   612→              value={opt.value}
+   613→   613→              className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
+   614→   614→            >
+   615→   615→              {opt.label}
+   616→   616→            </SelectItem>
+   617→   617→          ))}
+   618→   618→        </SelectContent>
+   619→   619→      </Select>
+   620→   620→    </div>
+   621→   621→  );
+   622→   622→
+   623→   623→  return (
+   624→   624→    <div className="flex h-full flex-col">
+   625→   625→      {/* Header */}
+   626→   626→      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+   627→   627→        <div className="flex items-center gap-2">
+   628→   628→          <Settings2 className="h-4 w-4 text-zinc-500" />
+   629→   629→          <span className="text-sm font-semibold text-zinc-200">Properties</span>
+   630→   630→        </div>
+   631→   631→        <button
+   632→   632→          className="rounded-md p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 focus:outline-none"
+   633→   633→          onClick={() => setSelectedSectionId(null)}
+   634→   634→          aria-label="Close properties"
+   635→   635→        >
+   636→   636→          <X className="h-4 w-4" />
+   637→   637→        </button>
+   638→   638→      </div>
+   639→   639→
+   640→   640→      <ScrollArea className="flex-1">
+   641→   641→        <div className="space-y-5 p-4">
+   642→   642→          {/* Section type badge */}
+   643→   643→          <div className="flex items-center gap-2">
+   644→   644→            <Badge
+   645→   645→              variant="outline"
+   646→   646→              className="gap-1.5 border-zinc-700 bg-zinc-800/60 text-zinc-300"
+   647→   647→            >
+   648→   648→              <Icon className="h-3.5 w-3.5" />
+   649→   649→              {typeLabel}
+   650→   650→            </Badge>
+   651→   651→            <span className="text-xs text-zinc-600 font-mono">{section.id.slice(0, 8)}</span>
+   652→   652→          </div>
+   653→   653→
+   654→   654→          <Separator className="bg-zinc-800" />
+   655→   655→
+   656→   656→          {/* Content fields */}
+   657→   657→          <div>
+   658→   658→            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+   659→   659→              Content
+   660→   660→            </h4>
+   661→   661→            <div className="space-y-3">
+   662→   662→              {Object.entries(section.content).map(([key, val]) => (
+   663→   663→                <ContentFieldRenderer
+   664→   664→                  key={key}
+   665→   665→                  keyName={key}
+   666→   666→                  value={val}
+   667→   667→                  onChange={handleContentChange}
+   668→   668→                />
+   669→   669→              ))}
+   670→   670→              {Object.keys(section.content).length === 0 && (
+   671→   671→                <p className="text-xs text-zinc-600 italic">No content fields</p>
+   672→   672→              )}
+   673→   673→            </div>
+   674→   674→          </div>
+   675→   675→
+   676→   676→          <Separator className="bg-zinc-800" />
+   677→   677→
+   678→   678→          {/* Style fields */}
+   679→   679→          <div>
+   680→   680→            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+   681→   681→              Style
+   682→   682→            </h4>
+   683→   683→            <div className="space-y-3">
+   684→   684→              {/* Background Color */}
+   685→   685→              <div>
+   686→   686→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   687→   687→                  Background Color
+   688→   688→                </Label>
+   689→   689→                <div className="flex items-center gap-2">
+   690→   690→                  <input
+   691→   691→                    type="color"
+   692→   692→                    value={localStyle.backgroundColor ?? '#000000'}
+   693→   693→                    onChange={(e) =>
+   694→   694→                      handleStyleChange({ backgroundColor: e.target.value })
+   695→   695→                    }
+   696→   696→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   697→   697→                  />
+   698→   698→                  <Input
+   699→   699→                    value={localStyle.backgroundColor ?? ''}
+   700→   700→                    onChange={(e) =>
+   701→   701→                      handleStyleChange({ backgroundColor: e.target.value || undefined })
+   702→   702→                    }
+   703→   703→                    placeholder="transparent"
+   704→   704→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   705→   705→                  />
+   706→   706→                </div>
+   707→   707→              </div>
+   708→   708→
+   709→   709→              {/* Text Color */}
+   710→   710→              <div>
+   711→   711→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   712→   712→                  Text Color
+   713→   713→                </Label>
+   714→   714→                <div className="flex items-center gap-2">
+   715→   715→                  <input
+   716→   716→                    type="color"
+   717→   717→                    value={localStyle.textColor ?? '#ffffff'}
+   718→   718→                    onChange={(e) =>
+   719→   719→                      handleStyleChange({ textColor: e.target.value })
+   720→   720→                    }
+   721→   721→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   722→   722→                  />
+   723→   723→                  <Input
+   724→   724→                    value={localStyle.textColor ?? ''}
+   725→   725→                    onChange={(e) =>
+   726→   726→                      handleStyleChange({ textColor: e.target.value || undefined })
+   727→   727→                    }
+   728→   728→                    placeholder="inherit"
+   729→   729→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   730→   730→                  />
+   731→   731→                </div>
+   732→   732→              </div>
+   733→   733→
+   734→   734→              {/* Padding Y */}
+   735→   735→              {renderSelect(
+   736→   736→                'Padding Vertical',
+   737→   737→                localStyle.paddingY,
+   738→   738→                [
+   739→   739→                  { label: 'Small', value: 'sm' },
+   740→   740→                  { label: 'Medium', value: 'md' },
+   741→   741→                  { label: 'Large', value: 'lg' },
+   742→   742→                  { label: 'Extra Large', value: 'xl' },
+   743→   743→                ],
+   744→   744→                (val) =>
+   745→   745→                  handleStyleChange({
+   746→   746→                    paddingY: val as SectionStyle['paddingY'],
+   747→   747→                  })
+   748→   748→              )}
+   749→   749→
+   750→   750→              {/* Padding X */}
+   751→   751→              {renderSelect(
+   752→   752→                'Padding Horizontal',
+   753→   753→                localStyle.paddingX,
+   754→   754→                [
+   755→   755→                  { label: 'Small', value: 'sm' },
+   756→   756→                  { label: 'Medium', value: 'md' },
+   757→   757→                  { label: 'Large', value: 'lg' },
+   758→   758→                ],
+   759→   759→                (val) =>
+   760→   760→                  handleStyleChange({
+   761→   761→                    paddingX: val as SectionStyle['paddingX'],
+   762→   762→                  })
+   763→   763→              )}
+   764→   764→
+   765→   765→              {/* Max Width */}
+   766→   766→              {renderSelect(
+   767→   767→                'Max Width',
+   768→   768→                localStyle.maxWidth,
+   769→   769→                [
+   770→   770→                  { label: 'Small', value: 'sm' },
+   771→   771→                  { label: 'Medium', value: 'md' },
+   772→   772→                  { label: 'Large', value: 'lg' },
+   773→   773→                  { label: 'Extra Large', value: 'xl' },
+   774→   774→                  { label: 'Full', value: 'full' },
+   775→   775→                ],
+   776→   776→                (val) =>
+   777→   777→                  handleStyleChange({
+   778→   778→                    maxWidth: val as SectionStyle['maxWidth'],
+   779→   779→                  })
+   780→   780→              )}
+   781→   781→
+   782→   782→              {/* Border Radius */}
+   783→   783→              {renderSelect(
+   784→   784→                'Border Radius',
+   785→   785→                localStyle.borderRadius,
+   786→   786→                [
+   787→   787→                  { label: 'None', value: 'none' },
+   788→   788→                  { label: 'Small', value: 'sm' },
+   789→   789→                  { label: 'Medium', value: 'md' },
+   790→   790→                  { label: 'Large', value: 'lg' },
+   791→   791→                ],
+   792→   792→                (val) =>
+   793→   793→                  handleStyleChange({
+   794→   794→                    borderRadius: val as SectionStyle['borderRadius'],
+   795→   795→                  })
+   796→   796→              )}
+   797→   797→            </div>
+   798→   798→          </div>
+   799→   799→
+   800→   800→          <Separator className="bg-zinc-800" />
+   801→   801→
+   802→   802→          {/* Visibility */}
+   803→   803→          <div className="flex items-center justify-between">
+   804→   804→            <Label className="text-xs text-zinc-400">Visible</Label>
+   805→   805→            <Switch
+   806→   806→              checked={section.visible}
+   807→   807→              onCheckedChange={handleVisibilityToggle}
+   808→   808→            />
+   809→   809→          </div>
+   810→   810→
+   811→   811→          <Separator className="bg-zinc-800" />
+   812→   812→
+   813→   813→          {/* Delete */}
+   814→   814→          <Button
+   815→   815→            variant="ghost"
+   816→   816→            size="sm"
+   817→   817→            className="w-full justify-start gap-2 text-red-400/80 hover:text-red-300 hover:bg-red-400/10"
+   818→   818→            onClick={handleDelete}
+   819→   819→          >
+   820→   820→            <Trash2 className="h-4 w-4" />
+   821→   821→            Delete Section
+   822→   822→          </Button>
+   823→   823→        </div>
+   824→   824→      </ScrollArea>
+   825→   825→    </div>
+   826→   826→  );
+   827→   827→}
+   828→   828→
+   829→   829→// ── Main VisualEditor Component ─────────────────────────────────────
+   830→   830→
+   831→   831→export function VisualEditor() {
+   832→   832→  const {
+   833→   833→    store,
+   834→   834→    setStore,
+   835→   835→    selectedSectionId,
+   836→   836→    setSelectedSectionId,
+   837→   837→    moveSection,
+   838→   838→    addSection,
+   839→   839→    removeSection,
+   840→   840→  } = useStoreEditor();
+   841→   841→
+   842→   842→  // Get the current page (homepage for now)
+   843→   843→  const currentPage = useMemo(
+   844→   844→    () => store?.pages.find((p) => p.isHomepage) ?? store?.pages[0],
+   845→   845→    [store?.pages]
+   846→   846→  );
+   847→   847→
+   848→   848→  const sections = currentPage?.sections ?? [];
+   849→   849→  const pageId = currentPage?.id ?? '';
+   850→   850→
+   851→   851→  const selectedSection = useMemo(
+   852→   852→    () => sections.find((s) => s.id === selectedSectionId) ?? null,
+   853→   853→    [sections, selectedSectionId]
+   854→   854→  );
+   855→   855→
+   856→   856→  // Drag end handler
+   857→   857→  const handleDragEnd = useCallback(
+   858→   858→    (event: DragEndEvent) => {
+   859→   859→      const { active, over } = event;
+   860→   860→      if (!over || active.id === over.id || !pageId) return;
+   861→   861→
+   862→   862→      const oldIndex = sections.findIndex((s) => s.id === active.id);
+   863→   863→      const newIndex = sections.findIndex((s) => s.id === over.id);
+   864→   864→
+   865→   865→      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+   866→   866→        moveSection(pageId, oldIndex, newIndex);
+   867→   867→      }
+   868→   868→    },
+   869→   869→    [sections, pageId, moveSection]
+   870→   870→  );
+   871→   871→
+   872→   872→  // Add section handler
+   873→   873→  const handleAddSection = useCallback(
+   874→   874→    (type: SectionType) => {
+   875→   875→      if (!pageId) return;
+   876→   876→      const newSection = createDefaultSection(type);
+   877→   877→      addSection(pageId, newSection);
+   878→   878→      setSelectedSectionId(newSection.id);
+   879→   879→      toast.success(`Added ${SECTION_TYPE_LABELS[type]} section`);
+   880→   880→    },
+   881→   881→    [pageId, addSection, setSelectedSectionId]
+   882→   882→  );
+   883→   883→
+   884→   884→  // Toggle visibility for section list items
+   885→   885→  const handleToggleVisibility = useCallback(
+   886→   886→    (sectionId: string) => {
+   887→   887→      if (!store) return;
+   888→   888→      const updatedStore = {
+   889→   889→        ...store,
+   890→   890→        updatedAt: new Date().toISOString(),
+   891→   891→        pages: store.pages.map((page) => ({
+   892→   892→          ...page,
+   893→   893→          sections: page.sections.map((s) =>
+   894→   894→            s.id === sectionId ? { ...s, visible: !s.visible } : s
+   895→   895→          ),
+   896→   896→        })),
+   897→   897→      };
+   898→   898→      setStore(updatedStore);
+   899→   899→    },
+   900→   900→    [store, setStore]
+   901→   901→  );
+   902→   902→
+   903→   903→  const handleDeleteSection = useCallback(
+   904→   904→    (sectionId: string) => {
+   905→   905→      if (!pageId) return;
+   906→   906→      const section = sections.find((s) => s.id === sectionId);
+   907→   907→      removeSection(pageId, sectionId);
+   908→   908→      if (selectedSectionId === sectionId) {
+   909→   909→        setSelectedSectionId(null);
+   910→   910→      }
+   911→   911→      if (section) {
+   912→   912→        toast.success(`Deleted ${SECTION_TYPE_LABELS[section.type]} section`);
+   913→   913→      }
+   914→   914→    },
+   915→   915→    [pageId, sections, selectedSectionId, removeSection, setSelectedSectionId]
+   916→   916→  );
+   917→   917→
+   918→   918→  if (!store || !currentPage) {
+   919→   919→    return (
+   920→   920→      <div className="flex h-full items-center justify-center bg-zinc-950">
+   921→   921→        <p className="text-sm text-zinc-600">No store loaded</p>
+   922→   922→      </div>
+   923→   923→    );
+   924→   924→  }
+   925→   925→
+   926→   926→  return (
+   927→   927→    <div className="flex h-full overflow-hidden bg-zinc-950">
+   928→   928→      {/* Section List Panel */}
+   929→   929→      <div
+   930→   930→        className={[
+   931→   931→          'flex flex-col border-r border-zinc-800 min-h-0',
+   932→   932→          selectedSection ? 'w-64 lg:w-72' : 'w-full',
+   933→   933→        ].join(' ')}
+   934→   934→      >
+   935→   935→        {/* Panel header */}
+   936→   936→        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+   937→   937→          <h3 className="text-sm font-semibold text-zinc-200">Sections</h3>
+   938→   938→          <span className="text-xs text-zinc-600 tabular-nums">
+   939→   939→            {sections.length}
+   940→   940→          </span>
+   941→   941→        </div>
+   942→   942→
+   943→   943→        {/* Section list with DnD */}
+   944→   944→        <ScrollArea className="flex-1">
+   945→   945→          <div className="p-2">
+   946→   946→            <DndContext
+   947→   947→              collisionDetection={closestCenter}
+   948→   948→              onDragEnd={handleDragEnd}
+   949→   949→            >
+   950→   950→              <SortableContext
+   951→   951→                items={sections.map((s) => s.id)}
+   952→   952→                strategy={verticalListSortingStrategy}
+   953→   953→              >
+   954→   954→                <div className="space-y-0.5">
+   955→   955→                  {sections.map((section) => (
+   956→   956→                    <SortableSectionItem
+   957→   957→                      key={section.id}
+   958→   958→                      section={section}
+   959→   959→                      isSelected={section.id === selectedSectionId}
+   960→   960→                      onSelect={() =>
+   961→   961→                        setSelectedSectionId(
+   962→   962→                          section.id === selectedSectionId ? null : section.id
+   963→   963→                        )
+   964→   964→                      }
+   965→   965→                      onToggleVisibility={() =>
+   966→   966→                        handleToggleVisibility(section.id)
+   967→   967→                      }
+   968→   968→                      onDelete={() => handleDeleteSection(section.id)}
+   969→   969→                    />
+   970→   970→                  ))}
+   971→   971→                </div>
+   972→   972→              </SortableContext>
+   973→   973→            </DndContext>
+   974→   974→          </div>
+   975→   975→        </ScrollArea>
+   976→   976→
+   977→   977→        {/* Add section button */}
+   978→   978→        <div className="border-t border-zinc-800 p-2">
+   979→   979→          <AddSectionPopover onAdd={handleAddSection} />
+   980→   980→        </div>
+   981→   981→      </div>
+   982→   982→
+   983→   983→      {/* Properties Panel */}
+   984→   984→      {selectedSection && (
+   985→   985→        <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 border-r border-zinc-800">
+   986→   986→          <PropertiesPanel section={selectedSection} pageId={pageId} />
+   987→   987→        </div>
+   988→   988→      )}
+   989→   989→    </div>
+   990→   990→  );
+   991→   991→}
+   992→   992→
+   993→   993→export default VisualEditor;
+   994→   994→
