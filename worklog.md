@@ -165,3 +165,25 @@ Stage Summary:
 - The exact user scenario (Hindi color request) now works correctly
 - No locked features touched (publish flow confirmed untouched)
 - No-op filter provides defense-in-depth even if AI misbehaves
+
+---
+Task ID: 3
+Agent: Main
+Task: Fix regression — hero backgroundColor ignored, no-op filter false positive
+
+Work Log:
+- Root cause: HeroSection renderer (sections.tsx) ALWAYS applied theme gradient as backgroundImage, which CSS renders on top of backgroundColor, making any custom backgroundColor invisible
+- This was a pre-existing bug, NOT caused by chat edit changes
+- The no-op filter was working correctly — it saw the color was already in the store. The issue was the renderer not reflecting the store value
+- Fix 1 (sections.tsx line 389-391): Only apply gradient when NO custom backgroundColor is set
+- Fix 1b (sections.tsx line 421-432): Also hide decorative overlay/circles when custom backgroundColor is set
+- Fix 2 (chat/route.ts): Added case-insensitive hex comparison in valuesEqual() as safety
+- Verified via Agent Browser:
+  - Chat: 'change hero background to teal #15bca0' → backgroundColor correctly applied (no gradient)
+  - Manual: Changed color in Properties panel → preview updated immediately
+  - No-op filter: Requesting same color → 'No effective changes made' (correct)
+
+Stage Summary:
+- Commits: 9a6abf0 (renderer fix), 4fe198a (hex comparison safety)
+- Both visual and chat customization paths now work
+- Publish flow untouched (LOCKED)
