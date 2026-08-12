@@ -208,3 +208,22 @@ Stage Summary:
 - Two consecutive runs: 19.1s and 18.5s, both 3 products + 4 sections
 - Normal prompts (short, medium) completely unaffected by sanitizer
 - Publish flow untouched (LOCKED)
+---
+Task ID: 5
+Agent: Main
+Task: Fix SSE event delivery bug + sanitizePrompt parse failure
+
+Work Log:
+- Discovered SSE events (progress, result) never reaching clients - only heartbeats worked
+- Root cause 1: sseEvent() not accessible inside ReadableStream.start() (Turbopack scoping)
+- Root cause 2: sanitizePrompt() regex caused esbuild/SWC parse failure
+- Fix 1: Inlined SSE event format in send()
+- Fix 2: Moved sanitizePrompt to /src/lib/sanitize-prompt.ts
+- Verified via Agent Browser: Aurora Home generates in 18.9s with 3 products, 4 sections
+
+Stage Summary:
+- Commit: 25a24a0
+- SSE events now deliver correctly
+- sanitizePrompt compiles in separate module
+- Full end-to-end: demanding prompt -> sanitized -> AI generates -> SSE delivers -> browser renders
+- Publish flow untouched (LOCKED)
