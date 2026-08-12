@@ -28,44 +28,32 @@ const PER_CALL_TIMEOUT_MS = 50_000;
 // We only need to guide the AI to output reasonable content, not perfect JSON.
 const SYSTEM_PROMPT = `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
 
-CRITICAL FORMAT RULES:
-1. Return raw JSON ONLY. No markdown fences, no commentary.
-2. NEVER put literal newlines inside any string value. Every string must be one line.
-3. NEVER use double-quote characters inside any string value. Use single quotes (') instead.
-4. Generate fresh UUIDs for all "id" fields.
+FORMAT RULES:
+1. Raw JSON ONLY. No markdown fences.
+2. NEVER put newlines or double-quotes inside any string. Use single quotes for emphasis.
+3. Fresh UUIDs for all "id" fields.
+4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
 
-TOP-LEVEL SCHEMA:
+SCHEMA (compact):
 {"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
 
-SECTION TYPES: hero | featured-products | product-grid | text-banner | image-gallery | testimonials | newsletter | faq | cta | categories | rich-text | spacer | divider
+SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}
 
-Each section: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}
-
-SECTION CONTENTS:
+SECTION CONTENTS (use ONLY these 4):
 - hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg"}
 - featured-products: {headline, subtitle, productIds: ["<ids>"], columns: 3, showPrice: true, showAddToCart: true}
-- product-grid: {headline: "All Products", columns: 3, showPrice: true, showAddToCart: true}
-- text-banner: {headline, body, alignment: "center", size: "md"}
-- image-gallery: {images: [{src: "https://images.unsplash.com/photo-<id>", alt: ""}], columns: 3, gap: "md"}
 - testimonials: {headline, items: [{id, quote, author, role, rating: 5}]}
 - newsletter: {headline, subtitle, placeholderText: "Enter your email", buttonText: "Subscribe"}
-- faq: {headline, items: [{id, question, answer}]}
-- cta: {headline, body, ctaText, ctaLink: "#", style: "solid"}
-- categories: {headline, items: [{id, name, slug, productCount: 5}], columns: 3}
-- rich-text: {html: "<valid HTML without double quotes inside attributes>"}
-- spacer: {height: "md"}
-- divider: {}
 
-PRODUCT: {id: "<uuid>", name, price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>"], description: "<1-2 sentences, ONE line, use single quotes for emphasis>", category, variants: [{id: "<uuid>", name: "Size", options: [{label: "M", value: "m"}], inStock: true}], featured: false, inStock: true}
+PRODUCT (NO variants field — omit it entirely):
+{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
 
 REQUIREMENTS:
-- 4-5 products with realistic names, prices, short descriptions (1 sentence each). Mark 2 as featured.
-- 5 sections: hero + featured-products + testimonials (2 items) + newsletter + cta.
-- Do NOT include header or footer sections.
-- Keep descriptions SHORT to minimize output length.
-- Theme colors must match the brand.
-- The JSON must have these exact top-level keys: id, name, slug, description, theme, pages, products, published, createdAt, updatedAt.
-- Each page must have a "sections" array with objects that have "id", "type", "content", "style".`;
+- EXACTLY 3 products. Mark 1 as featured. Descriptions max 8 words.
+- EXACTLY 4 sections in this order: hero, featured-products, testimonials (1 item only), newsletter.
+- NO header, footer, cta, or any other section types.
+- NO variants field on products.
+- Theme colors must match the brand.`;
 
 // ─── Fallback: generate a valid starter store without AI ───────
 function createFallbackStore(prompt: string): Store {
@@ -75,10 +63,9 @@ function createFallbackStore(prompt: string): Store {
   const uid = () => crypto.randomUUID();
 
   const products = [
-    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Our signature product, crafted with care.', category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
-    { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for discerning customers.', category: 'Featured', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }, { label: 'L', value: 'l' }], inStock: true }], featured: true, inStock: true },
-    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Great value, perfect for getting started.', category: 'Starter', variants: [{ id: uid(), name: 'Size', options: [{ label: 'S', value: 's' }, { label: 'M', value: 'm' }], inStock: true }], featured: false, inStock: true },
-    { id: uid(), name: 'Pro Collection', price: 129.99, compareAtPrice: 149.99, images: ['https://images.unsplash.com/photo-1560343090-f0409e92791a?w=600'], description: 'Professional grade for serious enthusiasts.', category: 'Pro', variants: [{ id: uid(), name: 'Size', options: [{ label: 'M', value: 'm' }, { label: 'L', value: 'l' }, { label: 'XL', value: 'xl' }], inStock: true }], featured: true, inStock: true },
+    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Our signature product.', category: 'Featured', featured: true, inStock: true },
+    { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for you.', category: 'Premium', featured: false, inStock: true },
+    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Great value starter.', category: 'Starter', featured: false, inStock: true },
   ];
 
   return {
@@ -99,10 +86,9 @@ function createFallbackStore(prompt: string): Store {
       id: uid(), name: 'Home', slug: '', isHomepage: true,
       sections: [
         { id: uid(), type: 'hero', content: { headline: `Welcome to ${storeName}`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
-        { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.slice(0, 3).map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
-        { id: uid(), type: 'testimonials', content: { headline: 'What Our Customers Say', items: [{ id: uid(), quote: 'Excellent quality and fast shipping!', author: 'Alex M.', role: 'Verified Buyer', rating: 5 }, { id: uid(), quote: 'Love the products. Will buy again.', author: 'Jordan K.', role: 'Verified Buyer', rating: 5 }] }, style: { backgroundColor: '#f9fafb', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
+        { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.filter(p => p.featured).map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
+        { id: uid(), type: 'testimonials', content: { headline: 'What Customers Say', items: [{ id: uid(), quote: 'Excellent quality and fast shipping!', author: 'Alex M.', role: 'Verified Buyer', rating: 5 }] }, style: { backgroundColor: '#f9fafb', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'newsletter', content: { headline: 'Stay Updated', subtitle: 'Get exclusive offers and new arrivals.', placeholderText: 'Enter your email', buttonText: 'Subscribe' }, style: { backgroundColor: '#6d28d9', textColor: '#ffffff', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
-        { id: uid(), type: 'cta', content: { headline: 'Ready to Shop?', body: 'Browse our full collection and find your favorites.', ctaText: 'View All Products', ctaLink: '#products', style: 'solid' }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
       ],
     }],
     products,

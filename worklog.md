@@ -90,3 +90,25 @@ Stage Summary:
 - Test matrix: 9/9 AI success, 0 502s, 0 schema failures
 - Sections panel scroll: fixed with min-h-0
 - Confirmed single-model constraint (ZhipuAI/GLM only, no Gemini/Groq/Kimi access)
+
+---
+Task ID: 1
+Agent: main
+Task: Reduce AI output size to bring generation under proxy timeout (~30s)
+
+Work Log:
+- Analyzed current system prompt output: 4-5 products with variants, 5 sections, 2 testimonials
+- Quantified reductions: products 4-5→3, variants removed entirely, sections 5→4 (dropped CTA), testimonials 2→1, descriptions "1-2 sentences"→"max 8 words"
+- Estimated ~35-40% output token reduction (~4200-5000 chars → ~2900 chars)
+- Updated SYSTEM_PROMPT in route.ts: compact format rules, only 4 section types documented, no variants in product schema
+- Updated createFallbackStore(): 3 products (no variants), 4 sections (hero/featured-products/testimonials/newsletter), 1 testimonial
+- Updated normalize-store.ts: ensureFeaturedProducts now ensures min 1 (was 2), fixProductReferences uses featured products
+- Ran 15-request long-prompt batch test (Aurora Skincare prompt, same as previous session)
+
+Stage Summary:
+- 15/15 AI success (100%), 0 fallbacks, 0 failures
+- Latency: min=18.5s, p50=21.0s, p95=24.3s, max=24.3s, avg=20.6s
+- Output size: ~2900 chars avg (was ~4200-5000)
+- Key improvement: max dropped from 38s → 24.3s (5.7s margin under 30s proxy timeout)
+- p50 stayed around 21s (model base latency dominates, not output tokens)
+- The tail (worst-case) is what caused the 502s, and that is now well within limits

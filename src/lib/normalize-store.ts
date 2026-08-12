@@ -429,7 +429,7 @@ function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>
         // Keep only IDs that reference actual products, or fill with first N product IDs
         const validIds = (section.content.productIds as string[]).filter((id) => validProductIds.has(id));
         if (validIds.length === 0 && store.products.length > 0) {
-          section.content.productIds = store.products.slice(0, 3).map((p) => p.id);
+          section.content.productIds = store.products.filter((p) => p.featured).slice(0, 3).map((p) => p.id);
           if (before > 0) {
             log.log({ field: 'featured-products.productIds', action: 'defaulted', from: `(none matched)`, to: `(${section.content.productIds.length} actual IDs)` });
           }
@@ -450,18 +450,12 @@ function ensureHomepage(store: Store, log: ReturnType<typeof createLogger>): voi
   }
 }
 
-/** Ensure at least 2 products are marked as featured (for featured-products sections) */
+/** Ensure at least 1 product is marked as featured (for featured-products sections) */
 function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogger>): void {
   const featuredCount = store.products.filter((p) => p.featured).length;
-  if (featuredCount < 2 && store.products.length >= 2) {
-    let needed = 2 - featuredCount;
-    for (const product of store.products) {
-      if (needed <= 0) break;
-      if (!product.featured) {
-        product.featured = true;
-        needed--;
-      }
-    }
+  if (featuredCount < 1 && store.products.length >= 1) {
+    store.products[0].featured = true;
+    log.log({ field: 'products[0].featured', action: 'defaulted', from: false, to: true });
   }
 }
 
