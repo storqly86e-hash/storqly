@@ -1,3 +1,34 @@
+# Storqly Worklog
+
+---
+## ⚠️  FEATURE LOCK PROTOCOL
+
+**Rule:** Features below marked ✅ LOCKED have been manually confirmed working by the user.
+Locked features MUST NOT be modified, refactored, or touched as a side effect of another fix — unless:
+1. It is absolutely required to fix a different confirmed bug, AND
+2. The developer explicitly flags BEFORE making the change:
+   > "⚠️ REGRESSION RISK: This fix requires touching [locked feature X] because [reason]. Here is what will change."
+3. After any such change, that locked feature must be re-tested before moving on.
+4. If a locked feature breaks without prior flagging, it is treated as a regression bug.
+
+**Baseline commit:** `lock-protocol-baseline` (2b59480) — output-size reduction, 15/15 test pass
+**Every fix gets its own git commit** so regressions can be traced and reverted.
+
+### Locked Feature List
+
+| Feature | Status | Verified By | Commit |
+|---------|--------|-------------|--------|
+| Landing page design/branding | ❌ NOT YET | — | — |
+| Store generation reliability (long + short prompts) | ❌ NOT YET (long prompt still failing) | — | — |
+| Visual editor customization | ❌ NOT YET (needs re-verification) | — | — |
+| Chat editor customization | ❌ NOT YET (needs re-verification) | — | — |
+| Dual-sync (visual + chat together) | ❌ NOT YET | — | — |
+| Publish flow (URL, copy, view live) | ❌ TENTATIVE (awaiting user re-test) | — | — |
+| Mobile responsiveness | ❌ NOT YET | — | — |
+
+---
+## Change History
+
 ---
 Task ID: 1
 Agent: Main
@@ -33,12 +64,11 @@ Work Log:
 Stage Summary:
 - Test Matrix Results:
   - SHORT (3-5 words): 5/5 PASS (25.8s – 38.5s)
-  - MEDIUM (1-2 sentences): 5/5 PASS (25.4s – 40.6s)  
+  - MEDIUM (1-2 sentences): 5/5 PASS (25.4s – 40.6s)
   - LONG (multi-sentence): 3/5 PASS, 2/5 FALLBACK (37.0s – 45.0s)
   - Overall: 13/15 PASS (86.7%), 2/15 FALLBACK (13.3%), 0/15 FAIL (0%)
   - ALL 15 returned HTTP 200 (zero 502 errors)
 - Key improvement: 0% JSON malformation (was ~50%), 0% 502 errors, max time 45s (was 60-126s)
-- The 2 fallbacks were long/specific prompts that exceeded 45s AI timeout — returned valid template store (not 502)
 
 ---
 Task ID: 3
@@ -46,23 +76,19 @@ Agent: Main
 Task: Fix 3 issues reported by user (fallback name, chat failure, sections scroll)
 
 Work Log:
-- Issue 1: Already fixed in previous session — extractStoreName() correctly extracts brand names. Verified with exact user prompt: "Build an online store called Marble & Co selling..." → "Marble and Co"
+- Issue 1: extractStoreName() correctly extracts brand names. Verified with exact user prompt
 - Issue 2: Found THREE root causes for chat failure:
-  a) Turbopack parses arrow functions (=>) inside template literals as JSX — breaks compilation entirely
+  a) Turbopack parses arrow functions (=>) inside template literals as JSX
   b) executeAI timeout never cleaned up (unhandled promise rejection)
-  c) Chat API didn't use json_object mode, so AI returned markdown-wrapped JSON arrays
-- Fixed Turbopack issue by rewriting buildChatSystemPrompt with string concatenation instead of template literals
-- Fixed timeout cleanup with finally{ clearTimeout(timer) }
-- Added responseFormat: json_object to chat-edit calls, updated prompt to return {"operations": [...]} format
-- Added null-safety for store.products in system prompt builder
-- Fixed arrow function in summary generation (used function() instead of arrow)
-- Issue 3: Added overflow-hidden to VisualEditor root div to constrain height chain for ScrollArea
+  c) Chat API didn't use json_object mode
+- Fixed all three root causes
+- Issue 3: Added overflow-hidden to VisualEditor root div
 
 Stage Summary:
 - All 3 issues fixed and verified via Agent Browser
 - Store generation: 200, no errors, renders correctly
-- Chat: "change the headline to Welcome to Our Candle Shop" → Applied successfully in ~1.6s
-- Sections panel: overflow-hidden enables ScrollArea to scroll when sections overflow
+- Chat: applied successfully in ~1.6s
+- Sections panel: overflow-hidden enables ScrollArea
 
 ---
 Task ID: 1
@@ -70,45 +96,30 @@ Agent: Main
 Task: Implement Schema Normalization Layer for store generation
 
 Work Log:
-- Investigated z-ai-web-dev-sdk for json_schema structured output support
-- Confirmed SDK is a thin passthrough to ZhipuAI (GLM) via internal-api.z.ai/v1
-- Ran live test: backend silently ignores json_schema format, returns plain text — NOT supported
-- Reported to user: single-model constraint, no multi-model failover available
+- Confirmed ZhipuAI/GLM does NOT support json_schema structured output
 - Built /src/lib/normalize-store.ts: deterministic type coercion layer (645 lines)
-  - 8 unit tests passing: perfect pass-through, missing fields, wrong types, non-objects, broken refs, newlines
-  - Handles: type coercion (str→num, str→bool), enum validation, UUID regeneration, product cross-reference fixes, newline collapsing
-- Rewrote /src/app/api/store/generate/route.ts to use normalizeStore() instead of isValidStore()
-- Removed isValidStore() function — replaced by normalizeStore() which never fails
-- Increased per-call timeout from 45s to 50s (AI typically completes 33-47s)
-- Ran 10-call test matrix (short/medium/long prompts × 3+ runs): 9 AI success + 1 timeout fallback = 0 HTTP errors, 0 502s, 0 JSON parse failures
-- Only normalization needed: productIds fix (AI generates non-matching UUIDs)
-- Fixed sections panel scroll: added min-h-0 to ScrollArea in visual-editor
+- Rewrote route.ts to use normalizeStore() instead of isValidStore()
+- Ran 10-call test matrix: 9 AI success + 1 timeout fallback = 0 HTTP errors
 
 Stage Summary:
-- Schema Normalization Layer: /src/lib/normalize-store.ts (complete)
-- Store generate route: /src/app/api/store/generate/route.ts (rewritten)
-- Test matrix: 9/9 AI success, 0 502s, 0 schema failures
-- Sections panel scroll: fixed with min-h-0
-- Confirmed single-model constraint (ZhipuAI/GLM only, no Gemini/Groq/Kimi access)
+- Schema Normalization Layer complete
+- 9/9 AI success, 0 502s, 0 schema failures
+- Confirmed single-model constraint (ZhipuAI/GLM only)
 
 ---
 Task ID: 1
-Agent: main
+Agent: Main
 Task: Reduce AI output size to bring generation under proxy timeout (~30s)
 
 Work Log:
-- Analyzed current system prompt output: 4-5 products with variants, 5 sections, 2 testimonials
-- Quantified reductions: products 4-5→3, variants removed entirely, sections 5→4 (dropped CTA), testimonials 2→1, descriptions "1-2 sentences"→"max 8 words"
-- Estimated ~35-40% output token reduction (~4200-5000 chars → ~2900 chars)
-- Updated SYSTEM_PROMPT in route.ts: compact format rules, only 4 section types documented, no variants in product schema
-- Updated createFallbackStore(): 3 products (no variants), 4 sections (hero/featured-products/testimonials/newsletter), 1 testimonial
-- Updated normalize-store.ts: ensureFeaturedProducts now ensures min 1 (was 2), fixProductReferences uses featured products
-- Ran 15-request long-prompt batch test (Aurora Skincare prompt, same as previous session)
+- Quantified reductions: products 4-5→3, variants removed, sections 5→4, testimonials 2→1, descriptions max 8 words
+- Updated SYSTEM_PROMPT: compact format, only 4 section types, no variants in product schema
+- Updated createFallbackStore(): 3 products (no variants), 4 sections, 1 testimonial
+- Updated normalize-store.ts: ensureFeatured min 1 (was 2), featured-first productIds
+- Ran 15-request long-prompt batch test
 
 Stage Summary:
 - 15/15 AI success (100%), 0 fallbacks, 0 failures
-- Latency: min=18.5s, p50=21.0s, p95=24.3s, max=24.3s, avg=20.6s
-- Output size: ~2900 chars avg (was ~4200-5000)
-- Key improvement: max dropped from 38s → 24.3s (5.7s margin under 30s proxy timeout)
-- p50 stayed around 21s (model base latency dominates, not output tokens)
-- The tail (worst-case) is what caused the 502s, and that is now well within limits
+- Latency: min=18.5s, p50=21.0s, max=24.3s
+- Output: ~2900 chars (was ~4200-5000)
+- Baseline commit: lock-protocol-baseline (2b59480)
