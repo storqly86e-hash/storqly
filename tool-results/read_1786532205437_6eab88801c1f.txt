@@ -1,0 +1,1075 @@
+     1→'use client';
+     2→
+     3→import { useMemo } from 'react';
+     4→import {
+     5→  Search,
+     6→  ShoppingCart,
+     7→  Star,
+     8→  ChevronDown,
+     9→  ChevronUp,
+    10→  Mail,
+    11→  ArrowRight,
+    12→  Minus,
+    13→} from 'lucide-react';
+    14→import type {
+    15→  StoreTheme,
+    16→  Section,
+    17→  SectionStyle,
+    18→  HeroContent,
+    19→  FeaturedProductsContent,
+    20→  ProductGridContent,
+    21→  TextBannerContent,
+    22→  ImageGalleryContent,
+    23→  TestimonialsContent,
+    24→  NewsletterContent,
+    25→  FAQContent,
+    26→  CTAContent,
+    27→  CategoriesContent,
+    28→  RichTextContent,
+    29→  HeaderContent,
+    30→  FooterContent,
+    31→  SpacerContent,
+    32→  StoreProduct,
+    33→} from '@/lib/store-schema';
+    34→import { useState } from 'react';
+    35→
+    36→// ─── Shared Helpers ─────────────────────────────────────────────────────
+    37→
+    38→/** Get padding-y class from style config */
+    39→function pyClass(paddingY?: SectionStyle['paddingY']) {
+    40→  switch (paddingY) {
+    41→    case 'sm': return 'py-6';
+    42→    case 'md': return 'py-10';
+    43→    case 'lg': return 'py-16';
+    44→    case 'xl': return 'py-24';
+    45→    default: return 'py-12';
+    46→  }
+    47→}
+    48→
+    49→/** Get padding-x class from style config */
+    50→function pxClass(paddingX?: SectionStyle['paddingX']) {
+    51→  switch (paddingX) {
+    52→    case 'sm': return 'px-4';
+    53→    case 'md': return 'px-6';
+    54→    case 'lg': return 'px-10';
+    55→    default: return 'px-6';
+    56→  }
+    57→}
+    58→
+    59→/** Get max-width class from style config */
+    60→function maxWidthClass(maxWidth?: SectionStyle['maxWidth']) {
+    61→  switch (maxWidth) {
+    62→    case 'sm': return 'max-w-2xl';
+    63→    case 'md': return 'max-w-4xl';
+    64→    case 'lg': return 'max-w-6xl';
+    65→    case 'xl': return 'max-w-7xl';
+    66→    case 'full': return 'max-w-full';
+    67→    default: return 'max-w-6xl';
+    68→  }
+    69→}
+    70→
+    71→/** Get border-radius class from theme */
+    72→function borderRadiusClass(radius?: StoreTheme['borderRadius']) {
+    73→  switch (radius) {
+    74→    case 'none': return 'rounded-none';
+    75→    case 'sm': return 'rounded-sm';
+    76→    case 'md': return 'rounded-md';
+    77→    case 'lg': return 'rounded-lg';
+    78→    case 'xl': return 'rounded-xl';
+    79→    default: return 'rounded-md';
+    80→  }
+    81→}
+    82→
+    83→/** Generate a consistent color from a string for image placeholders */
+    84→function stringToColor(str: string, theme: StoreTheme): string {
+    85→  let hash = 0;
+    86→  for (let i = 0; i < str.length; i++) {
+    87→    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+    88→  }
+    89→  const hue = Math.abs(hash) % 360;
+    90→  return `hsl(${hue}, 35%, 88%)`;
+    91→}
+    92→
+    93→/** Get a contrasting text color for a given background color */
+    94→function contrastTextColor(bgColor: string): string {
+    95→  const hex = bgColor.replace('#', '');
+    96→  if (hex.length !== 6) return '#111827';
+    97→  const r = parseInt(hex.substring(0, 2), 16);
+    98→  const g = parseInt(hex.substring(2, 4), 16);
+    99→  const b = parseInt(hex.substring(4, 6), 16);
+   100→  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+   101→  return luminance > 0.55 ? '#111827' : '#ffffff';
+   102→}
+   103→
+   104→/** Format price */
+   105→function formatPrice(price: number): string {
+   106→  return new Intl.NumberFormat('en-US', {
+   107→    style: 'currency',
+   108→    currency: 'USD',
+   109→  }).format(price);
+   110→}
+   111→
+   112→/** Get initials from a name */
+   113→function getInitials(name: string): string {
+   114→  return name
+   115→    .split(' ')
+   116→    .map((n) => n[0])
+   117→    .join('')
+   118→    .toUpperCase()
+   119→    .slice(0, 2);
+   120→}
+   121→
+   122→// ─── Section Wrapper ────────────────────────────────────────────────────
+   123→
+   124→interface SectionWrapperProps {
+   125→  section: Section;
+   126→  theme: StoreTheme;
+   127→  selectedSectionId?: string | null;
+   128→  onSelectSection?: (sectionId: string | null) => void;
+   129→  children: React.ReactNode;
+   130→}
+   131→
+   132→function SectionWrapper({
+   133→  section,
+   134→  theme,
+   135→  selectedSectionId,
+   136→  onSelectSection,
+   137→  children,
+   138→}: SectionWrapperProps) {
+   139→  const isSelected = selectedSectionId === section.id;
+   140→  const style = section.style;
+   141→
+   142→  const sectionBg = style.backgroundColor || theme.colors.background;
+   143→  const sectionText = style.textColor || theme.colors.text;
+   144→
+   145→  const bgImage = style.backgroundImage
+   146→    ? `url(${style.backgroundImage})`
+   147→    : undefined;
+   148→
+   149→  const outerClasses = [
+   150→    'relative transition-all duration-200 cursor-pointer',
+   151→    pyClass(style.paddingY),
+   152→    isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+   153→  ].join(' ');
+   154→
+   155→  return (
+   156→    <div
+   157→      className={outerClasses}
+   158→      style={{
+   159→        backgroundColor: sectionBg,
+   160→        color: sectionText,
+   161→        backgroundImage: bgImage,
+   162→        backgroundSize: 'cover',
+   163→        backgroundPosition: 'center',
+   164→      }}
+   165→      onClick={(e) => {
+   166→        e.stopPropagation();
+   167→        onSelectSection?.(isSelected ? null : section.id);
+   168→      }}
+   169→      data-section-id={section.id}
+   170→      data-section-type={section.type}
+   171→    >
+   172→      {/* Overlay for background images */}
+   173→      {style.backgroundImage && style.overlay && (
+   174→        <div className="absolute inset-0 bg-black/50 pointer-events-none" />
+   175→      )}
+   176→      <div
+   177→        className={`relative z-10 mx-auto ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}
+   178→      >
+   179→        {/* Selected section label */}
+   180→        {isSelected && (
+   181→          <div className="absolute -top-3 left-4 z-20 rounded-full bg-[#a855f7] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lg">
+   182→            {section.type.replace(/-/g, ' ')}
+   183→          </div>
+   184→        )}
+   185→        {children}
+   186→      </div>
+   187→    </div>
+   188→  );
+   189→}
+   190→
+   191→// ─── Product Card (shared) ─────────────────────────────────────────────
+   192→
+   193→function ProductCard({
+   194→  product,
+   195→  theme,
+   196→  showAddToCart,
+   197→  borderRadius,
+   198→}: {
+   199→  product: StoreProduct;
+   200→  theme: StoreTheme;
+   201→  showAddToCart: boolean;
+   202→  borderRadius: string;
+   203→}) {
+   204→  const [hovered, setHovered] = useState(false);
+   205→  const imgColor = stringToColor(product.id, theme);
+   206→  const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price;
+   207→
+   208→  return (
+   209→    <div
+   210→      className={`${borderRadius} overflow-hidden bg-white border border-gray-100 shadow-sm transition-shadow duration-200 group`}
+   211→      style={{
+   212→        borderColor: theme.colors.border,
+   213→      }}
+   214→      onMouseEnter={() => setHovered(true)}
+   215→      onMouseLeave={() => setHovered(false)}
+   216→    >
+   217→ {/* Image placeholder */}
+   218→      <div
+   219→        className="relative aspect-square w-full overflow-hidden"
+   220→        style={{ backgroundColor: imgColor }}
+   221→      >
+   222→        <div className="absolute inset-0 flex items-center justify-center">
+   223→          <div
+   224→            className="h-16 w-16 rounded-full opacity-30"
+   225→            style={{ backgroundColor: theme.colors.primary }}
+   226→          />
+   227→        </div>
+   228→        {/* Out of stock overlay */}
+   229→        {!product.inStock && (
+   230→          <div className="absolute inset-0 flex items-center justify-center bg-white/60">
+   231→            <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white">
+   232→              Sold Out
+   233→            </span>
+   234→          </div>
+   235→        )}
+   236→        {/* Discount badge */}
+   237→        {hasDiscount && product.compareAtPrice && (
+   238→          <div className="absolute left-2 top-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+   239→            {Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}% Off
+   240→          </div>
+   241→        )}
+   242→      </div>
+   243→      {/* Info */}
+   244→      <div className="p-3 sm:p-4">
+   245→        {product.category && (
+   246→          <p className="mb-1 text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+   247→            {product.category}
+   248→          </p>
+   249→        )}
+   250→        <h3 className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: theme.colors.text }}>
+   251→          {product.name}
+   252→        </h3>
+   253→        <div className="mt-1.5 flex items-center gap-2">
+   254→          <span className="text-sm font-bold" style={{ color: theme.colors.primary }}>
+   255→            {formatPrice(product.price)}
+   256→          </span>
+   257→          {hasDiscount && product.compareAtPrice && (
+   258→            <span className="text-xs line-through" style={{ color: theme.colors.textMuted }}>
+   259→              {formatPrice(product.compareAtPrice)}
+   260→            </span>
+   261→          )}
+   262→        </div>
+   263→        {showAddToCart && product.inStock && (
+   264→          <button
+   265→            className={`mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 ${
+   266→              hovered
+   267→                ? 'opacity-100 translate-y-0'
+   268→                : 'opacity-0 translate-y-1'
+   269→            }`}
+   270→            style={{
+   271→              backgroundColor: theme.colors.primary,
+   272→              color: contrastTextColor(theme.colors.primary),
+   273→            }}
+   274→          >
+   275→            Add to Cart
+   276→          </button>
+   277→        )}
+   278→      </div>
+   279→    </div>
+   280→  );
+   281→}
+   282→
+   283→// ─── Column grid class helper ───────────────────────────────────────────
+   284→
+   285→function gridCols(columns: 2 | 3 | 4) {
+   286→  switch (columns) {
+   287→    case 2: return 'grid-cols-1 sm:grid-cols-2';
+   288→    case 3: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+   289→    case 4: return 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4';
+   290→    default: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
+   291→  }
+   292→}
+   293→
+   294→// ═══════════════════════════════════════════════════════════════════════
+   295→// SECTION RENDERERS
+   296→// ═══════════════════════════════════════════════════════════════════════
+   297→
+   298→// ─── 1. Header ──────────────────────────────────────────────────────────
+   299→
+   300→export function HeaderSection({
+   301→  section,
+   302→  theme,
+   303→  selectedSectionId,
+   304→  onSelectSection,
+   305→}: SectionRendererProps) {
+   306→  const content = section.content as unknown as HeaderContent;
+   307→  const isSelected = selectedSectionId === section.id;
+   308→
+   309→  return (
+   310→    <header
+   311→      className={`sticky top-0 z-40 border-b transition-all duration-200 ${
+   312→        isSelected
+   313→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+   314→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+   315→      }`}
+   316→      style={{
+   317→        backgroundColor: theme.colors.surface,
+   318→        borderColor: theme.colors.border,
+   319→      }}
+   320→      onClick={(e) => {
+   321→        e.stopPropagation();
+   322→        onSelectSection?.(isSelected ? null : section.id);
+   323→      }}
+   324→      data-section-id={section.id}
+   325→      data-section-type={section.type}
+   326→    >
+   327→      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+   328→        {/* Logo / Store Name */}
+   329→        <div className="flex items-center gap-3">
+   330→          {content.logo ? (
+   331→            <img
+   332→              src={content.logo}
+   333→              alt={content.storeName}
+   334→              className="h-8 w-auto object-contain"
+   335→            />
+   336→          ) : (
+   337→            <span
+   338→              className="text-lg font-bold tracking-tight"
+   339→              style={{ color: theme.colors.text }}
+   340→            >
+   341→              {content.storeName}
+   342→            </span>
+   343→          )}
+   344→        </div>
+   345→
+   346→        {/* Navigation */}
+   347→        <nav className="hidden items-center gap-6 md:flex">
+   348→          {content.menuItems.map((item) => (
+   349→            <span
+   350→              key={item.label}
+   351→              className="text-sm font-medium transition-colors hover:opacity-70"
+   352→              style={{ color: theme.colors.textMuted }}
+   353→            >
+   354→              {item.label}
+   355→            </span>
+   356→          ))}
+   357→        </nav>
+   358→
+   359→        {/* Right icons */}
+   360→        <div className="flex items-center gap-4">
+   361→          {content.showSearch && (
+   362→            <button style={{ color: theme.colors.textMuted }} aria-label="Search">
+   363→              <Search className="h-5 w-5" />
+   364→            </button>
+   365→          )}
+   366→          {content.showCart && (
+   367→            <button className="relative" style={{ color: theme.colors.textMuted }} aria-label="Cart">
+   368→              <ShoppingCart className="h-5 w-5" />
+   369→              <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: theme.colors.primary }}>
+   370→                0
+   371→              </span>
+   372→            </button>
+   373→          )}
+   374→          {/* Mobile menu toggle placeholder */}
+   375→          <button className="md:hidden" style={{ color: theme.colors.textMuted }} aria-label="Menu">
+   376→            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+   377→              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+   378→            </svg>
+   379→          </button>
+   380→        </div>
+   381→      </div>
+   382→    </header>
+   383→  );
+   384→}
+   385→
+   386→// ─── 2. Hero ────────────────────────────────────────────────────────────
+   387→
+   388→export function HeroSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+   389→  const content = section.content as unknown as HeroContent;
+   390→  const style = section.style;
+   391→  const isSelected = selectedSectionId === section.id;
+   392→
+   393→  const heightMap = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
+   394→  const alignMap = {
+   395→    left: 'items-start text-left',
+   396→    center: 'items-center text-center',
+   397→    right: 'items-end text-right',
+   398→  };
+   399→
+   400→  // Only apply theme gradient as default background when no custom color or image is set.
+   401→  // If style.backgroundColor is set, respect it — don't cover it with a gradient.
+   402→  const bgGradient = !style.backgroundImage && !style.backgroundColor
+   403→    ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
+   404→    : undefined;
+   405→
+   406→  const outerClasses = [
+   407→    'relative flex transition-all duration-200 cursor-pointer',
+   408→    heightMap[content.height] || heightMap.md,
+   409→    alignMap[content.alignment],
+   410→    pyClass(style.paddingY),
+   411→    isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+   412→  ].join(' ');
+   413→
+   414→  return (
+   415→    <div
+   416→      className={outerClasses}
+   417→      style={{
+   418→        backgroundColor: style.backgroundColor || theme.colors.primary,
+   419→        backgroundImage: style.backgroundImage ? `url(${style.backgroundImage})` : bgGradient,
+   420→        backgroundSize: 'cover',
+   421→        backgroundPosition: 'center',
+   422→        color: style.textColor || '#ffffff',
+   423→      }}
+   424→      onClick={(e) => {
+   425→        e.stopPropagation();
+   426→        onSelectSection?.(isSelected ? null : section.id);
+   427→      }}
+   428→      data-section-id={section.id}
+   429→      data-section-type={section.type}
+   430→    >
+   431→      {/* Overlay */}
+   432→      {style.backgroundImage && style.overlay && (
+   433→        <div className="absolute inset-0 bg-black/50 pointer-events-none" />
+   434→      )}
+   435→      {/* Subtle overlay and decorative elements — only with gradient or image backgrounds */}
+   436→      {!style.backgroundImage && !style.backgroundColor && (
+   437→        <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
+   438→      )}
+   439→      {!style.backgroundImage && !style.backgroundColor && (
+   440→        <>
+   441→          <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+   442→          <div className="absolute bottom-10 left-10 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
+   443→        </>
+   444→      )}
+   445→
+   446→      <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
+   447→        <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
+   448→          {content.headline}
+   449→        </h1>
+   450→        {content.subheadline && (
+   451→          <p className="mt-4 max-w-xl text-base opacity-80 sm:text-lg md:text-xl">
+   452→            {content.subheadline}
+   453→          </p>
+   454→        )}
+   455→        {content.ctaText && (
+   456→          <button className="mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base" style={{ color: contrastTextColor('#ffffff') }}>
+   457→            {content.ctaText}
+   458→            <ArrowRight className="h-4 w-4" />
+   459→          </button>
+   460→        )}
+   461→      </div>
+   462→    </div>
+   463→  );
+   464→}
+   465→
+   466→// ─── 3. Featured Products ───────────────────────────────────────────────
+   467→
+   468→export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+   469→  const content = section.content as unknown as FeaturedProductsContent;
+   470→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   471→  const featuredProducts = useMemo(
+   472→    () => content.productIds.map((id) => products.find((p) => p.id === id)).filter(Boolean) as StoreProduct[],
+   473→    [content.productIds, products],
+   474→  );
+   475→
+   476→  return (
+   477→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   478→      {content.headline && (
+   479→        <h2 className="mb-2 text-2xl font-bold sm:text-3xl">
+   480→          {content.headline}
+   481→        </h2>
+   482→      )}
+   483→      {content.subtitle && (
+   484→        <p className="mb-8 text-sm opacity-65">
+   485→          {content.subtitle}
+   486→        </p>
+   487→      )}
+   488→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   489→        {featuredProducts.map((product) => (
+   490→          <ProductCard
+   491→            key={product.id}
+   492→            product={product}
+   493→            theme={theme}
+   494→            showAddToCart={content.showAddToCart}
+   495→            borderRadius={borderRadius}
+   496→          />
+   497→        ))}
+   498→      </div>
+   499→    </SectionWrapper>
+   500→  );
+   501→}
+   502→
+   503→// ─── 4. Product Grid ───────────────────────────────────────────────────
+   504→
+   505→export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+   506→  const content = section.content as unknown as ProductGridContent;
+   507→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   508→
+   509→  const filteredProducts = useMemo(() => {
+   510→    let prods = products;
+   511→    if (content.filterByCategory) {
+   512→      prods = prods.filter((p) => p.category === content.filterByCategory);
+   513→    }
+   514→    return prods;
+   515→  }, [products, content.filterByCategory]);
+   516→
+   517→  return (
+   518→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   519→      {content.headline && (
+   520→        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
+   521→          {content.headline}
+   522→        </h2>
+   523→      )}
+   524→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   525→        {filteredProducts.map((product) => (
+   526→          <ProductCard
+   527→            key={product.id}
+   528→            product={product}
+   529→            theme={theme}
+   530→            showAddToCart={content.showAddToCart}
+   531→            borderRadius={borderRadius}
+   532→          />
+   533→        ))}
+   534→      </div>
+   535→      {filteredProducts.length === 0 && (
+   536→        <div className="py-16 text-center opacity-65">
+   537→          <p className="text-sm">No products found.</p>
+   538→        </div>
+   539→      )}
+   540→    </SectionWrapper>
+   541→  );
+   542→}
+   543→
+   544→// ─── 5. Text Banner ─────────────────────────────────────────────────────
+   545→
+   546→export function TextBannerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   547→  const content = section.content as unknown as TextBannerContent;
+   548→  const alignMap = {
+   549→    left: 'text-left',
+   550→    center: 'text-center',
+   551→    right: 'text-right',
+   552→  };
+   553→  const sizeMap = {
+   554→    sm: { headline: 'text-xl sm:text-2xl', body: 'text-sm' },
+   555→    md: { headline: 'text-2xl sm:text-3xl md:text-4xl', body: 'text-base' },
+   556→    lg: { headline: 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl', body: 'text-lg' },
+   557→  };
+   558→  const sizes = sizeMap[content.size] || sizeMap.md;
+   559→
+   560→  return (
+   561→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   562→      <div className={`${alignMap[content.alignment]}`}>
+   563→        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`}>
+   564→          {content.headline}
+   565→        </h2>
+   566→        {content.body && (
+   567→          <p className={`mt-3 max-w-2xl ${sizes.body} opacity-65`}>
+   568→            {content.body}
+   569→          </p>
+   570→        )}
+   571→      </div>
+   572→    </SectionWrapper>
+   573→  );
+   574→}
+   575→
+   576→// ─── 6. Image Gallery ───────────────────────────────────────────────────
+   577→
+   578→export function ImageGallerySection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   579→  const content = section.content as unknown as ImageGalleryContent;
+   580→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   581→  const gapMap = { sm: 'gap-2', md: 'gap-4', lg: 'gap-6' };
+   582→
+   583→  return (
+   584→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   585→      <div className={`grid ${gridCols(content.columns)} ${gapMap[content.gap] || gapMap.md}`}>
+   586→        {content.images.map((img, i) => (
+   587→          <div key={i} className={`${borderRadius} overflow-hidden group`}>
+   588→            <div
+   589→              className={`aspect-[4/3] w-full ${borderRadius} bg-gray-200 transition-transform duration-300 group-hover:scale-[1.02]`}
+   590→              style={{
+   591→                backgroundColor: stringToColor(img.src || `img-${i}`, theme),
+   592→              }}
+   593→            >
+   594→              <div className="flex h-full items-center justify-center">
+   595→                <svg className="h-8 w-8 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+   596→                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+   597→                </svg>
+   598→              </div>
+   599→            </div>
+   600→            {img.caption && (
+   601→              <p className="mt-2 text-xs opacity-65">
+   602→                {img.caption}
+   603→              </p>
+   604→            )}
+   605→          </div>
+   606→        ))}
+   607→      </div>
+   608→    </SectionWrapper>
+   609→  );
+   610→}
+   611→
+   612→// ─── 7. Testimonials ────────────────────────────────────────────────────
+   613→
+   614→export function TestimonialsSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   615→  const content = section.content as unknown as TestimonialsContent;
+   616→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   617→
+   618→  return (
+   619→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   620→      {content.headline && (
+   621→        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
+   622→          {content.headline}
+   623→        </h2>
+   624→      )}
+   625→      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+   626→        {content.items.map((item) => (
+   627→          <div
+   628→            key={item.id}
+   629→            className={`${borderRadius} p-6 shadow-sm transition-shadow hover:shadow-md`}
+   630→            style={{
+   631→              backgroundColor: theme.colors.surface,
+   632→              border: `1px solid ${theme.colors.border}`,
+   633→            }}
+   634→          >
+   635→            {/* Stars */}
+   636→            {item.rating && (
+   637→              <div className="mb-3 flex gap-0.5">
+   638→                {Array.from({ length: 5 }).map((_, i) => (
+   639→                  <Star
+   640→                    key={i}
+   641→                    className={`h-4 w-4 ${i < item.rating! ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`}
+   642→                  />
+   643→                ))}
+   644→              </div>
+   645→            )}
+   646→            {/* Quote */}
+   647→            <p className="text-sm leading-relaxed">
+   648→              &ldquo;{item.quote}&rdquo;
+   649→            </p>
+   650→            {/* Author */}
+   651→            <div className="mt-4 flex items-center gap-3">
+   652→              {item.avatar ? (
+   653→                <img
+   654→                  src={item.avatar}
+   655→                  alt={item.author}
+   656→                  className="h-9 w-9 rounded-full object-cover"
+   657→                />
+   658→              ) : (
+   659→                <div
+   660→                  className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+   661→                  style={{ backgroundColor: theme.colors.primary }}
+   662→                >
+   663→                  {getInitials(item.author)}
+   664→                </div>
+   665→              )}
+   666→              <div>
+   667→                <p className="text-sm font-semibold">
+   668→                  {item.author}
+   669→                </p>
+   670→                {item.role && (
+   671→                  <p className="text-xs opacity-65">
+   672→                    {item.role}
+   673→                  </p>
+   674→                )}
+   675→              </div>
+   676→            </div>
+   677→          </div>
+   678→        ))}
+   679→      </div>
+   680→    </SectionWrapper>
+   681→  );
+   682→}
+   683→
+   684→// ─── 8. Newsletter ──────────────────────────────────────────────────────
+   685→
+   686→export function NewsletterSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   687→  const content = section.content as unknown as NewsletterContent;
+   688→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   689→
+   690→  return (
+   691→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   692→      <div className="mx-auto max-w-xl text-center">
+   693→        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
+   694→          <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
+   695→        </div>
+   696→        <h2 className="text-2xl font-bold sm:text-3xl">
+   697→          {content.headline}
+   698→        </h2>
+   699→        {content.subtitle && (
+   700→          <p className="mt-2 text-sm opacity-65">
+   701→            {content.subtitle}
+   702→          </p>
+   703→        )}
+   704→        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+   705→          <input
+   706→            type="email"
+   707→            placeholder={content.placeholderText || 'Enter your email'}
+   708→            className={`flex-1 ${borderRadius} border px-4 py-3 text-sm outline-none transition-colors`}
+   709→            style={{
+   710→              backgroundColor: theme.colors.background,
+   711→              borderColor: theme.colors.border,
+   712→              color: theme.colors.text,
+   713→            }}
+   714→            readOnly
+   715→          />
+   716→          <button
+   717→            className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+   718→            style={{ backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary) }}
+   719→          >
+   720→            {content.buttonText}
+   721→          </button>
+   722→        </div>
+   723→      </div>
+   724→    </SectionWrapper>
+   725→  );
+   726→}
+   727→
+   728→// ─── 9. FAQ ─────────────────────────────────────────────────────────────
+   729→
+   730→export function FAQSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   731→  const content = section.content as unknown as FAQContent;
+   732→  const [openId, setOpenId] = useState<string | null>(null);
+   733→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   734→
+   735→  return (
+   736→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   737→      <div className="mx-auto max-w-2xl">
+   738→        {content.headline && (
+   739→          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
+   740→            {content.headline}
+   741→          </h2>
+   742→        )}
+   743→        <div className="space-y-3">
+   744→          {content.items.map((item) => {
+   745→            const isOpen = openId === item.id;
+   746→            return (
+   747→              <div
+   748→                key={item.id}
+   749→                className={`${borderRadius} border transition-colors`}
+   750→                style={{ borderColor: theme.colors.border }}
+   751→              >
+   752→                <button
+   753→                  className="flex w-full items-center justify-between px-5 py-4 text-left"
+   754→                  onClick={(e) => {
+   755→                    e.stopPropagation();
+   756→                    setOpenId(isOpen ? null : item.id);
+   757→                  }}
+   758→                >
+   759→                  <span className="text-sm font-semibold">
+   760→                    {item.question}
+   761→                  </span>
+   762→                  {isOpen ? (
+   763→                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+   764→                  ) : (
+   765→                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+   766→                  )}
+   767→                </button>
+   768→                {isOpen && (
+   769→                  <div
+   770→                    className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
+   771→                    style={{
+   772→                      borderColor: theme.colors.border,
+   773→                    }}
+   774→                  >
+   775→                    {item.answer}
+   776→                  </div>
+   777→                )}
+   778→              </div>
+   779→            );
+   780→          })}
+   781→        </div>
+   782→      </div>
+   783→    </SectionWrapper>
+   784→  );
+   785→}
+   786→
+   787→// ─── 10. CTA ─────────────────────────────────────────────────────────────
+   788→
+   789→export function CTASection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   790→  const content = section.content as unknown as CTAContent;
+   791→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   792→
+   793→  const btnStyleMap = {
+   794→    solid: { backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary), border: 'none' },
+   795→    outline: { backgroundColor: 'transparent', color: contrastTextColor('#ffffff'), border: `2px solid ${theme.colors.primary}` },
+   796→    gradient: {
+   797→      background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.secondary})`,
+   798→      color: contrastTextColor(theme.colors.primary),
+   799→      border: 'none',
+   800→    },
+   801→  };  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
+   802→
+   803→  return (
+   804→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   805→      <div className={`mx-auto max-w-2xl text-center`}
+   806→        style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
+   807→      >
+   808→        <h2 className="text-2xl font-bold sm:text-3xl">
+   809→          {content.headline}
+   810→        </h2>
+   811→        {content.body && (
+   812→          <p className="mt-3 text-sm opacity-65">
+   813→            {content.body}
+   814→          </p>
+   815→        )}
+   816→        <button
+   817→          className={`${borderRadius} mt-6 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+   818→          style={btnStyle}
+   819→        >
+   820→          {content.ctaText}
+   821→          <ArrowRight className="h-4 w-4" />
+   822→        </button>
+   823→      </div>
+   824→    </SectionWrapper>
+   825→  );
+   826→}
+   827→
+   828→// ─── 11. Categories ─────────────────────────────────────────────────────
+   829→
+   830→export function CategoriesSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   831→  const content = section.content as unknown as CategoriesContent;
+   832→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   833→
+   834→  return (
+   835→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   836→      {content.headline && (
+   837→        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
+   838→          {content.headline}
+   839→        </h2>
+   840→      )}
+   841→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   842→        {content.items.map((cat) => (
+   843→          <div
+   844→            key={cat.id}
+   845→            className={`${borderRadius} overflow-hidden border transition-shadow hover:shadow-md group cursor-pointer`}
+   846→            style={{ borderColor: theme.colors.border }}
+   847→          >
+   848→            {cat.image ? (
+   849→              <div className="aspect-[3/2] w-full overflow-hidden">
+   850→                <img
+   851→                  src={cat.image}
+   852→                  alt={cat.name}
+   853→                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+   854→                />
+   855→              </div>
+   856→            ) : (
+   857→              <div
+   858→                className="flex aspect-[3/2] w-full items-center justify-center"
+   859→                style={{ backgroundColor: stringToColor(cat.slug, theme) }}
+   860→              >
+   861→                <svg className="h-10 w-10 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+   862→                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 01-1.125-1.125v-3.75zM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 01-1.125-1.125v-8.25zM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 01-1.125-1.125v-2.25z" />
+   863→                </svg>
+   864→              </div>
+   865→            )}
+   866→            <div className="p-3 sm:p-4">
+   867→              <h3 className="text-sm font-semibold">
+   868→                {cat.name}
+   869→              </h3>
+   870→              {cat.productCount !== undefined && (
+   871→                <p className="mt-0.5 text-xs opacity-65">
+   872→                  {cat.productCount} {cat.productCount === 1 ? 'product' : 'products'}
+   873→                </p>
+   874→              )}
+   875→            </div>
+   876→          </div>
+   877→        ))}
+   878→      </div>
+   879→    </SectionWrapper>
+   880→  );
+   881→}
+   882→
+   883→// ─── 12. Footer ─────────────────────────────────────────────────────────
+   884→
+   885→export function FooterSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   886→  const content = section.content as unknown as FooterContent;
+   887→
+   888→  return (
+   889→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   890→      <div className="space-y-8">
+   891→        {/* Tagline row */}
+   892→        <div>
+   893→          <span className="text-lg font-bold">
+   894→            {content.storeName}
+   895→          </span>
+   896→          {content.tagline && (
+   897→            <p className="mt-1 text-sm opacity-65">
+   898→              {content.tagline}
+   899→            </p>
+   900→          )}
+   901→        </div>
+   902→
+   903→        {/* Link columns */}
+   904→        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-4">
+   905→          {content.columns.map((col) => (
+   906→            <div key={col.title}>
+   907→              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider">
+   908→                {col.title}
+   909→              </h4>
+   910→              <ul className="space-y-2">
+   911→                {col.links.map((link) => (
+   912→                  <li key={link.label}>
+   913→                    <span className="cursor-pointer text-sm transition-colors hover:opacity-70 opacity-65">
+   914→                      {link.label}
+   915→                    </span>
+   916→                  </li>
+   917→                ))}
+   918→              </ul>
+   919→            </div>
+   920→          ))}
+   921→        </div>
+   922→
+   923→        {/* Bottom row */}
+   924→        <div className="flex flex-col items-center justify-between gap-3 border-t pt-6 sm:flex-row" style={{ borderColor: theme.colors.border }}>
+   925→          {content.copyrightText && (
+   926→            <p className="text-xs opacity-65">
+   927→              {content.copyrightText}
+   928→            </p>
+   929→          )}
+   930→          {/* Social icons placeholder */}
+   931→          {content.socialLinks && content.socialLinks.length > 0 && (
+   932→            <div className="flex gap-3">
+   933→              {content.socialLinks.map((social) => (
+   934→                <span
+   935→                  key={social.platform}
+   936→                  className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:opacity-70"
+   937→                  style={{ backgroundColor: `${theme.colors.primary}15`, color: theme.colors.primary }}
+   938→                  title={social.platform}
+   939→                >
+   940→                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+   941→                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+   942→                  </svg>
+   943→                </span>
+   944→              ))}
+   945→            </div>
+   946→          )}
+   947→        </div>
+   948→      </div>
+   949→    </SectionWrapper>
+   950→  );
+   951→}
+   952→
+   953→// ─── 13. Rich Text ──────────────────────────────────────────────────────
+   954→
+   955→export function RichTextSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   956→  const content = section.content as unknown as RichTextContent;
+   957→
+   958→  return (
+   959→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   960→      <div
+   961→        className="prose prose-sm max-w-none sm:prose-base"
+   962→        dangerouslySetInnerHTML={{ __html: content.html }}
+   963→      />
+   964→    </SectionWrapper>
+   965→  );
+   966→}
+   967→
+   968→// ─── 14. Spacer ─────────────────────────────────────────────────────────
+   969→
+   970→export function SpacerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   971→  const content = section.content as unknown as SpacerContent;
+   972→  const heightMap = { sm: 'h-6', md: 'h-12', lg: 'h-20', xl: 'h-32' };
+   973→  const isSelected = selectedSectionId === section.id;
+   974→
+   975→  return (
+   976→    <div
+   977→      className={`relative transition-all duration-200 ${heightMap[content.height] || heightMap.md} ${
+   978→        isSelected
+   979→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+   980→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+   981→      }`}
+   982→      onClick={(e) => {
+   983→        e.stopPropagation();
+   984→        onSelectSection?.(isSelected ? null : section.id);
+   985→      }}
+   986→      data-section-id={section.id}
+   987→      data-section-type={section.type}
+   988→    >
+   989→      {/* Dashed guide when selected */}
+   990→      {isSelected && (
+   991→        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#a855f7]/50" />
+   992→      )}
+   993→    </div>
+   994→  );
+   995→}
+   996→
+   997→// ─── 15. Divider ────────────────────────────────────────────────────────
+   998→
+   999→export function DividerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+  1000→  const isSelected = selectedSectionId === section.id;
+  1001→
+  1002→  return (
+  1003→    <div
+  1004→      className={`relative transition-all duration-200 py-2 ${
+  1005→        isSelected
+  1006→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+  1007→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+  1008→      }`}
+  1009→      onClick={(e) => {
+  1010→        e.stopPropagation();
+  1011→        onSelectSection?.(isSelected ? null : section.id);
+  1012→      }}
+  1013→      data-section-id={section.id}
+  1014→      data-section-type={section.type}
+  1015→    >
+  1016→      <div className="mx-auto max-w-6xl px-6">
+  1017→        <Minus className="mx-auto h-px w-full" style={{ color: theme.colors.border }} />
+  1018→      </div>
+  1019→    </div>
+  1020→  );
+  1021→}
+  1022→
+  1023→// ─── Section Renderer Props (shared) ────────────────────────────────────
+  1024→
+  1025→interface SectionRendererProps {
+  1026→  section: Section;
+  1027→  theme: StoreTheme;
+  1028→  selectedSectionId?: string | null;
+  1029→  onSelectSection?: (sectionId: string | null) => void;
+  1030→  products: StoreProduct[];
+  1031→}
+  1032→
+  1033→// ─── Main Section Router ────────────────────────────────────────────────
+  1034→
+  1035→export function renderSection(props: SectionRendererProps): React.ReactNode {
+  1036→  const { section } = props;
+  1037→
+  1038→  if (!section.visible) return null;
+  1039→
+  1040→  switch (section.type) {
+  1041→    case 'header':
+  1042→      return <HeaderSection {...props} />;
+  1043→    case 'hero':
+  1044→      return <HeroSection {...props} />;
+  1045→    case 'featured-products':
+  1046→      return <FeaturedProductsSection {...props} />;
+  1047→    case 'product-grid':
+  1048→      return <ProductGridSection {...props} />;
+  1049→    case 'text-banner':
+  1050→      return <TextBannerSection {...props} />;
+  1051→    case 'image-gallery':
+  1052→      return <ImageGallerySection {...props} />;
+  1053→    case 'testimonials':
+  1054→      return <TestimonialsSection {...props} />;
+  1055→    case 'newsletter':
+  1056→      return <NewsletterSection {...props} />;
+  1057→    case 'faq':
+  1058→      return <FAQSection {...props} />;
+  1059→    case 'cta':
+  1060→      return <CTASection {...props} />;
+  1061→    case 'categories':
+  1062→      return <CategoriesSection {...props} />;
+  1063→    case 'footer':
+  1064→      return <FooterSection {...props} />;
+  1065→    case 'rich-text':
+  1066→      return <RichTextSection {...props} />;
+  1067→    case 'spacer':
+  1068→      return <SpacerSection {...props} />;
+  1069→    case 'divider':
+  1070→      return <DividerSection {...props} />;
+  1071→    default:
+  1072→      return null;
+  1073→  }
+  1074→}
+  1075→

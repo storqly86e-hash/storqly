@@ -90,13 +90,66 @@ function stringToColor(str: string, theme: StoreTheme): string {
   return `hsl(${hue}, 35%, 88%)`;
 }
 
-/** Get a contrasting text color for a given background color */
-function contrastTextColor(bgColor: string): string {
-  const hex = bgColor.replace('#', '');
-  if (hex.length !== 6) return '#111827';
-  const r = parseInt(hex.substring(0, 2), 16);
-  const g = parseInt(hex.substring(2, 4), 16);
-  const b = parseInt(hex.substring(4, 6), 16);
+/** Parse any CSS color string to { r, g, b } (0–255). Handles #hex, #rgb, rgb(), hsl(). */
+function parseColorToRGB(raw: string): { r: number; g: number; b: number } | null {
+  try {
+    let s = raw.trim();
+    // --- 6-digit hex: #RRGGBB ---
+    const hex6 = s.match(/^#([0-9a-f]{6})$/i);
+    if (hex6) {
+      const h = hex6[1];
+      return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+    }
+    // --- 3-digit hex: #RGB ---
+    const hex3 = s.match(/^#([0-9a-f]{3})$/i);
+    if (hex3) {
+      const h = hex3[1];
+      return { r: parseInt(h[0] + h[0], 16), g: parseInt(h[1] + h[1], 16), b: parseInt(h[2] + h[2], 16) };
+    }
+    // --- rgb(r, g, b) ---
+    const rgbMatch = s.match(/^rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i);
+    if (rgbMatch) {
+      return { r: parseInt(rgbMatch[1]), g: parseInt(rgbMatch[2]), b: parseInt(rgbMatch[3]) };
+    }
+    // --- hsl(h, s%, l%) — approximate conversion ---
+    const hslMatch = s.match(/^hsl\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*\)$/i);
+    if (hslMatch) {
+      const h = parseInt(hslMatch[1]) / 360;
+      const sat = parseInt(hslMatch[2]) / 100;
+      const l = parseInt(hslMatch[3]) / 100;
+      let r: number, g: number, b: number;
+      if (sat === 0) {
+        r = g = b = l;
+      } else {
+        const hue2rgb = (p: number, q: number, t: number) => {
+          if (t < 0) t += 1; if (t > 1) t -= 1;
+          if (t < 1 / 6) return p + (q - p) * 6 * t;
+          if (t < 1 / 2) return q;
+          if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+          return p;
+        };
+        const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat;
+        const p = 2 * l - q;
+        r = hue2rgb(p, q, h + 1 / 3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1 / 3);
+      }
+      return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+    }
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+/** Get a contrasting text color for a given background color.
+ *  Handles #hex (3 & 6 digit), rgb(), hsl().
+ *  Falls back to white (safer for dark/unknown backgrounds). */
+function contrastTextColor(bgColor: unknown): string {
+  if (!bgColor || typeof bgColor !== 'string') return '#ffffff';
+  const parsed = parseColorToRGB(bgColor);
+  if (!parsed) return '#ffffff'; // safe default: white text
+  const { r, g, b } = parsed;
   const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
   return luminance > 0.55 ? '#111827' : '#ffffff';
 }
@@ -195,11 +248,15 @@ function ProductCard({
   theme,
   showAddToCart,
   borderRadius,
+  buttonBgOverride,
+  buttonTextOverride,
 }: {
   product: StoreProduct;
   theme: StoreTheme;
   showAddToCart: boolean;
   borderRadius: string;
+  buttonBgOverride?: string;
+  buttonTextOverride?: string;
 }) {
   const [hovered, setHovered] = useState(false);
   const imgColor = stringToColor(product.id, theme);
@@ -240,8 +297,8 @@ function ProductCard({
           </div>
         )}
       </div>
-      {/* Info */}
-      <div className="p-3 sm:p-4">
+      {/* Info — explicitly reset color to prevent section textColor bleeding into white card */}
+      <div className="p-3 sm:p-4" style={{ color: theme.colors.text }}>
         {product.category && (
           <p className="mb-1 text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
             {product.category}
@@ -268,8 +325,8 @@ function ProductCard({
                 : 'opacity-0 translate-y-1'
             }`}
             style={{
-              backgroundColor: theme.colors.primary,
-              color: contrastTextColor(theme.colors.primary),
+              backgroundColor: buttonBgOverride || theme.colors.primary,
+              color: buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary),
             }}
           >
             Add to Cart
@@ -444,7 +501,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
       )}
 
       <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
-        <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
+        <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h1>
         {content.subheadline && (
@@ -453,7 +510,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           </p>
         )}
         {content.ctaText && (
-          <button className="mt-8 inline-flex items-center gap-2 rounded-lg bg-white px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base" style={{ color: contrastTextColor('#ffffff') }}>
+          <button className="mt-8 inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base"
+            style={{
+              backgroundColor: section.style.buttonBackgroundColor || '#ffffff',
+              color: section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || '#ffffff'),
+            }}>
             {content.ctaText}
             <ArrowRight className="h-4 w-4" />
           </button>
@@ -476,7 +537,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-2 text-2xl font-bold sm:text-3xl">
+        <h2 className="mb-2 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}
@@ -493,6 +554,8 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
             theme={theme}
             showAddToCart={content.showAddToCart}
             borderRadius={borderRadius}
+            buttonBgOverride={section.style.buttonBackgroundColor}
+            buttonTextOverride={section.style.buttonTextColor}
           />
         ))}
       </div>
@@ -517,7 +580,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}
@@ -529,6 +592,8 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
             theme={theme}
             showAddToCart={content.showAddToCart}
             borderRadius={borderRadius}
+            buttonBgOverride={section.style.buttonBackgroundColor}
+            buttonTextOverride={section.style.buttonTextColor}
           />
         ))}
       </div>
@@ -560,7 +625,7 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className={`${alignMap[content.alignment]}`}>
-        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`}>
+        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
         {content.body && (
@@ -618,7 +683,7 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
+        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}
@@ -693,7 +758,7 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
         <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
           <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
         </div>
-        <h2 className="text-2xl font-bold sm:text-3xl">
+        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
         {content.subtitle && (
@@ -715,7 +780,10 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
           />
           <button
             className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
-            style={{ backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary) }}
+            style={{
+              backgroundColor: section.style.buttonBackgroundColor || theme.colors.primary,
+              color: section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || theme.colors.primary),
+            }}
           >
             {content.buttonText}
           </button>
@@ -736,7 +804,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection 
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className="mx-auto max-w-2xl">
         {content.headline && (
-          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
+          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
             {content.headline}
           </h2>
         )}
@@ -790,22 +858,29 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
   const content = section.content as unknown as CTAContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
+  // Build base button style from content.style variant
+  const btnBgOverride = section.style.buttonBackgroundColor;
+  const btnTextOverride = section.style.buttonTextColor;
+  const effectiveBtnBg = btnBgOverride || theme.colors.primary;
+  const effectiveBtnText = btnTextOverride || contrastTextColor(effectiveBtnBg);
+
   const btnStyleMap = {
-    solid: { backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary), border: 'none' },
-    outline: { backgroundColor: 'transparent', color: contrastTextColor('#ffffff'), border: `2px solid ${theme.colors.primary}` },
+    solid: { backgroundColor: effectiveBtnBg, color: effectiveBtnText, border: 'none' },
+    outline: { backgroundColor: 'transparent', color: effectiveBtnText, border: `2px solid ${effectiveBtnBg}` },
     gradient: {
-      background: `linear-gradient(135deg, ${theme.colors.primary}, ${theme.colors.secondary})`,
-      color: contrastTextColor(theme.colors.primary),
+      background: `linear-gradient(135deg, ${effectiveBtnBg}, ${theme.colors.secondary})`,
+      color: effectiveBtnText,
       border: 'none',
     },
-  };  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
+  };
+  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
 
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className={`mx-auto max-w-2xl text-center`}
         style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
       >
-        <h2 className="text-2xl font-bold sm:text-3xl">
+        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
         {content.body && (
@@ -834,7 +909,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}

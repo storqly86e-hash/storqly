@@ -97,3 +97,26 @@ Stage Summary:
 - Buttons now have independent, contrast-aware text colors regardless of section textColor
 - fixProductReferences guarantees all products appear in Featured Products section
 - Locked features untouched
+
+---
+Task ID: 4
+Agent: main
+Task: Fix two dual-sync test issues: (1) Add to Cart button contrast, (2) chat-edit sub-element targeting bug
+
+Work Log:
+- Analyzed contrastTextColor() — only handled 6-digit hex, crashed or returned wrong default for 3-digit hex, rgb(), hsl()
+- Rewrote contrastTextColor with parseColorToRGB helper that handles 6-digit hex, 3-digit hex, rgb(), hsl() with full HSL→RGB conversion
+- Changed fallback from dangerous '#111827' (dark) to safe '#ffffff' (white) for unparseable colors
+- Added null/undefined guard on contrastTextColor input parameter
+- Added explicit color reset (style={{ color: theme.colors.text }}) to ProductCard info container to prevent section textColor bleeding into white cards
+- Extended SectionStyle schema with element-level overrides: buttonBackgroundColor, buttonTextColor, headlineColor
+- Updated chat system prompt with RULE 6 (SUB-ELEMENT TARGETING) — explicit instructions to use element-level fields for button/headline targeting, with CORRECT/WRONG/CATASTROPHICALLY WRONG examples
+- Updated renderer: Hero, FeaturedProducts, ProductGrid, Newsletter, CTA, TextBanner, Testimonials, FAQ, Categories — all use headlineColor, buttonBackgroundColor, buttonTextColor overrides when set
+- ProductCard now accepts buttonBgOverride/buttonTextOverride props, passed from section style
+- Updated visual editor: added Element Overrides section with Headline Color, Button Background, Button Text Color color pickers
+- Browser-verified both fixes with VLM analysis
+
+Stage Summary:
+- Issue 1 (button contrast): contrastTextColor() now robust; ProductCard info container resets color inheritance; VLM confirms good contrast
+- Issue 2 (chat targeting): Schema extended with element-level fields; AI prompt has RULE 6 with examples; VLM confirms AI uses buttonBackgroundColor (not backgroundColor) and section bg stays unchanged
+- Files changed: sections.tsx, store-schema.ts, chat/route.ts, visual-editor/index.tsx

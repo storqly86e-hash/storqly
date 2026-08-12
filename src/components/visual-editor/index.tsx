@@ -731,6 +731,86 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
                 </div>
               </div>
 
+              <Separator className="bg-zinc-800" />
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+                Element Overrides
+              </h4>
+
+              {/* Headline Color */}
+              <div>
+                <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  Headline Color
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={localStyle.headlineColor ?? '#000000'}
+                    onChange={(e) =>
+                      handleStyleChange({ headlineColor: e.target.value })
+                    }
+                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+                  />
+                  <Input
+                    value={localStyle.headlineColor ?? ''}
+                    onChange={(e) =>
+                      handleStyleChange({ headlineColor: e.target.value || undefined })
+                    }
+                    placeholder="inherit"
+                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Button Background Color */}
+              <div>
+                <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  Button Background
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={localStyle.buttonBackgroundColor ?? '#000000'}
+                    onChange={(e) =>
+                      handleStyleChange({ buttonBackgroundColor: e.target.value })
+                    }
+                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+                  />
+                  <Input
+                    value={localStyle.buttonBackgroundColor ?? ''}
+                    onChange={(e) =>
+                      handleStyleChange({ buttonBackgroundColor: e.target.value || undefined })
+                    }
+                    placeholder="use primary"
+                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Button Text Color */}
+              <div>
+                <Label className="text-xs text-zinc-400 mb-1.5 block">
+                  Button Text Color
+                </Label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={localStyle.buttonTextColor ?? '#ffffff'}
+                    onChange={(e) =>
+                      handleStyleChange({ buttonTextColor: e.target.value })
+                    }
+                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+                  />
+                  <Input
+                    value={localStyle.buttonTextColor ?? ''}
+                    onChange={(e) =>
+                      handleStyleChange({ buttonTextColor: e.target.value || undefined })
+                    }
+                    placeholder="auto-contrast"
+                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+                  />
+                </div>
+              </div>
+
               {/* Padding Y */}
               {renderSelect(
                 'Padding Vertical',

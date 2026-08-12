@@ -54,12 +54,26 @@ function buildChatSystemPrompt(store: Store): string {
     '6. update-product: { "type": "update-product", "payload": { "productId": "<id>", "data": { "name": "New" } } }\n' +
     '7. add-product: { "type": "add-product", "payload": { "id": "<uuid>", "name": "...", "price": 29.99, "images": ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"], "description": "...", "category": "...", "inStock": true } }\n' +
     '8. remove-product: { "type": "remove-product", "payload": { "productId": "<id>" } }\n\n' +
+    '## Style Fields Reference\n\n' +
+    'Section-level style fields (affect the ENTIRE section):\n' +
+    '- backgroundColor: hex color for section background\n' +
+    '- textColor: hex color for all text in the section\n' +
+    '- paddingY, paddingX, maxWidth, backgroundImage, overlay, borderRadius\n\n' +
+    'Element-level style fields (affect SPECIFIC elements inside the section):\n' +
+    '- buttonBackgroundColor: hex color for buttons (CTA, Add to Cart, Subscribe) ONLY\n' +
+    '- buttonTextColor: hex color for button text ONLY\n' +
+    '- headlineColor: hex color for the section headline ONLY\n\n' +
     '## CRITICAL SAFETY RULES (VIOLATING THESE WILL CORRUPT USER DATA)\n\n' +
     'RULE 1 — MINIMAL PATCHES: In update-section, ONLY include the specific field(s) the user asked to change. Do NOT include any other content or style fields.\n' +
     'RULE 2 — NEVER REGENERATE: Never copy-paste existing content values into the operation. If the user did not ask to change a field, it must NOT appear in the payload.\n' +
-    'RULE 3 — COLOR REQUESTS: When user asks to change a color/background, use style.backgroundColor with a hex color. Common: neon=#39ff14, hot pink=#ff1493, royal blue=#4169e1, gold=#ffd700, forest green=#228b22, coral=#ff7f50, midnight=#191970, lavender=#e6e6fa.\n' +
+    'RULE 3 — COLOR REQUESTS — SECTION LEVEL: When user asks to change the background or text of a SECTION, use style.backgroundColor or style.textColor with a hex color. Common: neon=#39ff14, hot pink=#ff1493, royal blue=#4169e1, gold=#ffd700, forest green=#228b22, coral=#ff7f50, midnight=#191970, lavender=#e6e6fa, black=#000000, white=#ffffff.\n' +
     'RULE 4 — TEXT REQUESTS: When user asks to change text (headline, subtitle, description, button text), ONLY include that one content field.\n' +
-    'RULE 5 — sectionId: Always use the EXACT sectionId from the store state above.\n\n' +
+    'RULE 5 — sectionId: Always use the EXACT sectionId from the store state above.\n' +
+    'RULE 6 — SUB-ELEMENT TARGETING (CRITICAL): When the user asks to change a SPECIFIC element inside a section (a button, a headline, etc.), you MUST use element-level style fields, NOT section-level ones.\n' +
+    '  - "change button color" → use style.buttonBackgroundColor (NOT backgroundColor!)\n' +
+    '  - "change button text color" → use style.buttonTextColor\n' +
+    '  - "change headline color" → use style.headlineColor\n' +
+    '  NEVER use style.backgroundColor when the user said "button" — backgroundColor changes the WHOLE section background, not the button.\n\n' +
     '### EXAMPLES\n\n' +
     'User: "change hero background to neon"\n' +
     'CORRECT: {"type":"update-section","payload":{"sectionId":"<hero-id>","style":{"backgroundColor":"#39ff14"}}}\n' +
@@ -69,6 +83,14 @@ function buildChatSystemPrompt(store: Store): string {
     'CORRECT: {"type":"update-section","payload":{"sectionId":"<id>","content":{"headline":"Welcome Home"}}}\n' +
     'WRONG: {"type":"update-section","payload":{"sectionId":"<id>","content":{"headline":"Welcome Home","subheadline":"New subtitle","ctaText":"Buy Now"},"style":{}}}\n' +
     '^^^ WRONG because: subheadline and ctaText were not requested and will overwrite existing values\n\n' +
+    'User: "change the Add to Cart button to black"\n' +
+    'CORRECT: {"type":"update-section","payload":{"sectionId":"<featured-products-id>","style":{"buttonBackgroundColor":"#000000"}}}\n' +
+    'WRONG: {"type":"update-section","payload":{"sectionId":"<featured-products-id>","style":{"backgroundColor":"#000000"}}}\n' +
+    '^^^ CATASTROPHICALLY WRONG: backgroundColor changes the ENTIRE section background to black, not just the button!\n\n' +
+    'User: "make the CTA button text white"\n' +
+    'CORRECT: {"type":"update-section","payload":{"sectionId":"<cta-id>","style":{"buttonTextColor":"#ffffff"}}}\n\n' +
+    'User: "change the headline color to gold"\n' +
+    'CORRECT: {"type":"update-section","payload":{"sectionId":"<id>","style":{"headlineColor":"#ffd700"}}}\n\n' +
     '## Output Format\n\n' +
     'Return ONLY: {"operations": [...]}\n' +
     'No markdown, no explanation, no commentary.';

@@ -62,6 +62,7 @@ export type SectionType =
   | 'divider';
 
 export interface SectionStyle {
+  // Section-level
   backgroundColor?: string;
   textColor?: string;
   paddingY?: 'sm' | 'md' | 'lg' | 'xl';
@@ -70,6 +71,10 @@ export interface SectionStyle {
   backgroundImage?: string;
   overlay?: boolean;
   borderRadius?: 'none' | 'sm' | 'md' | 'lg';
+  // Element-level overrides (sub-element targeting)
+  buttonBackgroundColor?: string;
+  buttonTextColor?: string;
+  headlineColor?: string;
 }
 
 export interface Section {
