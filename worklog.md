@@ -23,7 +23,7 @@ Locked features MUST NOT be modified, refactored, or touched as a side effect of
 | Visual editor customization | ❌ NOT YET (needs re-verification) | — | — |
 | Chat editor customization | ❌ NOT YET (needs re-verification) | — | — |
 | Dual-sync (visual + chat together) | ❌ NOT YET | — | — |
-| Publish flow (URL, copy, view live) | ❌ TENTATIVE (awaiting user re-test) | — | — |
+| Publish flow (URL, copy, view live) | ✅ LOCKED | User manual test | 6de772b |
 | Mobile responsiveness | ❌ NOT YET | — | — |
 
 ---
@@ -123,3 +123,45 @@ Stage Summary:
 - Latency: min=18.5s, p50=21.0s, max=24.3s
 - Output: ~2900 chars (was ~4200-5000)
 - Baseline commit: lock-protocol-baseline (2b59480)
+
+---
+Task ID: 2-a
+Agent: Main
+Task: Fix Properties panel scroll (Issue 1)
+
+Work Log:
+- Audit found only 1 panel with missing scroll: Properties Panel
+- Sections panel was already fixed in prior session
+- Chat panel uses overflow-hidden approach (works)
+- Root cause: same as Sections panel — missing min-h-0 at 3 levels in flex chain
+- Added min-h-0 to: PropertiesPanel root div (line 624), ScrollArea (line 640), wrapper div (line 985)
+
+Stage Summary:
+- Commit: f1cc4e9
+- No locked features touched
+
+---
+Task ID: 2-b
+Agent: Main
+Task: Fix chat edit destructive operations (Issue 2 — critical)
+
+Work Log:
+- Root cause analysis: 3 compounding problems:
+  1. System prompt only showed section IDs/types (no content) — AI had no context of current values
+  2. No enforcement of "only include changed fields" — AI returned full content objects with hallucinations
+  3. No server-side validation — destructive operations passed through unchecked
+- Rewrote /src/app/api/store/chat/route.ts with 3-layer defense:
+  1. System prompt now includes FULL section content + CRITICAL SAFETY RULES with wrong/right examples + color hex guidance
+  2. Server-side no-op filter: compares each field against current store, strips fields matching existing values, drops empty operations
+  3. Detailed summary: shows specific fields changed (e.g. "Updated section: style.backgroundColor")
+- Verified via Agent Browser: Properties panel opens, all fields visible, min-h-0 confirmed in DOM
+- API tests (3 scenarios):
+  - "make the hero background neon green" → only style.backgroundColor, no content fields (PASS)
+  - "Hero section ka colour neon kar do" (Hindi) → only style.backgroundColor, headline/subheadline/ctaText untouched (PASS)
+  - "change the CTA button text to Buy Now" → only ctaText, no other content fields (PASS)
+
+Stage Summary:
+- Commit: 0a9e24a
+- The exact user scenario (Hindi color request) now works correctly
+- No locked features touched (publish flow confirmed untouched)
+- No-op filter provides defense-in-depth even if AI misbehaves
