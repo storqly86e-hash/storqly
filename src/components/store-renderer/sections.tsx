@@ -408,6 +408,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         backgroundImage: style.backgroundImage ? `url(${style.backgroundImage})` : bgGradient,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        color: style.textColor || '#ffffff',
       }}
       onClick={(e) => {
         e.stopPropagation();
@@ -432,11 +433,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
       )}
 
       <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
-        <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white sm:text-4xl md:text-5xl lg:text-6xl">
+        <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl">
           {content.headline}
         </h1>
         {content.subheadline && (
-          <p className="mt-4 max-w-xl text-base text-white/80 sm:text-lg md:text-xl">
+          <p className="mt-4 max-w-xl text-base opacity-80 sm:text-lg md:text-xl">
             {content.subheadline}
           </p>
         )}
@@ -464,12 +465,12 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-2 text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="mb-2 text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
       )}
       {content.subtitle && (
-        <p className="mb-8 text-sm" style={{ color: theme.colors.textMuted }}>
+        <p className="mb-8 text-sm opacity-65">
           {content.subtitle}
         </p>
       )}
@@ -505,7 +506,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
       )}
@@ -521,7 +522,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
         ))}
       </div>
       {filteredProducts.length === 0 && (
-        <div className="py-16 text-center" style={{ color: theme.colors.textMuted }}>
+        <div className="py-16 text-center opacity-65">
           <p className="text-sm">No products found.</p>
         </div>
       )}
@@ -548,11 +549,11 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className={`${alignMap[content.alignment]}`}>
-        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={{ color: theme.colors.text }}>
+        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`}>
           {content.headline}
         </h2>
         {content.body && (
-          <p className={`mt-3 max-w-2xl ${sizes.body}`} style={{ color: theme.colors.textMuted }}>
+          <p className={`mt-3 max-w-2xl ${sizes.body} opacity-65`}>
             {content.body}
           </p>
         )}
@@ -586,7 +587,7 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
               </div>
             </div>
             {img.caption && (
-              <p className="mt-2 text-xs" style={{ color: theme.colors.textMuted }}>
+              <p className="mt-2 text-xs opacity-65">
                 {img.caption}
               </p>
             )}
@@ -606,7 +607,7 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
       )}
@@ -632,7 +633,7 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
               </div>
             )}
             {/* Quote */}
-            <p className="text-sm leading-relaxed" style={{ color: theme.colors.text }}>
+            <p className="text-sm leading-relaxed">
               &ldquo;{item.quote}&rdquo;
             </p>
             {/* Author */}
@@ -652,11 +653,11 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
                 </div>
               )}
               <div>
-                <p className="text-sm font-semibold" style={{ color: theme.colors.text }}>
+                <p className="text-sm font-semibold">
                   {item.author}
                 </p>
                 {item.role && (
-                  <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+                  <p className="text-xs opacity-65">
                     {item.role}
                   </p>
                 )}
@@ -681,11 +682,11 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
         <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
           <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
         </div>
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
         {content.subtitle && (
-          <p className="mt-2 text-sm" style={{ color: theme.colors.textMuted }}>
+          <p className="mt-2 text-sm opacity-65">
             {content.subtitle}
           </p>
         )}
@@ -724,7 +725,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection 
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className="mx-auto max-w-2xl">
         {content.headline && (
-          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl">
             {content.headline}
           </h2>
         )}
@@ -744,21 +745,20 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection 
                     setOpenId(isOpen ? null : item.id);
                   }}
                 >
-                  <span className="text-sm font-semibold" style={{ color: theme.colors.text }}>
+                  <span className="text-sm font-semibold">
                     {item.question}
                   </span>
                   {isOpen ? (
-                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0" style={{ color: theme.colors.textMuted }} />
+                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
                   ) : (
-                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0" style={{ color: theme.colors.textMuted }} />
+                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
                   )}
                 </button>
                 {isOpen && (
                   <div
-                    className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed"
+                    className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
                     style={{
                       borderColor: theme.colors.border,
-                      color: theme.colors.textMuted,
                     }}
                   >
                     {item.answer}
@@ -795,11 +795,11 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
       <div className={`mx-auto max-w-2xl text-center`}
         style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
       >
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
         {content.body && (
-          <p className="mt-3 text-sm" style={{ color: theme.colors.textMuted }}>
+          <p className="mt-3 text-sm opacity-65">
             {content.body}
           </p>
         )}
@@ -824,7 +824,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={{ color: theme.colors.text }}>
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl">
           {content.headline}
         </h2>
       )}
@@ -854,11 +854,11 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
               </div>
             )}
             <div className="p-3 sm:p-4">
-              <h3 className="text-sm font-semibold" style={{ color: theme.colors.text }}>
+              <h3 className="text-sm font-semibold">
                 {cat.name}
               </h3>
               {cat.productCount !== undefined && (
-                <p className="mt-0.5 text-xs" style={{ color: theme.colors.textMuted }}>
+                <p className="mt-0.5 text-xs opacity-65">
                   {cat.productCount} {cat.productCount === 1 ? 'product' : 'products'}
                 </p>
               )}
@@ -880,11 +880,11 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
       <div className="space-y-8">
         {/* Tagline row */}
         <div>
-          <span className="text-lg font-bold" style={{ color: theme.colors.text }}>
+          <span className="text-lg font-bold">
             {content.storeName}
           </span>
           {content.tagline && (
-            <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
+            <p className="mt-1 text-sm opacity-65">
               {content.tagline}
             </p>
           )}
@@ -894,13 +894,13 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
         <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-4">
           {content.columns.map((col) => (
             <div key={col.title}>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: theme.colors.text }}>
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider">
                 {col.title}
               </h4>
               <ul className="space-y-2">
                 {col.links.map((link) => (
                   <li key={link.label}>
-                    <span className="cursor-pointer text-sm transition-colors hover:opacity-70" style={{ color: theme.colors.textMuted }}>
+                    <span className="cursor-pointer text-sm transition-colors hover:opacity-70 opacity-65">
                       {link.label}
                     </span>
                   </li>
@@ -913,7 +913,7 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
         {/* Bottom row */}
         <div className="flex flex-col items-center justify-between gap-3 border-t pt-6 sm:flex-row" style={{ borderColor: theme.colors.border }}>
           {content.copyrightText && (
-            <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+            <p className="text-xs opacity-65">
               {content.copyrightText}
             </p>
           )}
@@ -949,7 +949,6 @@ export function RichTextSection({ section, theme, selectedSectionId, onSelectSec
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div
         className="prose prose-sm max-w-none sm:prose-base"
-        style={{ color: theme.colors.text }}
         dangerouslySetInnerHTML={{ __html: content.html }}
       />
     </SectionWrapper>

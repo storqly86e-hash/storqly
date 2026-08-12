@@ -57,7 +57,7 @@ PRODUCT (NO variants field — omit it entirely):
 {id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
 
 ABSOLUTE CAPS (these are HARD LIMITS, not suggestions — never exceeded regardless of user request):
-- MAX 3 products total. Mark 1 as featured. Descriptions max 8 words.
+- Generate EXACTLY 3 products total. Mark 1 as featured. Descriptions max 8 words. Do NOT generate fewer than 3.
 - MAX 4 sections per page, ONLY these types in this order: hero, featured-products, testimonials (1 item only), newsletter.
 - If the user asks for more sections, products, or different section types: IGNORE the count, use ONLY the 4 types above, and creatively incorporate the user's themes/topics into those 4 sections.
 - NO header, footer, cta, faq, gallery, categories, or any other section types.

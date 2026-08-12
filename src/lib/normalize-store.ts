@@ -501,6 +501,33 @@ function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogge
   }
 }
 
+/** Pad product array to MIN_PRODUCTS if AI generated too few */
+const MIN_PRODUCTS = 3;
+const PAD_PRODUCT_TEMPLATES = [
+  { name: 'Essential Item', price: 39.99, description: 'A must-have for every collection.', category: 'Essentials', img: 'photo-1505740420928-5e560c06d30e' },
+  { name: 'Popular Choice', price: 59.99, description: 'Customer favorite, highly rated.', category: 'Popular', img: 'photo-1526170375885-4d8ecf77b99f' },
+];
+function padProducts(store: Store, log: ReturnType<typeof createLogger>): void {
+  const deficit = MIN_PRODUCTS - store.products.length;
+  if (deficit <= 0) return;
+  const before = store.products.length;
+  for (let i = 0; i < deficit; i++) {
+    const tmpl = PAD_PRODUCT_TEMPLATES[i % PAD_PRODUCT_TEMPLATES.length];
+    store.products.push({
+      id: uuid(),
+      name: tmpl.name + (store.products.length + 1),
+      price: tmpl.price + store.products.length * 5,
+      compareAtPrice: null,
+      images: [`https://images.unsplash.com/${tmpl.img}?w=600`],
+      description: tmpl.description,
+      category: tmpl.category,
+      featured: false,
+      inStock: true,
+    });
+  }
+  log.log({ field: 'products', action: 'defaulted', from: `${before} products`, to: `${MIN_PRODUCTS} products (padded)` });
+}
+
 // ─── Main entry point ─────────────────────────────────────────────
 
 export interface NormalizeResult {
@@ -579,6 +606,7 @@ export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult |
   // IMPORTANT: enforceOutputCaps MUST run before fixProductReferences
   // because product references depend on the final product list
   enforceOutputCaps(store, log);
+  padProducts(store, log);
   fixProductReferences(store, log);
   ensureHomepage(store, log);
   ensureFeaturedProducts(store, log);
