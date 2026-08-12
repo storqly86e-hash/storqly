@@ -418,6 +418,48 @@ function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): Stor
 
 // ─── Cross-reference fixes ────────────────────────────────────────
 
+/** Hard-cap enforcement: truncate sections and products to safe output limits.
+ *  This is the safety net if the AI ignores the system prompt caps.
+ *  Layers of defense:
+ *    1. sanitizePrompt() in route.ts strips count requests (prevents AI from trying)
+ *    2. System prompt ABSOLUTE CAPS language (strong AI guidance)
+ *    3. THIS function: hard truncation (final safety net)
+ */
+function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): void {
+  const MAX_PRODUCTS = 3;
+  const MAX_SECTIONS = 4;
+
+  // ── Cap products ──
+  if (store.products.length > MAX_PRODUCTS) {
+    const before = store.products.length;
+    store.products = store.products.slice(0, MAX_PRODUCTS);
+    // Ensure at least 1 featured product after truncation
+    if (!store.products.some((p) => p.featured) && store.products.length > 0) {
+      store.products[0].featured = true;
+    }
+    log.log({
+      field: 'products',
+      action: 'coerced',
+      from: `${before} products`,
+      to: `${MAX_PRODUCTS} products (capped)`,
+    });
+  }
+
+  // ── Cap sections per page ──
+  for (const page of store.pages) {
+    if (page.sections.length > MAX_SECTIONS) {
+      const before = page.sections.length;
+      page.sections = page.sections.slice(0, MAX_SECTIONS);
+      log.log({
+        field: `pages[${page.name}].sections`,
+        action: 'coerced',
+        from: `${before} sections`,
+        to: `${MAX_SECTIONS} sections (capped)`,
+      });
+    }
+  }
+}
+
 /** Fix productIds in featured-products sections to reference actual products */
 function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>): void {
   const validProductIds = new Set(store.products.map((p) => p.id));
@@ -534,6 +576,9 @@ export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult |
   }
 
   // ── Cross-reference fixes ──
+  // IMPORTANT: enforceOutputCaps MUST run before fixProductReferences
+  // because product references depend on the final product list
+  enforceOutputCaps(store, log);
   fixProductReferences(store, log);
   ensureHomepage(store, log);
   ensureFeaturedProducts(store, log);

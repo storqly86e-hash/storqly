@@ -17,6 +17,13 @@ import { executeAI } from '@/lib/ai-orchestrator';
 import { normalizeStore } from '@/lib/normalize-store';
 import type { Store } from '@/lib/store-schema';
 
+// ─── Output size caps (HARD LIMITS — never exceeded) ───────────
+// These are enforced at TWO layers:
+//   1. sanitizePrompt() strips count requests from user input (prevents AI from trying)
+//   2. normalizeStore() truncates excess sections/products (safety net)
+const MAX_PRODUCTS = 3;
+const MAX_SECTIONS_PER_PAGE = 4;
+
 // ─── Time budgets ────────────────────────────────────────────
 // Infrastructure proxy has a ~60s hard timeout. We must finish well before that.
 // AI typically completes in 20-42s. 50s timeout gives margin for occasional slower calls.
@@ -48,10 +55,11 @@ SECTION CONTENTS (use ONLY these 4):
 PRODUCT (NO variants field — omit it entirely):
 {id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
 
-REQUIREMENTS:
-- EXACTLY 3 products. Mark 1 as featured. Descriptions max 8 words.
-- EXACTLY 4 sections in this order: hero, featured-products, testimonials (1 item only), newsletter.
-- NO header, footer, cta, or any other section types.
+ABSOLUTE CAPS (these are HARD LIMITS, not suggestions — never exceeded regardless of user request):
+- MAX 3 products total. Mark 1 as featured. Descriptions max 8 words.
+- MAX 4 sections per page, ONLY these types in this order: hero, featured-products, testimonials (1 item only), newsletter.
+- If the user asks for more sections, products, or different section types: IGNORE the count, use ONLY the 4 types above, and creatively incorporate the user's themes/topics into those 4 sections.
+- NO header, footer, cta, faq, gallery, categories, or any other section types.
 - NO variants field on products.
 - Theme colors must match the brand.`;
 
@@ -139,6 +147,67 @@ function extractStoreName(prompt: string): string {
   return 'My Store';
 }
 
+// ─── Prompt sanitizer ────────────────────────────────────────────
+// Strips explicit count/section-type requests from user input to prevent
+// the AI from attempting to generate more content than the safe output caps.
+// Strategy: (1) strip counts first, (2) collapse long colon-lists, (3) drop orphaned demand sentences.
+function sanitizePrompt(prompt: string): string {
+  let s = prompt;
+
+  // Step 1: Strip section/product count requests that exceed safe caps.
+  //         Only strip numbers > our caps. Keep within-cap counts (they're harmless).
+  s = s.replace(/\b(\d+)\s*sections?\b/gi, (match) => {
+    const num = parseInt(match, 10);
+    return num > 4 ? '' : match;
+  });
+  s = s.replace(/\b(\d+)\s*products?\b/gi, (match) => {
+    const num = parseInt(match, 10);
+    return num > 3 ? '' : match;
+  });
+  // Always strip "N product categories" (the enumeration is not useful)
+  s = s.replace(/\b\d+\s*product\s*categor(y|ies)\b/gi, '');
+
+  // Step 2: Collapse any colon-delimited list with 5+ comma-separated items.
+  //         (5+ because our cap is 4 — only collapse lists that exceed it.)
+  s = s.replace(/:([^:]*?)\.(?:\s|$)/g, (_match, afterColon) => {
+    const normalized = afterColon
+      .replace(/\s+and\s+/gi, ', ')
+      .replace(/\s+&\s+/gi, ', ');
+    const items = normalized.split(/,/).map(i => i.trim()).filter(i => i.length > 1);
+    return items.length >= 5
+      ? ' with various themed content.'
+      : `:${afterColon}.`;
+  });
+
+  // Also handle colon-lists at end of string (no trailing period)
+  s = s.replace(/:([^:.]*?)$/g, (_match, afterColon) => {
+    const normalized = afterColon
+      .replace(/\s+and\s+/gi, ', ')
+      .replace(/\s+&\s+/gi, ', ');
+    const items = normalized.split(/,/).map(i => i.trim()).filter(i => i.length > 1);
+    return items.length >= 5
+      ? ' with various themed content.'
+      : `:${afterColon}`;
+  });
+
+  // Step 3: Clean up grammar artifacts
+  s = s.replace(/\s{2,}/g, ' ');
+  s = s.replace(/\s+:/g, ':');
+  s = s.replace(/:\s*\./g, '.');
+
+  // Step 4: Drop orphaned demand sentences that lost their meaning after stripping.
+  //         These are sentences that now just say "I want with various themed content."
+  //         or "Include categories with various themed content." — no useful info.
+  s = s.replace(/\s*[^.]*\b(?:I want|Include|I need|Add|Also include)\b[^.]*with various themed content\.\s*/gi, ' ');
+
+  // Final cleanup
+  s = s.replace(/\.{2,}/g, '.');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (s && !/[.!?]$/.test(s)) s += '.';
+
+  return s;
+}<tool_call>
+
 // ─── SSE Helper ──────────────────────────────────────────────────
 function sseEvent(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
@@ -174,7 +243,12 @@ export async function POST(req: NextRequest) {
         }
 
         const trimmedPrompt = prompt.trim();
-        const userMessage = `Generate an e-commerce store: ${trimmedPrompt}`;
+        const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
+        const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
+
+        if (sanitizedPrompt.length < trimmedPrompt.length) {
+          console.log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (count/type requests removed)`);
+        }
 
         // ── Check time budget ──
         if (elapsed() > TIME_BUDGET_MS) {
@@ -191,7 +265,7 @@ export async function POST(req: NextRequest) {
           { role: 'user', content: userMessage },
         ], {
           systemPrompt: SYSTEM_PROMPT,
-          temperature: 0.7,
+          temperature: 0.6,
           timeout: PER_CALL_TIMEOUT_MS,
           maxRetries: 1,
           responseFormat: 'json_object',
