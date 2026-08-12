@@ -68,3 +68,32 @@ Stage Summary:
 - Product count: prompt says EXACTLY 3, plus padProducts() safety net
 - Publish flow, hard caps, mobile responsiveness — NOT TOUCHED (all LOCKED)
 - Verified that locked features remain untouched
+
+---
+Task ID: 3-c
+Agent: Main
+Task: Fix button contrast regression + fixProductReferences product count
+
+Work Log:
+- Diagnosed: Hero CTA button inherited section textColor (white) on white bg = invisible
+- Diagnosed: Add to Cart used hardcoded white text on light primary colors = poor contrast
+- Added contrastTextColor(bgHex) helper: returns dark (#111827) or white based on WCAG luminance > 0.55
+- Updated ALL interactive buttons to use contrastTextColor:
+  - Hero CTA (bg-white -> dark text)
+  - ProductCard Add to Cart (bg=primary -> adaptive text)
+  - Newsletter Subscribe (bg=primary -> adaptive text)
+  - CTA section solid/gradient/outline (all adaptive)
+- Diagnosed fixProductReferences: only kept valid IDs, dropped invalid ones without filling
+- Rewrote fixProductReferences to keep valid IDs AND fill remaining slots with other product IDs
+- Verified via Agent Browser with Nordic Haven prompt (light theme, primary=#f5f5f5):
+  - Hero CTA: bg=white, text=rgb(17,24,39) — excellent contrast ✅
+  - Add to Cart: bg=rgb(245,245,245), text=rgb(17,24,39) — excellent contrast ✅
+  - Newsletter: bg=rgb(245,245,245), text=rgb(17,24,39) — excellent contrast ✅
+  - Featured Products: 3 products shown (Arctic Floor Lamp, Fjord Ceramic Vase, Coastal Linen Throw) ✅
+  - Zero console errors
+
+Stage Summary:
+- Commit: ebc2fa0
+- Buttons now have independent, contrast-aware text colors regardless of section textColor
+- fixProductReferences guarantees all products appear in Featured Products section
+- Locked features untouched
