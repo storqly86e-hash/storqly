@@ -260,10 +260,19 @@ export function StoreRenderer({
   );
 
   // Navigate to a page by ID
-   const handleNavigate = useCallback((pageId: string) => {
+  const handleNavigate = useCallback((pageId: string) => {
     setCurrentPageId(pageId);
     onSelectSection?.(null);
   }, [onSelectSection]);
+
+  // Home page: card click → navigate to Shop/Collection page
+  const handleHomeCardClick = useCallback(
+    (_productId: string) => {
+      const shopPage = store.pages.find((p) => p.type === 'collection');
+      if (shopPage) handleNavigate(shopPage.id);
+    },
+    [store.pages, handleNavigate]
+  );
 
   if (!currentPage) {
     return (
@@ -303,7 +312,16 @@ export function StoreRenderer({
           <>
             {body.map((section) => (
               <Fragment key={section.id}>
-                {renderSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate })}
+                {renderSection({
+                  section,
+                  theme,
+                  selectedSectionId,
+                  onSelectSection,
+                  products,
+                  onViewProduct: handleHomeCardClick,
+                  onNavigate: handleNavigate,
+                  forceHideAddToCart: true,
+                })}
               </Fragment>
             ))}
             {body.length === 0 && (

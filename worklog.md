@@ -333,3 +333,29 @@ Stage Summary:
 - CollectionPage.tsx: Added pointer-events-none / group-hover:pointer-events-auto to prevent invisible button from intercepting clicks
 - All three flows confirmed working (2 via browser, 1 via code review + parity with confirmed-working home page)
 - No locked features touched
+
+---
+Task ID: flow-refactor
+Agent: main
+Task: Refactor Add to Cart flow: Home→Shop→Detail→Cart pipeline
+
+Work Log:
+- sections.tsx: Added `forceHideAddToCart` prop to SectionRendererProps
+- sections.tsx: FeaturedProductsSection & ProductGridSection now check `!forceHideAddToCart` before showing Add to Cart
+- index.tsx: Created `handleHomeCardClick` callback that navigates to the Collection/Shop page (ignoring productId)
+- index.tsx: Home page body sections now receive `onViewProduct: handleHomeCardClick` + `forceHideAddToCart: true`
+- CollectionPage.tsx: Removed `useCartStore` import and `addItem` usage
+- CollectionPage.tsx: Changed button onClick from `addItem(product)` to `onViewProduct?.(product.id)`
+- CollectionPage.tsx: Renamed button text from "Add to Cart" to "View Details"
+- Browser verified all 3 flows:
+  - Flow 1: Home card click → Shop page (no Add to Cart on home) ✅
+  - Flow 2: Shop card click + View Details button → Product Detail ✅
+  - Flow 3: Detail Add to Cart → auto-navigate to Cart ✅
+- Lint: clean, no dev log errors
+
+Stage Summary:
+- New flow pipeline: Home (browse) → Shop (browse/choose) → Detail (configure/add) → Cart (review)
+- Home page product cards: no Add to Cart button, card click → Shop page
+- Shop page product cards: "View Details" button → Product Detail (same as card click)
+- Product Detail: Add to Cart adds item + auto-navigates to Cart (unchanged)
+- No locked features touched

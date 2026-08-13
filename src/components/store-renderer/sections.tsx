@@ -405,7 +405,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
 // ─── 3. Featured Products ───────────────────────────────────────────────
 
-export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct }: SectionRendererProps) {
+export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
   const content = section.content as unknown as FeaturedProductsContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
   const featuredProducts = useMemo(
@@ -431,7 +431,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
             key={product.id}
             product={product}
             theme={theme}
-            showAddToCart={content.showAddToCart}
+            showAddToCart={content.showAddToCart && !forceHideAddToCart}
             borderRadius={borderRadius}
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
@@ -445,7 +445,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
 
 // ─── 4. Product Grid ───────────────────────────────────────────────────
 
-export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct }: SectionRendererProps) {
+export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
   const content = section.content as unknown as ProductGridContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
@@ -470,7 +470,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
             key={product.id}
             product={product}
             theme={theme}
-            showAddToCart={content.showAddToCart}
+            showAddToCart={content.showAddToCart && !forceHideAddToCart}
             borderRadius={borderRadius}
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
@@ -986,6 +986,8 @@ interface SectionRendererProps {
   products: StoreProduct[];
   onViewProduct?: (productId: string) => void;
   onNavigate?: (pageId: string) => void;
+  /** When true, force-hide the Add to Cart button on product cards (e.g. home page) */
+  forceHideAddToCart?: boolean;
 }
 
 // ─── Main Section Router ────────────────────────────────────────────────

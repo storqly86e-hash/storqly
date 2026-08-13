@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import { Package, Search } from 'lucide-react';
 import type { TemplatePageProps } from './types';
-import { useCartStore } from '@/lib/cart-store';
 import {
   formatPrice,
   contrastTextColor,
@@ -14,7 +13,6 @@ import {
 export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
   const theme = store.theme;
   const products = store.products;
-  const addItem = useCartStore((s) => s.addItem);
   const radius = borderRadiusClass(theme.borderRadius);
 
   const [search, setSearch] = useState('');
@@ -218,10 +216,10 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
                       onClick={(e) => {
                         e.stopPropagation();
                         e.preventDefault();
-                        addItem(product);
+                        onViewProduct?.(product.id);
                       }}
                     >
-                      Add to Cart
+                      View Details
                     </button>
                   )}
                 </div>
