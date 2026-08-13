@@ -78,12 +78,13 @@ export default function MarketingKit({
         throw new Error('No response stream. Please try again.');
       }
 
-      // Consume SSE stream (keeps proxy alive via heartbeats)
+      // Consume SSE stream — real token-by-token streaming
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
       let settled = false;
       let currentEvent = '';
+      let accumulated = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -99,11 +100,24 @@ export default function MarketingKit({
             currentEvent = line.slice(7).trim();
             continue;
           }
-          if (line.startsWith(':')) continue; // heartbeat comment
+          if (line.startsWith(':')) continue; // SSE comment
           if (line.startsWith('data: ')) {
             try {
               const data = JSON.parse(line.slice(6));
 
+              // Progressive streaming: each token chunk
+              if (currentEvent === 'delta' && data.content) {
+                accumulated += data.content;
+                setResult(accumulated);
+                // Switch from loading spinner to output on first token
+                if (!settled) {
+                  setPhase('output');
+                  settled = true;
+                }
+                continue;
+              }
+
+              // Final complete content (replaces accumulated for consistency)
               if (currentEvent === 'result' && data.content !== undefined) {
                 if (!data.content || data.content.length === 0) {
                   throw new Error('AI returned empty content. Try a more detailed prompt.');
@@ -114,9 +128,12 @@ export default function MarketingKit({
                 return;
               }
 
+              // Server-side error
               if (currentEvent === 'error' && data.message) {
                 throw new Error(data.message);
               }
+
+              // Ignore ping/progress/unknown events
             } catch (parseErr: unknown) {
               // Re-throw only our intentional errors, swallow JSON parse on non-JSON lines
               if (

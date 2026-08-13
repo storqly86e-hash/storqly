@@ -408,3 +408,25 @@ Stage Summary:
 - Marketing Kit is a standalone content-generation tool with no connection to Store data
 - Initial timeout was 60s (too short for long-form content); increased to 120s after first test failure
 
+---
+Task ID: 1
+Agent: Main
+Task: Fix Marketing Kit 502 proxy timeout — convert to real token-by-token streaming
+
+Work Log:
+- Analyzed error screenshot: 502 Bad Gateway on Marketing Kit Generator
+- Diagnosed: Server logs show 200 for all requests (even 69-71s), but infrastructure proxy kills connections >60s
+- Previous SSE pattern used comment heartbeats (`: heartbeat\n\n`) which proxies may ignore
+- Converted backend to use `stream: true` from z-ai-web-dev-sdk — returns ReadableStream<Uint8Array>
+- Backend now parses AI's SSE stream and forwards each token chunk as a `delta` SSE event
+- Changed heartbeat from SSE comment to real `ping` data event (`event: ping\ndata: {"t":...}\n\n`)
+- Updated frontend to handle `delta` events — accumulates tokens and renders progressively
+- Frontend switches from loading spinner to output phase on first token (ChatGPT-style typing)
+- `result` event still sent at end with complete content for consistency
+- Increased timeout to 180s (streaming keeps proxy alive, so timeout is just a safety net)
+
+Stage Summary:
+- Files modified: `src/app/api/marketing-kit/generate/route.ts`, `src/components/marketing-kit/index.tsx`
+- Root cause: Infrastructure proxy has ~60s total connection timeout. Non-streaming SSE (wait for full response, then send) exceeded this. Heartbeat comments didn't count as proxy activity.
+- Fix: Real token streaming ensures continuous data flow. Proxy can never time out because data is always moving.
+- Lint: Clean
