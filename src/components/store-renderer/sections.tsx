@@ -13,6 +13,7 @@ import {
   borderRadiusClass,
   gridCols,
 } from './helpers';
+import { useCartStore } from '@/lib/cart-store';
 import {
   Search,
   ShoppingCart,
@@ -123,6 +124,7 @@ function ProductCard({
   borderRadius,
   buttonBgOverride,
   buttonTextOverride,
+  onViewProduct,
 }: {
   product: StoreProduct;
   theme: StoreTheme;
@@ -130,8 +132,10 @@ function ProductCard({
   borderRadius: string;
   buttonBgOverride?: string;
   buttonTextOverride?: string;
+  onViewProduct?: (productId: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const addToCart = useCartStore((s) => s.addItem);
   const imgColor = stringToColor(product.id, theme);
   const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price;
 
@@ -143,6 +147,9 @@ function ProductCard({
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={onViewProduct ? () => onViewProduct(product.id) : undefined}
+      role={onViewProduct ? 'button' : undefined}
+      tabIndex={onViewProduct ? 0 : undefined}
     >
  {/* Image placeholder */}
       <div
@@ -200,6 +207,10 @@ function ProductCard({
             style={{
               backgroundColor: buttonBgOverride || theme.colors.primary,
               color: buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary),
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              addToCart(product);
             }}
           >
             Add to Cart
@@ -389,7 +400,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
 // ─── 3. Featured Products ───────────────────────────────────────────────
 
-export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct }: SectionRendererProps) {
   const content = section.content as unknown as FeaturedProductsContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
   const featuredProducts = useMemo(
@@ -419,6 +430,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
             borderRadius={borderRadius}
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
+            onViewProduct={onViewProduct}
           />
         ))}
       </div>
@@ -428,7 +440,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
 
 // ─── 4. Product Grid ───────────────────────────────────────────────────
 
-export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct }: SectionRendererProps) {
   const content = section.content as unknown as ProductGridContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
@@ -457,6 +469,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
             borderRadius={borderRadius}
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
+            onViewProduct={onViewProduct}
           />
         ))}
       </div>
@@ -966,6 +979,8 @@ interface SectionRendererProps {
   selectedSectionId?: string | null;
   onSelectSection?: (sectionId: string | null) => void;
   products: StoreProduct[];
+  onViewProduct?: (productId: string) => void;
+  onNavigate?: (pageId: string) => void;
 }
 
 // ─── Main Section Router ────────────────────────────────────────────────

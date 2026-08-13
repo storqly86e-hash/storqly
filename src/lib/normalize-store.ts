@@ -540,6 +540,47 @@ function ensureHomepage(store: Store, log: ReturnType<typeof createLogger>): voi
   }
 }
 
+/** Ensure template pages (Shop, Cart, Checkout) exist */
+function ensureTemplatePages(store: Store, log: ReturnType<typeof createLogger>): void {
+  const pageTypes = new Set(store.pages.map((p) => p.type || 'home'));
+
+  if (!pageTypes.has('collection')) {
+    store.pages.push({
+      id: uuid(),
+      name: 'Shop',
+      slug: 'shop',
+      type: 'collection',
+      isHomepage: false,
+      sections: [],
+    });
+    log.log({ field: 'pages', action: 'defaulted', to: 'added collection page' });
+  }
+
+  if (!pageTypes.has('cart')) {
+    store.pages.push({
+      id: uuid(),
+      name: 'Cart',
+      slug: 'cart',
+      type: 'cart',
+      isHomepage: false,
+      sections: [],
+    });
+    log.log({ field: 'pages', action: 'defaulted', to: 'added cart page' });
+  }
+
+  if (!pageTypes.has('checkout')) {
+    store.pages.push({
+      id: uuid(),
+      name: 'Checkout',
+      slug: 'checkout',
+      type: 'checkout',
+      isHomepage: false,
+      sections: [],
+    });
+    log.log({ field: 'pages', action: 'defaulted', to: 'added checkout page' });
+  }
+}
+
 /** Ensure at least 1 product is marked as featured (for featured-products sections) */
 function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogger>): void {
   const featuredCount = store.products.filter((p) => p.featured).length;
@@ -658,6 +699,7 @@ export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult |
   fixProductReferences(store, log);
   ensureHomepage(store, log);
   ensureFeaturedProducts(store, log);
+  ensureTemplatePages(store, log);
 
   // ── Build result ──
   const logEntries = log.getLogs();

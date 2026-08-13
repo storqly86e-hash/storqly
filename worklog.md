@@ -213,3 +213,46 @@ Stage Summary:
 - All template pages use useCartStore for cart operations
 - Template pages are wired into StoreRenderer via page.type detection
 - Template pages not yet reachable from normal flow (no pages with type=collection/product/cart/checkout exist yet — Step 3 will create them)
+
+---
+Task ID: step3
+Agent: main
+Task: Step 3 — Navigation Infrastructure
+
+Work Log:
+- Added ensureTemplatePages() to normalize-store.ts: auto-creates Shop (collection), Cart (cart), Checkout (checkout) pages during normalization. Runs after ensureFeaturedProducts. Uses VALID_PAGE_TYPES check to avoid duplicates.
+- Updated sections.tsx SectionRendererProps: added onViewProduct and onNavigate optional callbacks
+- Updated ProductCard: added onViewProduct prop, card onClick navigates to product detail, Add to Cart button onClick calls useCartStore.addItem with stopPropagation
+- Updated FeaturedProductsSection: destructures and passes onViewProduct to ProductCard
+- Updated ProductGridSection: destructures and passes onViewProduct to ProductCard
+- Updated StoreRenderer (index.tsx):
+  - AutoHeader: nav links are now clickable buttons calling onNavigate, cart icon is clickable and navigates to cart page, store name navigates to home
+  - PageTabs: filters out product pages (dynamic, shown on-demand only), passes effectivePages for accurate tab rendering
+  - Dynamic product page creation: handleViewProduct creates StorePage with type='product' in local dynamicPages state, navigates to it. Reuses existing page if already created.
+  - effectivePages = [...store.pages, ...dynamicPages] merged for all lookups
+  - handleNavigate clears section selection
+  - TemplatePageRenderer now receives onViewProduct from parent (not its own) — fixes product detail navigation from CollectionPage
+  - renderSection calls now pass onViewProduct and onNavigate callbacks
+
+Test Results (full flow: Home → Shop → Product Detail → Add to Cart → Cart → Checkout):
+- bun run lint: clean (0 errors, 0 warnings)
+- Generated 'Green Haven' store: 3 normalizations (template pages added), 3 products, 4 sections
+- Home page: header nav shows Home/Shop/Cart/Checkout buttons, PageTabs show same with cart badge
+- Home → Add to Cart (Jade Plant): cart store updated, localStorage shows 1 item
+- Home → Cart tab: Shopping Cart page renders with item list, quantity controls, order summary, Checkout/Continue Shopping
+- Cart → quantity +: updated to 2, total recalculated
+- Cart → Checkout tab: Checkout page renders with contact/shipping/payment forms, order summary shows $55.97 (2×$24.99 + $5.99 shipping), form validation
+- Home → Shop tab: Collection page renders with search bar, category pills (All/Cacti/Succulents/Terrariums), all 3 products with Add to Cart
+- Shop → click Prickly Pear: Product Detail page renders dynamically with Back button, product name, quantity selector, Add to Cart
+- Product Detail → Add to Cart: cart updated (Jade Plant x2, Prickly Pear x1)
+- Cart persistence: verified via localStorage — items survive page navigation
+- Zero console errors, zero runtime errors across entire flow
+
+Locked Features Status: NONE TOUCHED
+- Generation reliability: unchanged (3 normalizations are expected — template page creation)
+- Publish/save flow: unchanged
+- Mobile responsiveness: unchanged
+- Visual/chat editor: unchanged
+- Product count: unchanged (EXACTLY 3)
+- Button contrast/targeting: unchanged
+- sections.tsx rendering logic: only ADDITIVE changes (optional callbacks, cart store import)

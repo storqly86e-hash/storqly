@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, Fragment, useCallback } from 'react';
-import type { Store, Section, PageType } from '@/lib/store-schema';
+import type { Store, Section, PageType, StorePage } from '@/lib/store-schema';
 import { renderSection } from './sections';
 import {
   CollectionPage,
@@ -46,13 +46,14 @@ function separateHeaderFooter(sections: Section[]): {
 
 // ─── Auto-generated header when none exists ────────────────────────────
 
-function AutoHeader({ store, theme, selectedSectionId, onSelectSection, cartCount }: {
+function AutoHeader({ store, theme, onNavigate, cartCount }: {
   store: Store;
   theme: Store['theme'];
-  selectedSectionId?: string | null;
-  onSelectSection?: (id: string | null) => void;
+  onNavigate: (pageId: string) => void;
   cartCount: number;
 }) {
+  const cartPageId = store.pages.find((p) => p.type === 'cart')?.id;
+
   return (
     <header
       className="sticky top-0 z-40 border-b"
@@ -62,26 +63,38 @@ function AutoHeader({ store, theme, selectedSectionId, onSelectSection, cartCoun
       }}
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-        <span className="text-lg font-bold tracking-tight" style={{ color: theme.colors.text }}>
+        <span
+          className="cursor-pointer text-lg font-bold tracking-tight transition-opacity hover:opacity-70"
+          style={{ color: theme.colors.text }}
+          onClick={() => {
+            const home = store.pages.find((p) => p.isHomepage);
+            if (home) onNavigate(home.id);
+          }}
+        >
           {store.name}
         </span>
         <nav className="hidden items-center gap-6 md:flex">
-          {store.pages.map((page) => (
-            <span
-              key={page.id}
-              className="cursor-pointer text-sm font-medium transition-colors hover:opacity-70"
-              style={{ color: theme.colors.textMuted }}
-            >
-              {page.name}
-            </span>
-          ))}
+          {store.pages
+            .filter((p) => p.isHomepage || (p.type && p.type !== 'product'))
+            .map((page) => (
+              <button
+                key={page.id}
+                onClick={() => onNavigate(page.id)}
+                className="text-sm font-medium transition-colors hover:opacity-70"
+                style={{ color: theme.colors.textMuted }}
+              >
+                {page.name}
+              </button>
+            ))}
         </nav>
         <div className="flex items-center gap-4">
-          <svg className="h-5 w-5" style={{ color: theme.colors.textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-          <span className="relative">
-            <svg className="h-5 w-5" style={{ color: theme.colors.textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <button
+            className="relative transition-opacity hover:opacity-70"
+            style={{ color: theme.colors.textMuted }}
+            onClick={() => cartPageId && onNavigate(cartPageId)}
+            aria-label="Cart"
+          >
+            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
             </svg>
             {cartCount > 0 && (
@@ -89,7 +102,7 @@ function AutoHeader({ store, theme, selectedSectionId, onSelectSection, cartCoun
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
-          </span>
+          </button>
           <button className="md:hidden" style={{ color: theme.colors.textMuted }} aria-label="Menu">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -144,12 +157,14 @@ function PageTabs({
   onNavigate: (pageId: string) => void;
   cartCount: number;
 }) {
-  if (store.pages.length <= 1) return null;
+  // Only show non-product pages in tabs (product pages are dynamic)
+  const visiblePages = store.pages.filter((p) => p.type !== 'product');
+  if (visiblePages.length <= 1) return null;
 
   return (
     <div className="border-b bg-white/80 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-6 py-1">
-        {store.pages.map((page) => (
+        {visiblePages.map((page) => (
           <button
             key={page.id}
             onClick={() => onNavigate(page.id)}
@@ -182,26 +197,15 @@ function TemplatePageRenderer({
   pageType,
   productId,
   onNavigate,
+  onViewProduct,
 }: {
   store: Store;
   pageType: PageType;
   productId?: string;
   onNavigate: (pageId: string) => void;
+  onViewProduct?: (productId: string) => void;
 }) {
-  const handleViewProduct = useCallback(
-    (pid: string) => {
-      // Find an existing product page for this product
-      const existing = store.pages.find((p) => p.type === 'product' && p.productId === pid);
-      if (existing) {
-        onNavigate(existing.id);
-      }
-      // If no product page exists yet, the navigation won't happen.
-      // Step 3 will handle auto-creating product pages.
-    },
-    [store.pages, onNavigate]
-  );
-
-  const props = { store, onNavigate, onViewProduct: handleViewProduct };
+  const props = { store, onNavigate, onViewProduct };
 
   switch (pageType) {
     case 'collection':
@@ -230,24 +234,67 @@ export function StoreRenderer({
     () => store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || ''
   );
 
+  // Dynamic product pages — created on-the-fly when clicking a product
+  const [dynamicPages, setDynamicPages] = useState<StorePage[]>([]);
+
   const theme = store.theme;
   const products = store.products;
   const cartCount = useCartStore((s) => s.getItemCount());
 
+  // Merge store pages with dynamic product pages
+  const effectivePages = useMemo(
+    () => [...store.pages, ...dynamicPages],
+    [store.pages, dynamicPages]
+  );
+
   const currentPage = useMemo(
-    () => store.pages.find((p) => p.id === currentPageId) || store.pages[0],
-    [store.pages, currentPageId]
+    () => effectivePages.find((p) => p.id === currentPageId) || effectivePages[0],
+    [effectivePages, currentPageId]
   );
 
   // Determine if current page is a template page
   const pageType = currentPage?.type;
-  const isTemplatePage = pageType && pageType !== 'home';
+  const isTemplatePage = !!pageType && pageType !== 'home';
 
-  // Only separate header/footer for non-template pages (home pages with sections)
+  // Only separate header/footer for non-template pages
   const { header, footer, body } = useMemo(
     () => (isTemplatePage ? { header: null, footer: null, body: [] as Section[] } : separateHeaderFooter(currentPage?.sections || [])),
     [currentPage, isTemplatePage]
   );
+
+  // Navigate to a product detail page (creates dynamically if needed)
+  const handleViewProduct = useCallback(
+    (productId: string) => {
+      // Check if a dynamic page already exists
+      const existing = effectivePages.find((p) => p.type === 'product' && p.productId === productId);
+      if (existing) {
+        setCurrentPageId(existing.id);
+        return;
+      }
+      // Find the product
+      const product = products.find((p) => p.id === productId);
+      if (!product) return;
+      // Create a dynamic product page
+      const newPage: StorePage = {
+        id: crypto.randomUUID(),
+        name: product.name,
+        slug: product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+        type: 'product',
+        isHomepage: false,
+        productId: product.id,
+        sections: [],
+      };
+      setDynamicPages((prev) => [...prev, newPage]);
+      setCurrentPageId(newPage.id);
+    },
+    [effectivePages, products]
+  );
+
+  // Navigate to a page by ID
+   const handleNavigate = useCallback((pageId: string) => {
+    setCurrentPageId(pageId);
+    onSelectSection?.(null);
+  }, [onSelectSection]);
 
   if (!currentPage) {
     return (
@@ -267,29 +314,30 @@ export function StoreRenderer({
       }}
       onClick={() => onSelectSection?.(null)}
     >
-      {/* Header — shown for all page types */}
+      {/* Header */}
       {!isTemplatePage && header
-        ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products })
-        : <AutoHeader store={store} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cartCount={cartCount} />
+        ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate })
+        : <AutoHeader store={store} theme={theme} onNavigate={handleNavigate} cartCount={cartCount} />
       }
 
-      {/* Page tabs (only if multiple pages) */}
-      <PageTabs store={store} currentPageId={currentPageId} onNavigate={setCurrentPageId} cartCount={cartCount} />
+      {/* Page tabs */}
+      <PageTabs store={{ ...store, pages: effectivePages }} currentPageId={currentPageId} onNavigate={handleNavigate} cartCount={cartCount} />
 
       {/* Main content */}
       <main className="flex-1">
         {isTemplatePage ? (
           <TemplatePageRenderer
-            store={store}
+            store={{ ...store, pages: effectivePages }}
             pageType={pageType}
             productId={currentPage.productId}
-            onNavigate={setCurrentPageId}
+            onNavigate={handleNavigate}
+            onViewProduct={handleViewProduct}
           />
         ) : (
           <>
             {body.map((section) => (
               <Fragment key={section.id}>
-                {renderSection({ section, theme, selectedSectionId, onSelectSection, products })}
+                {renderSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate })}
               </Fragment>
             ))}
             {body.length === 0 && (
@@ -310,9 +358,9 @@ export function StoreRenderer({
         )}
       </main>
 
-      {/* Footer — shown for all page types */}
+      {/* Footer */}
       {!isTemplatePage && footer
-        ? renderSection({ section: footer, theme, selectedSectionId, onSelectSection, products })
+        ? renderSection({ section: footer, theme, selectedSectionId, onSelectSection, products, onNavigate: handleNavigate })
         : <AutoFooter store={store} theme={theme} />
       }
     </div>
