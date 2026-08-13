@@ -70,6 +70,17 @@ export default function MarketingKit({
         signal: controller.signal,
       });
 
+      // Defensive: check content-type before attempting JSON parse
+      const contentType = res.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        await res.text().catch(() => {}); // consume body
+        throw new Error(
+          res.ok
+            ? 'The server returned an unexpected response. Please try again.'
+            : `Server error (${res.status}). Please try again.`
+        );
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
