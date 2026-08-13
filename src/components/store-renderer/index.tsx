@@ -257,8 +257,7 @@ export function StoreRenderer({
       // Check if a dynamic page already exists
       const existing = effectivePages.find((p) => p.type === 'product' && p.productId === productId);
       if (existing) {
-        // Dynamic pages use internal state even in editor mode
-        setInternalPageId(existing.id);
+        setCurrentPageId(existing.id);
         return;
       }
       // Find the product
@@ -275,10 +274,9 @@ export function StoreRenderer({
         sections: [],
       };
       setDynamicPages((prev) => [...prev, newPage]);
-      // Dynamic pages use internal state even in editor mode
-      setInternalPageId(newPage.id);
+      setCurrentPageId(newPage.id);
     },
-    [effectivePages, products]
+    [effectivePages, products, setCurrentPageId]
   );
 
   // Navigate to a page by ID
