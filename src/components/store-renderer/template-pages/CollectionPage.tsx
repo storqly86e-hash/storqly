@@ -210,7 +210,7 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
                   </div>
                   {product.inStock && (
                     <button
-                      className="mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0"
+                      className="mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 cursor-pointer opacity-0 translate-y-1 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto"
                       style={{
                         backgroundColor: theme.colors.primary,
                         color: contrastTextColor(theme.colors.primary),

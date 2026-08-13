@@ -256,3 +256,35 @@ Locked Features Status: NONE TOUCHED
 - Product count: unchanged (EXACTLY 3)
 - Button contrast/targeting: unchanged
 - sections.tsx rendering logic: only ADDITIVE changes (optional callbacks, cart store import)
+
+---
+Task ID: step3-fixes
+Agent: main
+Task: Fix 4 user-reported issues from Step 3 testing
+
+Work Log:
+- **Issue 1 (Duplicate nav)**: Removed PageTabs component entirely from StoreRenderer. AutoHeader now serves as the single navigation bar. Added active page highlighting (bold text color for current page) to AutoHeader nav buttons.
+- **Issue 2 (Junk pages)**: Added stripJunkPages() to normalize-store.ts — filters out pages where type='home' AND isHomepage=false (AI-generated pages like "About Us", "Shipping Policy" that get classified as type='home' by default). Runs before ensureTemplatePages in the normalization pipeline.
+- **Issue 3 (Add to Cart UX)**: Added `pointer-events-none` to the invisible Add to Cart button state (opacity-0) in both sections.tsx ProductCard and CollectionPage. This prevents the invisible button from intercepting touch/click events on mobile. Added `cursor-pointer` class explicitly. Added "Added!" green feedback animation (1.2s) to ProductCard's Add to Cart button in sections.tsx.
+- **Issue 4 (Product card → Cart bug)**: Root cause: ProductCard in sections.tsx had no `cursor-pointer` class, making the card look non-clickable. On mobile/touch, the invisible hover-reveal "Add to Cart" button (opacity-0, no pointer-events-none) intercepted taps, causing unexpected behavior. Fix: added `cursor-pointer` to ProductCard div, added `pointer-events-none` to hidden button state, added `pointer-events-auto` on group-hover for CollectionPage.
+
+Files Changed:
+- src/components/store-renderer/index.tsx: Removed PageTabs, added currentPageId prop + active highlighting to AutoHeader, removed duplicate closing tags
+- src/components/store-renderer/sections.tsx: ProductCard now has cursor-pointer, pointer-events-none on hidden button, Added! feedback state
+- src/components/store-renderer/template-pages/CollectionPage.tsx: Added pointer-events-none/auto to hidden/hovered button
+- src/lib/normalize-store.ts: Added stripJunkPages() function, integrated into normalization pipeline
+
+Browser Verification (Agent Browser, full flow):
+- Generated 'LuxLeather' store: 3 products, 4 sections, 3 normalizations (template pages added)
+- Nav shows ONLY: Home, Shop, Cart, Checkout (no junk pages) ✅
+- No duplicate PageTabs below header ✅
+- Home → click product name → Product Detail page loads ✅
+- Product Detail → Add to Cart → Cart badge updates ✅
+- Shop page → product grid with category pills ✅
+- Shop → click product card → Product Detail page loads ✅
+- Cart page → 2 items with quantity controls, order summary ✅
+- Checkout page → form fields, order summary, Place Order button ✅
+- bun run lint: clean (0 errors, 0 warnings)
+- Dev log: zero errors, all 200s
+
+Locked Features Status: NONE TOUCHED

@@ -135,13 +135,21 @@ function ProductCard({
   onViewProduct?: (productId: string) => void;
 }) {
   const [hovered, setHovered] = useState(false);
+  const [addedFeedback, setAddedFeedback] = useState(false);
   const addToCart = useCartStore((s) => s.addItem);
   const imgColor = stringToColor(product.id, theme);
   const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price;
 
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    addToCart(product);
+    setAddedFeedback(true);
+    setTimeout(() => setAddedFeedback(false), 1200);
+  };
+
   return (
     <div
-      className={`${borderRadius} overflow-hidden bg-white border border-gray-100 shadow-sm transition-shadow duration-200 group`}
+      className={`${borderRadius} ${onViewProduct ? 'cursor-pointer' : ''} overflow-hidden bg-white border border-gray-100 shadow-sm transition-shadow duration-200 group`}
       style={{
         borderColor: theme.colors.border,
       }}
@@ -199,21 +207,18 @@ function ProductCard({
         </div>
         {showAddToCart && product.inStock && (
           <button
-            className={`mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 ${
+            className={`mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 cursor-pointer ${
               hovered
                 ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-1'
+                : 'opacity-0 translate-y-1 pointer-events-none'
             }`}
             style={{
-              backgroundColor: buttonBgOverride || theme.colors.primary,
-              color: buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary),
+              backgroundColor: addedFeedback ? '#16a34a' : (buttonBgOverride || theme.colors.primary),
+              color: addedFeedback ? '#ffffff' : (buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary)),
             }}
-            onClick={(e) => {
-              e.stopPropagation();
-              addToCart(product);
-            }}
+            onClick={handleAddToCart}
           >
-            Add to Cart
+            {addedFeedback ? 'Added!' : 'Add to Cart'}
           </button>
         )}
       </div>

@@ -46,13 +46,15 @@ function separateHeaderFooter(sections: Section[]): {
 
 // ─── Auto-generated header when none exists ────────────────────────────
 
-function AutoHeader({ store, theme, onNavigate, cartCount }: {
+function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
   store: Store;
   theme: Store['theme'];
   onNavigate: (pageId: string) => void;
   cartCount: number;
+  currentPageId: string;
 }) {
   const cartPageId = store.pages.find((p) => p.type === 'cart')?.id;
+  const homePageId = store.pages.find((p) => p.isHomepage)?.id;
 
   return (
     <header
@@ -67,8 +69,7 @@ function AutoHeader({ store, theme, onNavigate, cartCount }: {
           className="cursor-pointer text-lg font-bold tracking-tight transition-opacity hover:opacity-70"
           style={{ color: theme.colors.text }}
           onClick={() => {
-            const home = store.pages.find((p) => p.isHomepage);
-            if (home) onNavigate(home.id);
+            if (homePageId) onNavigate(homePageId);
           }}
         >
           {store.name}
@@ -80,8 +81,10 @@ function AutoHeader({ store, theme, onNavigate, cartCount }: {
               <button
                 key={page.id}
                 onClick={() => onNavigate(page.id)}
-                className="text-sm font-medium transition-colors hover:opacity-70"
-                style={{ color: theme.colors.textMuted }}
+                className={`text-sm font-medium transition-colors hover:opacity-70 ${
+                  page.id === currentPageId ? 'opacity-100' : ''
+                }`}
+                style={{ color: page.id === currentPageId ? theme.colors.text : theme.colors.textMuted }}
               >
                 {page.name}
               </button>
@@ -141,52 +144,6 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
         </p>
       </div>
     </footer>
-  );
-}
-
-// ─── Page Navigation tabs ──────────────────────────────────────────────
-
-function PageTabs({
-  store,
-  currentPageId,
-  onNavigate,
-  cartCount,
-}: {
-  store: Store;
-  currentPageId: string;
-  onNavigate: (pageId: string) => void;
-  cartCount: number;
-}) {
-  // Only show non-product pages in tabs (product pages are dynamic)
-  const visiblePages = store.pages.filter((p) => p.type !== 'product');
-  if (visiblePages.length <= 1) return null;
-
-  return (
-    <div className="border-b bg-white/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-1 overflow-x-auto px-6 py-1">
-        {visiblePages.map((page) => (
-          <button
-            key={page.id}
-            onClick={() => onNavigate(page.id)}
-            className={`relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors ${
-              page.id === currentPageId
-                ? 'text-gray-900'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {page.name}
-            {page.type === 'cart' && cartCount > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#a855f7] px-1 text-[9px] font-bold text-white">
-                {cartCount > 9 ? '9+' : cartCount}
-              </span>
-            )}
-            {page.id === currentPageId && (
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#a855f7] rounded-full" />
-            )}
-          </button>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -317,11 +274,8 @@ export function StoreRenderer({
       {/* Header */}
       {!isTemplatePage && header
         ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate })
-        : <AutoHeader store={store} theme={theme} onNavigate={handleNavigate} cartCount={cartCount} />
+        : <AutoHeader store={{ ...store, pages: effectivePages }} theme={theme} onNavigate={handleNavigate} cartCount={cartCount} currentPageId={currentPageId} />
       }
-
-      {/* Page tabs */}
-      <PageTabs store={{ ...store, pages: effectivePages }} currentPageId={currentPageId} onNavigate={handleNavigate} cartCount={cartCount} />
 
       {/* Main content */}
       <main className="flex-1">
