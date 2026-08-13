@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, Fragment, useCallback } from 'react';
+import { useEffect, useMemo, useState, Fragment, useCallback } from 'react';
 import type { Store, Section, PageType, StorePage } from '@/lib/store-schema';
 import { renderSection } from './sections';
 import {
@@ -10,6 +10,9 @@ import {
   CheckoutPage,
 } from './template-pages';
 import { useCartStore } from '@/lib/cart-store';
+
+// Visible build ID for sync debugging — matches the one in page.tsx footer
+const BUILD_ID = 'build:2026-08-11-072515Z-279ad2e';
 
 // ─── Props ──────────────────────────────────────────────────────────────
 
@@ -139,9 +142,12 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
             </p>
           )}
         </div>
-        <p className="text-xs" style={{ color: theme.colors.textMuted }}>
-          &copy; {new Date().getFullYear()} {store.name}. All rights reserved.
-        </p>
+        <div className="flex flex-col items-center gap-1 sm:items-end">
+          <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+            &copy; {new Date().getFullYear()} {store.name}. All rights reserved.
+          </p>
+          <p className="text-[10px] font-mono opacity-30">{BUILD_ID}</p>
+        </div>
       </div>
     </footer>
   );
@@ -193,6 +199,12 @@ export function StoreRenderer({
 
   // Dynamic product pages — created on-the-fly when clicking a product
   const [dynamicPages, setDynamicPages] = useState<StorePage[]>([]);
+
+  // Initialize per-store cart when store ID changes
+  const initForStore = useCartStore((s) => s.initForStore);
+  useEffect(() => {
+    if (store.id) initForStore(store.id);
+  }, [store.id, initForStore]);
 
   const theme = store.theme;
   const products = store.products;

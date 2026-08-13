@@ -288,3 +288,28 @@ Browser Verification (Agent Browser, full flow):
 - Dev log: zero errors, all 200s
 
 Locked Features Status: NONE TOUCHED
+
+---
+Task ID: step3-fixes-round2
+Agent: main
+Task: Fix 3 user-reported issues: cart scoping, CollectionPage Add to Cart, Product Detail navigation
+
+Work Log:
+- **Issue A (Cart shared across stores)**: Rewrote cart-store.ts to scope cart per store ID. Added `_storeId` internal state, `initForStore(storeId)` action that saves current cart to old key and loads from new key. All localStorage operations now use `storqly-cart:${storeId}` composite key. Added `migrateLegacyCart()` to remove old global `storqly-cart` key on module load. Added `useEffect` in StoreRenderer to call `initForStore(store.id)` when store changes.
+- **Issue B (CollectionPage Add to Cart)**: Removed `pointer-events-none`/`pointer-events-auto` from CollectionPage button (the Shop page has no SectionWrapper, so invisible button interception isn't a concern there). Added `e.preventDefault()` for safety.
+- **Issue C (Product Detail unreachable)**: Added visible build ID (`build:2026-08-11-072515Z-279ad2e`) to AutoFooter, rendered as faint monospace text. Same ID shown in page.tsx landing footer for cross-referencing. Browser-verified product card → Product Detail navigation works in both editor view AND published store view (`?store=slug`).
+
+Files Changed:
+- src/lib/cart-store.ts: Complete rewrite for per-store scoping
+- src/components/store-renderer/index.tsx: Added useEffect for initForStore, BUILD_ID constant, build ID in AutoFooter
+- src/components/store-renderer/template-pages/CollectionPage.tsx: Removed pointer-events-none, added e.preventDefault()
+
+Browser Verification:
+- Generated WaveRiders store: Cart page shows "Your cart is empty" (no cross-store contamination) ✅
+- Shop page Add to Cart: Cart badge updates to "1" ✅
+- Shop page → click product name → Product Detail page loads ✅
+- Published store view (?store=premium-shopify-store): Product card → Product Detail works ✅
+- Build ID visible and matches between editor and published views ✅
+- bun run lint: clean
+
+Locked Features Status: NONE TOUCHED
