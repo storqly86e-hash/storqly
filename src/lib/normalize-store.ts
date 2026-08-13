@@ -13,7 +13,7 @@
 // - Be lenient with types — coerce strings to numbers, etc.
 // - Log every normalization for debugging
 
-import type { Store, StoreTheme, StoreProduct, StorePage, Section, SectionStyle, SectionType } from './store-schema';
+import type { Store, StoreTheme, StoreProduct, StorePage, Section, SectionStyle, SectionType, PageType } from './store-schema';
 import { defaultTheme } from './store-schema';
 
 // ─── Validation sets ─────────────────────────────────────────────
@@ -33,6 +33,7 @@ const VALID_ALIGNMENT = new Set<string>(['left', 'center', 'right']);
 const VALID_HEIGHT = new Set<string>(['sm', 'md', 'lg', 'xl']);
 const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
 const VALID_COLUMNS = new Set<number>([2, 3, 4]);
+const VALID_PAGE_TYPES = new Set<string>(['home', 'collection', 'product', 'cart', 'checkout']);
 const VALID_CTA_STYLE = new Set<string>(['solid', 'outline', 'gradient']);
 const VALID_GAP = new Set<string>(['sm', 'md', 'lg']);
 
@@ -404,14 +405,51 @@ function normalizeProduct(raw: unknown, log: ReturnType<typeof createLogger>): S
 
 // ─── Page normalization ───────────────────────────────────────────
 
+/** Infer page type from slug/name if not explicitly set. */
+function normalizePageType(
+  rawType: unknown,
+  slug: string,
+  name: string,
+  isHomepage: boolean,
+  log: ReturnType<typeof createLogger>
+): PageType {
+  // Explicit type takes priority
+  if (typeof rawType === 'string' && VALID_PAGE_TYPES.has(rawType)) {
+    return rawType as PageType;
+  }
+  // Homepage is always 'home'
+  if (isHomepage) return 'home';
+  // Infer from slug
+  const slugLower = slug.toLowerCase();
+  if (slugLower === 'shop' || slugLower === 'products' || slugLower === 'collection') return 'collection';
+  if (slugLower === 'cart') return 'cart';
+  if (slugLower === 'checkout') return 'checkout';
+  // Infer from name
+  const nameLower = name.toLowerCase();
+  if (nameLower.includes('shop') || nameLower.includes('collection') || nameLower.includes('catalog')) return 'collection';
+  if (nameLower.includes('cart')) return 'cart';
+  if (nameLower.includes('checkout')) return 'checkout';
+  // Default
+  if (rawType !== undefined) {
+    log.log({ field: 'page.type', action: 'coerced', from: String(rawType), to: 'home' });
+  }
+  return 'home';
+}
+
 function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): StorePage {
   const p = obj(raw, {} as Record<string, unknown>);
+  const isHomepage = bool(p.isHomepage, false);
+  const slug = str(p.slug, '');
+  const name = str(p.name, 'Home').substring(0, 100);
+  const pageType = normalizePageType(p.type, slug, name, isHomepage, log);
 
   return {
     id: isUUID(str(p.id, '')) ? str(p.id, '') : uuid(),
-    name: str(p.name, 'Home').substring(0, 100),
-    slug: str(p.slug, ''),
-    isHomepage: bool(p.isHomepage, false),
+    name,
+    slug,
+    type: pageType,
+    isHomepage,
+    productId: p.productId && typeof p.productId === 'string' ? str(p.productId, '') : undefined,
     sections: arr<unknown>(p.sections, []).map((s) => normalizeSection(s, log)),
   };
 }
@@ -445,8 +483,9 @@ function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): 
     });
   }
 
-  // ── Cap sections per page ──
+  // ── Cap sections per page (only for 'home' type — template pages have 0 sections by design) ──
   for (const page of store.pages) {
+    if (page.type && page.type !== 'home') continue; // Skip non-home pages
     if (page.sections.length > MAX_SECTIONS) {
       const before = page.sections.length;
       page.sections = page.sections.slice(0, MAX_SECTIONS);
@@ -642,6 +681,7 @@ function createDefaultPage(storeName: string): StorePage {
     id: uuid(),
     name: 'Home',
     slug: '',
+    type: 'home',
     isHomepage: true,
     sections: [
       {

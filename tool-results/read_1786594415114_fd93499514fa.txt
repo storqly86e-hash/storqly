@@ -1,0 +1,721 @@
+     1→// ========================================
+     2→// Storqly Schema Normalization Layer
+     3→// ========================================
+     4→// Deterministic, testable function that takes ANY valid JSON object
+     5→// (guaranteed by json_object mode) and reshapes it into a valid Store.
+     6→//
+     7→// This is NOT JSON repair (that fixes broken syntax).
+     8→// This IS schema normalization (coercing valid JSON to match the Store type).
+     9→//
+    10→// Design principles:
+    11→// - Never throws — always returns a valid Store
+    12→// - Preserve AI output when valid — only fill defaults for missing/wrong fields
+    13→// - Be lenient with types — coerce strings to numbers, etc.
+    14→// - Log every normalization for debugging
+    15→
+    16→import type { Store, StoreTheme, StoreProduct, StorePage, Section, SectionStyle, SectionType } from './store-schema';
+    17→import { defaultTheme } from './store-schema';
+    18→
+    19→// ─── Validation sets ─────────────────────────────────────────────
+    20→
+    21→const VALID_SECTION_TYPES = new Set<string>([
+    22→  'hero', 'featured-products', 'product-grid', 'text-banner', 'image-gallery',
+    23→  'testimonials', 'newsletter', 'faq', 'cta', 'categories', 'header',
+    24→  'footer', 'rich-text', 'spacer', 'divider',
+    25→]);
+    26→
+    27→const VALID_SPACING = new Set<string>(['compact', 'normal', 'spacious']);
+    28→const VALID_BORDER_RADIUS = new Set<string>(['none', 'sm', 'md', 'lg', 'xl']);
+    29→const VALID_PADDING_Y = new Set<string>(['sm', 'md', 'lg', 'xl']);
+    30→const VALID_PADDING_X = new Set<string>(['sm', 'md', 'lg']);
+    31→const VALID_MAX_WIDTH = new Set<string>(['sm', 'md', 'lg', 'xl', 'full']);
+    32→const VALID_ALIGNMENT = new Set<string>(['left', 'center', 'right']);
+    33→const VALID_HEIGHT = new Set<string>(['sm', 'md', 'lg', 'xl']);
+    34→const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
+    35→const VALID_COLUMNS = new Set<number>([2, 3, 4]);
+    36→const VALID_CTA_STYLE = new Set<string>(['solid', 'outline', 'gradient']);
+    37→const VALID_GAP = new Set<string>(['sm', 'md', 'lg']);
+    38→
+    39→// ─── Logging ──────────────────────────────────────────────────────
+    40→
+    41→type NormLog = { field: string; action: 'missing' | 'coerced' | 'invalid' | 'defaulted'; from?: unknown; to?: unknown };
+    42→
+    43→function createLogger() {
+    44→  const logs: NormLog[] = [];
+    45→  return {
+    46→    log(entry: NormLog) { logs.push(entry); },
+    47→    getLogs() { return logs; },
+    48→    summary(): string {
+    49→      const counts = { missing: 0, coerced: 0, invalid: 0, defaulted: 0 };
+    50→      for (const l of logs) counts[l.action]++;
+    51→      return `Normalization: ${logs.length} fixes (${counts.missing} missing, ${counts.coerced} coerced, ${counts.invalid} invalid, ${counts.defaulted} defaulted)`;
+    52→    },
+    53→  };
+    54→}
+    55→
+    56→// ─── Primitive helpers ────────────────────────────────────────────
+    57→
+    58→function uuid(): string {
+    59→  return crypto.randomUUID();
+    60→}
+    61→
+    62→function str(v: unknown, fallback: string): string {
+    63→  if (typeof v === 'string' && v.length > 0) return v;
+    64→  if (v === null || v === undefined) return fallback;
+    65→  return String(v).slice(0, 500) || fallback;
+    66→}
+    67→
+    68→function num(v: unknown, fallback: number, min?: number, max?: number): number {
+    69→  if (typeof v === 'number' && isFinite(v)) {
+    70→    let n = v;
+    71→    if (min !== undefined) n = Math.max(min, n);
+    72→    if (max !== undefined) n = Math.min(max, n);
+    73→    return n;
+    74→  }
+    75→  // Coerce string numbers
+    76→  if (typeof v === 'string') {
+    77→    const n = parseFloat(v.replace(/[^\d.\-]/g, ''));
+    78→    if (!isNaN(n) && isFinite(n)) {
+    79→      if (min !== undefined) return Math.max(min, n);
+    80→      if (max !== undefined) return Math.min(max, n);
+    81→      return n;
+    82→    }
+    83→  }
+    84→  return fallback;
+    85→}
+    86→
+    87→function bool(v: unknown, fallback: boolean): boolean {
+    88→  if (typeof v === 'boolean') return v;
+    89→  if (typeof v === 'string') return v === 'true' || v === '1';
+    90→  if (typeof v === 'number') return v !== 0;
+    91→  return fallback;
+    92→}
+    93→
+    94→function arr<T>(v: unknown, fallback: T[]): T[] {
+    95→  if (Array.isArray(v)) return v;
+    96→  return fallback;
+    97→}
+    98→
+    99→function obj(v: unknown, fallback: Record<string, unknown>): Record<string, unknown> {
+   100→  if (v !== null && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>;
+   101→  return fallback;
+   102→}
+   103→
+   104→function enumVal(v: unknown, valid: Set<string>, fallback: string): string {
+   105→  if (typeof v === 'string' && valid.has(v)) return v;
+   106→  // Case-insensitive fallback
+   107→  if (typeof v === 'string') {
+   108→    const lower = v.toLowerCase();
+   109→    for (const validVal of valid) {
+   110→      if (validVal === lower) return validVal;
+   111→    }
+   112→  }
+   113→  return fallback;
+   114→}
+   115→
+   116→function oneLine(s: string): string {
+   117→  return s.replace(/[\r\n]+/g, ' ').replace(/\s{2,}/g, ' ').trim();
+   118→}
+   119→
+   120→function slugify(s: string): string {
+   121→  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').substring(0, 60) || 'store';
+   122→}
+   123→
+   124→function isUUID(s: string): boolean {
+   125→  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+   126→}
+   127→
+   128→// ─── Theme normalization ──────────────────────────────────────────
+   129→
+   130→function normalizeTheme(raw: unknown, log: ReturnType<typeof createLogger>): StoreTheme {
+   131→  const t = obj(raw, {} as Record<string, unknown>);
+   132→  const theme: StoreTheme = { ...defaultTheme };
+   133→
+   134→  // Colors
+   135→  const colors = obj(t.colors, {} as Record<string, unknown>);
+   136→  const colorKeys = ['primary', 'secondary', 'accent', 'background', 'surface', 'text', 'textMuted', 'border'] as const;
+   137→  for (const key of colorKeys) {
+   138→    const v = colors[key];
+   139→    if (typeof v === 'string' && v.startsWith('#') && v.length >= 4) {
+   140→      theme.colors[key] = v;
+   141→    } else if (v !== undefined) {
+   142→      log.log({ field: `theme.colors.${key}`, action: 'invalid', from: v, to: defaultTheme.colors[key] });
+   143→    }
+   144→  }
+   145→
+   146→  // Fonts
+   147→  const fonts = obj(t.fonts, {} as Record<string, unknown>);
+   148→  theme.fonts.heading = str(fonts.heading, 'Inter');
+   149→  theme.fonts.body = str(fonts.body, 'Inter');
+   150→
+   151→  // Spacing
+   152→  theme.spacing = enumVal(t.spacing, VALID_SPACING, 'normal') as StoreTheme['spacing'];
+   153→  if (t.spacing && theme.spacing === 'normal' && !VALID_SPACING.has(t.spacing as string)) {
+   154→    log.log({ field: 'theme.spacing', action: 'invalid', from: t.spacing, to: 'normal' });
+   155→  }
+   156→
+   157→  // Border radius
+   158→  theme.borderRadius = enumVal(t.borderRadius, VALID_BORDER_RADIUS, 'md') as StoreTheme['borderRadius'];
+   159→
+   160→  return theme;
+   161→}
+   162→
+   163→// ─── Section style normalization ──────────────────────────────────
+   164→
+   165→function normalizeSectionStyle(raw: unknown, log: ReturnType<typeof createLogger>): SectionStyle {
+   166→  const s = obj(raw, {} as Record<string, unknown>);
+   167→  const style: SectionStyle = {};
+   168→
+   169→  if (typeof s.backgroundColor === 'string' && s.backgroundColor) style.backgroundColor = s.backgroundColor;
+   170→  if (typeof s.textColor === 'string' && s.textColor) style.textColor = s.textColor;
+   171→  if (typeof s.backgroundImage === 'string' && s.backgroundImage) style.backgroundImage = s.backgroundImage;
+   172→  if (typeof s.overlay === 'boolean') style.overlay = s.overlay;
+   173→
+   174→  style.paddingY = enumVal(s.paddingY, VALID_PADDING_Y, 'md') as SectionStyle['paddingY'];
+   175→  style.paddingX = enumVal(s.paddingX, VALID_PADDING_X, 'md') as SectionStyle['paddingX'];
+   176→  style.maxWidth = enumVal(s.maxWidth, VALID_MAX_WIDTH, 'lg') as SectionStyle['maxWidth'];
+   177→  style.borderRadius = enumVal(s.borderRadius, VALID_BORDER_RADIUS, 'none') as SectionStyle['borderRadius'];
+   178→
+   179→  return style;
+   180→}
+   181→
+   182→// ─── Section content normalization ────────────────────────────────
+   183→
+   184→function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnType<typeof createLogger>): Record<string, unknown> {
+   185→  const c = obj(raw, {} as Record<string, unknown>);
+   186→
+   187→  switch (type) {
+   188→    case 'hero': {
+   189→      return {
+   190→        headline: str(c.headline, 'Welcome'),
+   191→        subheadline: c.subheadline !== undefined ? str(c.subheadline, '') : undefined,
+   192→        ctaText: str(c.ctaText, 'Shop Now'),
+   193→        ctaLink: c.ctaLink !== undefined ? str(c.ctaLink, '#') : undefined,
+   194→        backgroundImage: c.backgroundImage !== undefined ? str(c.backgroundImage, '') : undefined,
+   195→        alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
+   196→        height: enumVal(c.height, VALID_HEIGHT, 'lg'),
+   197→      };
+   198→    }
+   199→    case 'featured-products': {
+   200→      return {
+   201→        headline: str(c.headline, 'Featured Products'),
+   202→        subtitle: c.subtitle !== undefined ? str(c.subtitle, '') : undefined,
+   203→        productIds: arr<string>(c.productIds, []),
+   204→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   205→        showPrice: bool(c.showPrice, true),
+   206→        showAddToCart: bool(c.showAddToCart, true),
+   207→      };
+   208→    }
+   209→    case 'product-grid': {
+   210→      return {
+   211→        headline: c.headline !== undefined ? str(c.headline, 'All Products') : undefined,
+   212→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   213→        filterByCategory: c.filterByCategory !== undefined ? str(c.filterByCategory, '') : undefined,
+   214→        showPrice: bool(c.showPrice, true),
+   215→        showAddToCart: bool(c.showAddToCart, true),
+   216→      };
+   217→    }
+   218→    case 'text-banner': {
+   219→      return {
+   220→        headline: str(c.headline, 'Text Banner'),
+   221→        body: c.body !== undefined ? str(c.body, '') : undefined,
+   222→        alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
+   223→        size: enumVal(c.size, VALID_SIZE, 'md'),
+   224→      };
+   225→    }
+   226→    case 'image-gallery': {
+   227→      const images = arr<Record<string, unknown>>(c.images, []);
+   228→      return {
+   229→        images: images.slice(0, 12).map((img) => ({
+   230→          src: str(img.src, 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'),
+   231→          alt: str(img.alt, ''),
+   232→          caption: img.caption !== undefined ? str(img.caption, '') : undefined,
+   233→        })),
+   234→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   235→        gap: enumVal(c.gap, VALID_GAP, 'md'),
+   236→      };
+   237→    }
+   238→    case 'testimonials': {
+   239→      const items = arr<Record<string, unknown>>(c.items, []);
+   240→      return {
+   241→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   242→        items: items.slice(0, 6).map((item) => ({
+   243→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   244→          quote: str(item.quote, 'Great product!'),
+   245→          author: str(item.author, 'Customer'),
+   246→          role: item.role !== undefined ? str(item.role, '') : undefined,
+   247→          avatar: item.avatar !== undefined ? str(item.avatar, '') : undefined,
+   248→          rating: num(item.rating, 5, 1, 5),
+   249→        })),
+   250→      };
+   251→    }
+   252→    case 'newsletter': {
+   253→      return {
+   254→        headline: str(c.headline, 'Stay Updated'),
+   255→        subtitle: c.subtitle !== undefined ? str(c.subtitle, '') : undefined,
+   256→        placeholderText: c.placeholderText !== undefined ? str(c.placeholderText, 'Enter your email') : undefined,
+   257→        buttonText: str(c.buttonText, 'Subscribe'),
+   258→      };
+   259→    }
+   260→    case 'faq': {
+   261→      const items = arr<Record<string, unknown>>(c.items, []);
+   262→      return {
+   263→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   264→        items: items.slice(0, 8).map((item) => ({
+   265→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   266→          question: str(item.question, 'Common question?'),
+   267→          answer: str(item.answer, 'Common answer.'),
+   268→        })),
+   269→      };
+   270→    }
+   271→    case 'cta': {
+   272→      return {
+   273→        headline: str(c.headline, 'Take Action'),
+   274→        body: c.body !== undefined ? str(c.body, '') : undefined,
+   275→        ctaText: str(c.ctaText, 'Learn More'),
+   276→        ctaLink: c.ctaLink !== undefined ? str(c.ctaLink, '#') : undefined,
+   277→        style: enumVal(c.style, VALID_CTA_STYLE, 'solid'),
+   278→      };
+   279→    }
+   280→    case 'categories': {
+   281→      const items = arr<Record<string, unknown>>(c.items, []);
+   282→      return {
+   283→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   284→        items: items.slice(0, 8).map((item) => ({
+   285→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   286→          name: str(item.name, 'Category'),
+   287→          image: item.image !== undefined ? str(item.image, '') : undefined,
+   288→          productCount: num(item.productCount, 5, 0),
+   289→          slug: str(item.slug, 'category'),
+   290→        })),
+   291→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   292→      };
+   293→    }
+   294→    case 'header': {
+   295→      const menuItems = arr<Record<string, unknown>>(c.menuItems, []);
+   296→      return {
+   297→        logo: c.logo !== undefined ? str(c.logo, '') : undefined,
+   298→        storeName: str(c.storeName, 'My Store'),
+   299→        showSearch: bool(c.showSearch, true),
+   300→        showCart: bool(c.showCart, true),
+   301→        menuItems: menuItems.slice(0, 8).map((mi) => ({
+   302→          label: str(mi.label, 'Link'),
+   303→          link: str(mi.link, '#'),
+   304→        })),
+   305→      };
+   306→    }
+   307→    case 'footer': {
+   308→      const columns = arr<Record<string, unknown>>(c.columns, []);
+   309→      const socialLinks = arr<Record<string, unknown>>(c.socialLinks, []);
+   310→      return {
+   311→        storeName: str(c.storeName, 'My Store'),
+   312→        tagline: c.tagline !== undefined ? str(c.tagline, '') : undefined,
+   313→        columns: columns.slice(0, 4).map((col) => ({
+   314→          title: str(col.title, 'Links'),
+   315→          links: arr<Record<string, unknown>>(col.links, []).slice(0, 6).map((link) => ({
+   316→            label: str(link.label, 'Link'),
+   317→            link: str(link.link, '#'),
+   318→          })),
+   319→        })),
+   320→        socialLinks: socialLinks.slice(0, 6).map((sl) => ({
+   321→          platform: str(sl.platform, 'twitter'),
+   322→          url: str(sl.url, '#'),
+   323→        })),
+   324→        copyrightText: c.copyrightText !== undefined ? str(c.copyrightText, '') : undefined,
+   325→      };
+   326→    }
+   327→    case 'rich-text': {
+   328→      return {
+   329→        html: str(c.html, '<p>Content coming soon.</p>'),
+   330→      };
+   331→    }
+   332→    case 'spacer': {
+   333→      return {
+   334→        height: enumVal(c.height, VALID_HEIGHT, 'md'),
+   335→      };
+   336→    }
+   337→    case 'divider': {
+   338→      return {};
+   339→    }
+   340→    default: {
+   341→      // Unknown section type — return generic content that won't crash the renderer
+   342→      log.log({ field: `section.type`, action: 'invalid', from: type, to: 'text-banner' });
+   343→      return { headline: 'Section', alignment: 'center', size: 'md' };
+   344→    }
+   345→  }
+   346→}
+   347→
+   348→// ─── Section normalization ────────────────────────────────────────
+   349→
+   350→function normalizeSection(raw: unknown, log: ReturnType<typeof createLogger>): Section {
+   351→  const s = obj(raw, {} as Record<string, unknown>);
+   352→
+   353→  // Validate and normalize type
+   354→  let type = str(s.type, 'text-banner').toLowerCase().trim() as SectionType;
+   355→  if (!VALID_SECTION_TYPES.has(type)) {
+   356→    log.log({ field: 'section.type', action: 'invalid', from: s.type, to: 'text-banner' });
+   357→    type = 'text-banner';
+   358→  }
+   359→
+   360→  return {
+   361→    id: isUUID(str(s.id, '')) ? str(s.id, '') : uuid(),
+   362→    type,
+   363→    content: normalizeSectionContent(type, s.content, log),
+   364→    style: normalizeSectionStyle(s.style, log),
+   365→    visible: bool(s.visible, true),
+   366→  };
+   367→}
+   368→
+   369→// ─── Product normalization ────────────────────────────────────────
+   370→
+   371→function normalizeProduct(raw: unknown, log: ReturnType<typeof createLogger>): StoreProduct {
+   372→  const p = obj(raw, {} as Record<string, unknown>);
+   373→
+   374→  const name = oneLine(str(p.name, 'Product'));
+   375→  const price = num(p.price, 29.99, 0.01, 999999);
+   376→  const images = arr<string>(p.images, ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600']);
+   377→
+   378→  // Normalize variants
+   379→  const rawVariants = arr<Record<string, unknown>>(p.variants, []);
+   380→  const variants = rawVariants.slice(0, 5).map((v) => ({
+   381→    id: isUUID(str(v.id, '')) ? str(v.id, '') : uuid(),
+   382→    name: str(v.name, 'Size'),
+   383→    options: arr<Record<string, unknown>>(v.options, [{ label: 'M', value: 'm' }]).slice(0, 6).map((opt) => ({
+   384→      label: str(opt.label, 'Option'),
+   385→      value: str(opt.value, 'option'),
+   386→    })),
+   387→    price: v.price !== undefined ? num(v.price, undefined as unknown as number, 0) : undefined,
+   388→    inStock: bool(v.inStock, true),
+   389→  }));
+   390→
+   391→  return {
+   392→    id: isUUID(str(p.id, '')) ? str(p.id, '') : uuid(),
+   393→    name,
+   394→    price,
+   395→    compareAtPrice: p.compareAtPrice !== undefined && p.compareAtPrice !== null ? num(p.compareAtPrice, undefined as unknown as number, 0) : undefined,
+   396→    images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'],
+   397→    description: oneLine(str(p.description, '')),
+   398→    category: p.category !== undefined ? str(p.category, '') : undefined,
+   399→    variants: variants.length > 0 ? variants : undefined,
+   400→    featured: bool(p.featured, false),
+   401→    inStock: bool(p.inStock, true),
+   402→  };
+   403→}
+   404→
+   405→// ─── Page normalization ───────────────────────────────────────────
+   406→
+   407→function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): StorePage {
+   408→  const p = obj(raw, {} as Record<string, unknown>);
+   409→
+   410→  return {
+   411→    id: isUUID(str(p.id, '')) ? str(p.id, '') : uuid(),
+   412→    name: str(p.name, 'Home').substring(0, 100),
+   413→    slug: str(p.slug, ''),
+   414→    isHomepage: bool(p.isHomepage, false),
+   415→    sections: arr<unknown>(p.sections, []).map((s) => normalizeSection(s, log)),
+   416→  };
+   417→}
+   418→
+   419→// ─── Cross-reference fixes ────────────────────────────────────────
+   420→
+   421→/** Hard-cap enforcement: truncate sections and products to safe output limits.
+   422→ *  This is the safety net if the AI ignores the system prompt caps.
+   423→ *  Layers of defense:
+   424→ *    1. sanitizePrompt() in route.ts strips count requests (prevents AI from trying)
+   425→ *    2. System prompt ABSOLUTE CAPS language (strong AI guidance)
+   426→ *    3. THIS function: hard truncation (final safety net)
+   427→ */
+   428→function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): void {
+   429→  const MAX_PRODUCTS = 3;
+   430→  const MAX_SECTIONS = 4;
+   431→
+   432→  // ── Cap products ──
+   433→  if (store.products.length > MAX_PRODUCTS) {
+   434→    const before = store.products.length;
+   435→    store.products = store.products.slice(0, MAX_PRODUCTS);
+   436→    // Ensure at least 1 featured product after truncation
+   437→    if (!store.products.some((p) => p.featured) && store.products.length > 0) {
+   438→      store.products[0].featured = true;
+   439→    }
+   440→    log.log({
+   441→      field: 'products',
+   442→      action: 'coerced',
+   443→      from: `${before} products`,
+   444→      to: `${MAX_PRODUCTS} products (capped)`,
+   445→    });
+   446→  }
+   447→
+   448→  // ── Cap sections per page ──
+   449→  for (const page of store.pages) {
+   450→    if (page.sections.length > MAX_SECTIONS) {
+   451→      const before = page.sections.length;
+   452→      page.sections = page.sections.slice(0, MAX_SECTIONS);
+   453→      log.log({
+   454→        field: `pages[${page.name}].sections`,
+   455→        action: 'coerced',
+   456→        from: `${before} sections`,
+   457→        to: `${MAX_SECTIONS} sections (capped)`,
+   458→      });
+   459→    }
+   460→  }
+   461→}
+   462→
+   463→/** Fix productIds in featured-products sections to reference actual products */
+   464→function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>): void {
+   465→  const validProductIds = new Set(store.products.map((p) => p.id));
+   466→  const allProductIds = store.products.map((p) => p.id);
+   467→
+   468→  for (const page of store.pages) {
+   469→    for (const section of page.sections) {
+   470→      if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
+   471→        const before = section.content.productIds.length;
+   472→        // Keep only IDs that reference actual products
+   473→        const validIds = (section.content.productIds as string[]).filter((id) => validProductIds.has(id));
+   474→
+   475→        // Fill missing slots with other product IDs so all products are shown
+   476→        const usedIds = new Set(validIds);
+   477→        for (const pid of allProductIds) {
+   478→          if (validIds.length >= store.products.length) break;
+   479→          if (!usedIds.has(pid)) {
+   480→            validIds.push(pid);
+   481→            usedIds.add(pid);
+   482→          }
+   483→        }
+   484→
+   485→        if (validIds.length !== before) {
+   486→          const invalidCount = before - (validIds.length - (store.products.length - before > 0 ? store.products.length - before : 0));
+   487→          log.log({ field: 'featured-products.productIds', action: 'coerced', from: `${before} IDs (some invalid)`, to: `${validIds.length} valid IDs` });
+   488→        }
+   489→        section.content.productIds = validIds;
+   490→      }
+   491→    }
+   492→  }
+   493→}
+   494→
+   495→/** Ensure at least one page is marked as homepage */
+   496→function ensureHomepage(store: Store, log: ReturnType<typeof createLogger>): void {
+   497→  const hasHomepage = store.pages.some((p) => p.isHomepage);
+   498→  if (!hasHomepage && store.pages.length > 0) {
+   499→    store.pages[0].isHomepage = true;
+   500→    log.log({ field: 'pages[0].isHomepage', action: 'defaulted', from: false, to: true });
+   501→  }
+   502→}
+   503→
+   504→/** Ensure at least 1 product is marked as featured (for featured-products sections) */
+   505→function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogger>): void {
+   506→  const featuredCount = store.products.filter((p) => p.featured).length;
+   507→  if (featuredCount < 1 && store.products.length >= 1) {
+   508→    store.products[0].featured = true;
+   509→    log.log({ field: 'products[0].featured', action: 'defaulted', from: false, to: true });
+   510→  }
+   511→}
+   512→
+   513→/** Pad product array to MIN_PRODUCTS if AI generated too few */
+   514→const MIN_PRODUCTS = 3;
+   515→const PAD_PRODUCT_TEMPLATES = [
+   516→  { name: 'Essential Item', price: 39.99, description: 'A must-have for every collection.', category: 'Essentials', img: 'photo-1505740420928-5e560c06d30e' },
+   517→  { name: 'Popular Choice', price: 59.99, description: 'Customer favorite, highly rated.', category: 'Popular', img: 'photo-1526170375885-4d8ecf77b99f' },
+   518→];
+   519→function padProducts(store: Store, log: ReturnType<typeof createLogger>): void {
+   520→  const deficit = MIN_PRODUCTS - store.products.length;
+   521→  if (deficit <= 0) return;
+   522→  const before = store.products.length;
+   523→  for (let i = 0; i < deficit; i++) {
+   524→    const tmpl = PAD_PRODUCT_TEMPLATES[i % PAD_PRODUCT_TEMPLATES.length];
+   525→    store.products.push({
+   526→      id: uuid(),
+   527→      name: tmpl.name + (store.products.length + 1),
+   528→      price: tmpl.price + store.products.length * 5,
+   529→      compareAtPrice: null,
+   530→      images: [`https://images.unsplash.com/${tmpl.img}?w=600`],
+   531→      description: tmpl.description,
+   532→      category: tmpl.category,
+   533→      featured: false,
+   534→      inStock: true,
+   535→    });
+   536→  }
+   537→  log.log({ field: 'products', action: 'defaulted', from: `${before} products`, to: `${MIN_PRODUCTS} products (padded)` });
+   538→}
+   539→
+   540→// ─── Main entry point ─────────────────────────────────────────────
+   541→
+   542→export interface NormalizeResult {
+   543→  store: Store;
+   544→  log: string[];        // Human-readable log lines
+   545→  summary: string;      // One-line summary
+   546→  isFallback: boolean;  // true if the input was too broken to normalize
+   547→  normalizationCount: number; // Number of fixes applied
+   548→}
+   549→
+   550→/**
+   551→ * Normalize any valid JSON object into a conformant Store.
+   552→ *
+   553→ * This function NEVER throws. If the input is too malformed to recover,
+   554→ * it returns null and the caller should use a hardcoded fallback store.
+   555→ *
+   556→ * @param raw - Parsed JSON object (JSON.parse already succeeded)
+   557→ * @param prompt - Original user prompt (for fallback name extraction)
+   558→ */
+   559→export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult | null {
+   560→  const log = createLogger();
+   561→
+   562→  // ── Guard: must be a non-null object ──
+   563→  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+   564→    console.warn('[normalizeStore] Input is not an object:', typeof raw);
+   565→    return null;
+   566→  }
+   567→
+   568→  const r = raw as Record<string, unknown>;
+   569→
+   570→  // ── Extract store name (used as fallback for missing name) ──
+   571→  const storeName = oneLine(str(r.name, prompt ? extractStoreNameFromPrompt(prompt) : 'My Store'));
+   572→
+   573→  if (!r.name || typeof r.name !== 'string') {
+   574→    log.log({ field: 'name', action: 'missing', to: storeName });
+   575→  }
+   576→
+   577→  // ── Top-level fields ──
+   578→  const now = new Date().toISOString();
+   579→  const store: Store = {
+   580→    id: isUUID(str(r.id, '')) ? str(r.id, '') : uuid(),
+   581→    name: storeName.substring(0, 100),
+   582→    slug: slugify(storeName),
+   583→    description: r.description !== undefined ? oneLine(str(r.description, '')) : undefined,
+   584→    theme: r.theme ? normalizeTheme(r.theme, log) : defaultTheme,
+   585→    pages: Array.isArray(r.pages)
+   586→      ? r.pages.map((p: unknown) => normalizePage(p, log))
+   587→      : [createDefaultPage(storeName)],
+   588→    products: Array.isArray(r.products)
+   589→      ? (r.products as unknown[]).map((p: unknown) => normalizeProduct(p, log))
+   590→      : [],
+   591→    published: bool(r.published, false),
+   592→    publishedAt: r.publishedAt !== undefined ? str(r.publishedAt, '') : undefined,
+   593→    createdAt: str(r.createdAt, now),
+   594→    updatedAt: str(r.updatedAt, now),
+   595→  };
+   596→
+   597→  // Log missing arrays
+   598→  if (!Array.isArray(r.pages)) log.log({ field: 'pages', action: 'missing' });
+   599→  if (!Array.isArray(r.products)) log.log({ field: 'products', action: 'missing' });
+   600→  if (!r.theme) log.log({ field: 'theme', action: 'missing' });
+   601→
+   602→  // ── Ensure at least one page exists ──
+   603→  if (store.pages.length === 0) {
+   604→    store.pages.push(createDefaultPage(storeName));
+   605→    log.log({ field: 'pages', action: 'defaulted' });
+   606→  }
+   607→
+   608→  // ── Ensure at least one product exists (renderer expects products array) ──
+   609→  if (store.products.length === 0) {
+   610→    store.products.push(createDefaultProduct());
+   611→    log.log({ field: 'products', action: 'defaulted' });
+   612→  }
+   613→
+   614→  // ── Cross-reference fixes ──
+   615→  // IMPORTANT: enforceOutputCaps MUST run before fixProductReferences
+   616→  // because product references depend on the final product list
+   617→  enforceOutputCaps(store, log);
+   618→  padProducts(store, log);
+   619→  fixProductReferences(store, log);
+   620→  ensureHomepage(store, log);
+   621→  ensureFeaturedProducts(store, log);
+   622→
+   623→  // ── Build result ──
+   624→  const logEntries = log.getLogs();
+   625→  const logLines = logEntries.map(
+   626→    (l) => `[${l.action}] ${l.field}${l.from !== undefined ? ` (was: ${JSON.stringify(l.from).substring(0, 60)})` : ''}${l.to !== undefined ? ` → ${JSON.stringify(l.to).substring(0, 60)}` : ''}`
+   627→  );
+   628→
+   629→  return {
+   630→    store,
+   631→    log: logLines,
+   632→    summary: log.summary(),
+   633→    isFallback: false,
+   634→    normalizationCount: logEntries.length,
+   635→  };
+   636→}
+   637→
+   638→// ─── Default builders (used when AI output is completely missing a section) ──
+   639→
+   640→function createDefaultPage(storeName: string): StorePage {
+   641→  return {
+   642→    id: uuid(),
+   643→    name: 'Home',
+   644→    slug: '',
+   645→    isHomepage: true,
+   646→    sections: [
+   647→      {
+   648→        id: uuid(),
+   649→        type: 'hero',
+   650→        content: {
+   651→          headline: `Welcome to ${storeName}`,
+   652→          subheadline: 'Discover our curated collection.',
+   653→          ctaText: 'Shop Now',
+   654→          ctaLink: '#products',
+   655→          alignment: 'center',
+   656→          height: 'lg',
+   657→        },
+   658→        style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' },
+   659→        visible: true,
+   660→      },
+   661→    ],
+   662→  };
+   663→}
+   664→
+   665→function createDefaultProduct(): StoreProduct {
+   666→  return {
+   667→    id: uuid(),
+   668→    name: 'Featured Product',
+   669→    price: 49.99,
+   670→    images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'],
+   671→    description: 'Our signature product, crafted with care.',
+   672→    featured: true,
+   673→    inStock: true,
+   674→  };
+   675→}
+   676→
+   677→/** Extract a short store name from a user prompt (lightweight version for normalization) */
+   678→function extractStoreNameFromPrompt(prompt: string): string {
+   679→  const text = prompt.trim();
+   680→
+   681→  // Brand name after "called / named / known as"
+   682→  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,2})/i);
+   683→  if (calledMatch?.[1]) {
+   684→    const name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring)\s*$/i, '').trim();
+   685→    if (name.length >= 2 && name.length <= 40) return name;
+   686→  }
+   687→
+   688→  // Quoted brand name
+   689→  const quotedMatch = text.match(/["']([^"']{2,40})["']/);
+   690→  if (quotedMatch?.[1]) return quotedMatch[1].trim();
+   691→
+   692→  // Strip common prefixes
+   693→  const stripped = text
+   694→    .replace(/^(build|create|make|design|set\s+up)\s+(a|an|the|my)\s+/i, '')
+   695→    .replace(/\b(online|e-commerce|ecommerce)\s+(store|shop|boutique)\b/gi, '')
+   696→    .replace(/\b(store|shop|boutique|website|site|brand)\b/gi, '')
+   697→    .replace(/\b(selling|with|that|for|using|featuring)\b.*/i, '')
+   698→    .trim();
+   699→
+   700→  // Find title-case run
+   701→  const words = stripped.split(/\s+/).filter(w => w.length >= 2);
+   702→  const isTitle = (w: string) => w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase();
+   703→  let bestRun: string[] = [];
+   704→  let currentRun: string[] = [];
+   705→  for (const w of words) {
+   706→    if (isTitle(w)) {
+   707→      currentRun.push(w.replace(/[^a-zA-Z0-9&'-]/g, ''));
+   708→    } else {
+   709→      if (currentRun.length > bestRun.length) bestRun = currentRun;
+   710→      currentRun = [];
+   711→    }
+   712→  }
+   713→  if (currentRun.length > bestRun.length) bestRun = currentRun;
+   714→
+   715→  if (bestRun.length >= 1) {
+   716→    const candidate = bestRun.slice(0, 3).join(' ');
+   717→    if (candidate.length >= 2 && candidate.length <= 40) return candidate;
+   718→  }
+   719→
+   720→  return 'My Store';
+   721→}

@@ -120,3 +120,48 @@ Stage Summary:
 - Issue 1 (button contrast): contrastTextColor() now robust; ProductCard info container resets color inheritance; VLM confirms good contrast
 - Issue 2 (chat targeting): Schema extended with element-level fields; AI prompt has RULE 6 with examples; VLM confirms AI uses buttonBackgroundColor (not backgroundColor) and section bg stays unchanged
 - Files changed: sections.tsx, store-schema.ts, chat/route.ts, visual-editor/index.tsx
+
+---
+Task ID: step1
+Agent: main
+Task: Step 1 — Cart State + Schema Extension
+
+Work Log:
+- Created src/lib/cart-store.ts: Zustand store with localStorage persistence
+  - CartItem interface (productId, name, price, image, quantity)
+  - addItem (increments if exists, creates if new), removeItem, updateQuantity, clearCart
+  - getItemCount, getSubtotal computed getters
+  - localStorage load/save with validation
+- Extended StorePage in store-schema.ts:
+  - Added PageType = 'home' | 'collection' | 'product' | 'cart' | 'checkout'
+  - Added optional type?: PageType field (defaults to 'home' for backward compat)
+  - Added optional productId?: string field (for 'product' type pages)
+- Updated normalize-store.ts:
+  - Added VALID_PAGE_TYPES validation set
+  - Added normalizePageType(): explicit type > isHomepage > slug inference > name inference > default 'home'
+  - Updated normalizePage() to call normalizePageType and include type + productId
+  - Updated enforceOutputCaps to skip non-home pages (template pages have 0 sections by design)
+  - Updated createDefaultPage to include type: 'home'
+
+Test Results:
+- bun run lint: clean (0 errors, 0 warnings)
+- Dev server: no compilation errors, no runtime errors
+- Generated 'Green Thumb' store: 0 normalizations, renders correctly (VLM verified Hero + 4 sections)
+- normalizeStore tests (7 tests): ALL PASSED
+  - Backward compat (no type field) → 'home'
+  - Explicit type 'collection' → 'collection'
+  - Infer from slug 'cart' → 'cart'
+  - Infer from name 'Checkout' → 'checkout'
+  - Invalid type 'invalid-type' → 'home' (coerced, logged)
+  - Product page with productId → preserved
+  - Section caps skip non-home pages (6→4 on home, 0 stays 0 on cart)
+- Cart store tests (5 tests): ALL PASSED
+  - Add item, add same (increments), update quantity, remove, clear
+
+Locked Features Status: NONE TOUCHED
+- Generation reliability: unchanged (0 normalizations on test store)
+- Publish/save flow: unchanged
+- Mobile responsiveness: unchanged
+- Visual/chat editor: unchanged
+- Product count: unchanged (EXACTLY 3)
+- Button contrast/targeting: unchanged

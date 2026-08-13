@@ -201,11 +201,21 @@ export interface FooterContent {
   copyrightText?: string;
 }
 
+// Page types — determines how a page is rendered
+// 'home' = section-based (AI-generated content)
+// 'collection' = template (all products grid)
+// 'product' = template (single product detail)
+// 'cart' = template (shopping cart)
+// 'checkout' = template (checkout form + order summary)
+export type PageType = 'home' | 'collection' | 'product' | 'cart' | 'checkout';
+
 export interface StorePage {
   id: string;
   name: string;
   slug: string;
+  type?: PageType; // defaults to 'home' for backward compatibility
   isHomepage: boolean;
+  productId?: string; // for 'product' type — references a product in store.products
   sections: Section[];
 }
 
