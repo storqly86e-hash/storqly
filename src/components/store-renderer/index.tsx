@@ -1,8 +1,15 @@
 'use client';
 
-import { useMemo, useState, Fragment } from 'react';
-import type { Store, Section, StorePage } from '@/lib/store-schema';
+import { useMemo, useState, Fragment, useCallback } from 'react';
+import type { Store, Section, PageType } from '@/lib/store-schema';
 import { renderSection } from './sections';
+import {
+  CollectionPage,
+  ProductDetailPage,
+  CartPage,
+  CheckoutPage,
+} from './template-pages';
+import { useCartStore } from '@/lib/cart-store';
 
 // ─── Props ──────────────────────────────────────────────────────────────
 
@@ -39,11 +46,12 @@ function separateHeaderFooter(sections: Section[]): {
 
 // ─── Auto-generated header when none exists ────────────────────────────
 
-function AutoHeader({ store, theme, selectedSectionId, onSelectSection }: {
+function AutoHeader({ store, theme, selectedSectionId, onSelectSection, cartCount }: {
   store: Store;
   theme: Store['theme'];
   selectedSectionId?: string | null;
   onSelectSection?: (id: string | null) => void;
+  cartCount: number;
 }) {
   return (
     <header
@@ -76,6 +84,11 @@ function AutoHeader({ store, theme, selectedSectionId, onSelectSection }: {
             <svg className="h-5 w-5" style={{ color: theme.colors.textMuted }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 100 4 2 2 0 000-4z" />
             </svg>
+            {cartCount > 0 && (
+              <span className="absolute -right-2 -top-2 flex h-4 w-4 items-center justify-center rounded-full bg-[#a855f7] text-[10px] font-bold text-white">
+                {cartCount > 9 ? '9+' : cartCount}
+              </span>
+            )}
           </span>
           <button className="md:hidden" style={{ color: theme.colors.textMuted }} aria-label="Menu">
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -118,16 +131,18 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
   );
 }
 
-// ─── Page Navigation (for non-homepage pages) ──────────────────────────
+// ─── Page Navigation tabs ──────────────────────────────────────────────
 
 function PageTabs({
   store,
   currentPageId,
   onNavigate,
+  cartCount,
 }: {
   store: Store;
   currentPageId: string;
   onNavigate: (pageId: string) => void;
+  cartCount: number;
 }) {
   if (store.pages.length <= 1) return null;
 
@@ -138,13 +153,18 @@ function PageTabs({
           <button
             key={page.id}
             onClick={() => onNavigate(page.id)}
-            className={`relative whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors ${
+            className={`relative flex items-center gap-1.5 whitespace-nowrap px-3 py-2 text-xs font-medium transition-colors ${
               page.id === currentPageId
                 ? 'text-gray-900'
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {page.name}
+            {page.type === 'cart' && cartCount > 0 && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-[#a855f7] px-1 text-[9px] font-bold text-white">
+                {cartCount > 9 ? '9+' : cartCount}
+              </span>
+            )}
             {page.id === currentPageId && (
               <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#a855f7] rounded-full" />
             )}
@@ -153,6 +173,48 @@ function PageTabs({
       </div>
     </div>
   );
+}
+
+// ─── Template Page Router ──────────────────────────────────────────────
+
+function TemplatePageRenderer({
+  store,
+  pageType,
+  productId,
+  onNavigate,
+}: {
+  store: Store;
+  pageType: PageType;
+  productId?: string;
+  onNavigate: (pageId: string) => void;
+}) {
+  const handleViewProduct = useCallback(
+    (pid: string) => {
+      // Find an existing product page for this product
+      const existing = store.pages.find((p) => p.type === 'product' && p.productId === pid);
+      if (existing) {
+        onNavigate(existing.id);
+      }
+      // If no product page exists yet, the navigation won't happen.
+      // Step 3 will handle auto-creating product pages.
+    },
+    [store.pages, onNavigate]
+  );
+
+  const props = { store, onNavigate, onViewProduct: handleViewProduct };
+
+  switch (pageType) {
+    case 'collection':
+      return <CollectionPage {...props} />;
+    case 'product':
+      return <ProductDetailPage key={productId} {...props} productId={productId} />;
+    case 'cart':
+      return <CartPage {...props} />;
+    case 'checkout':
+      return <CheckoutPage {...props} />;
+    default:
+      return null;
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -170,15 +232,21 @@ export function StoreRenderer({
 
   const theme = store.theme;
   const products = store.products;
+  const cartCount = useCartStore((s) => s.getItemCount());
 
   const currentPage = useMemo(
     () => store.pages.find((p) => p.id === currentPageId) || store.pages[0],
     [store.pages, currentPageId]
   );
 
+  // Determine if current page is a template page
+  const pageType = currentPage?.type;
+  const isTemplatePage = pageType && pageType !== 'home';
+
+  // Only separate header/footer for non-template pages (home pages with sections)
   const { header, footer, body } = useMemo(
-    () => separateHeaderFooter(currentPage?.sections || []),
-    [currentPage]
+    () => (isTemplatePage ? { header: null, footer: null, body: [] as Section[] } : separateHeaderFooter(currentPage?.sections || [])),
+    [currentPage, isTemplatePage]
   );
 
   if (!currentPage) {
@@ -199,40 +267,51 @@ export function StoreRenderer({
       }}
       onClick={() => onSelectSection?.(null)}
     >
-      {/* Header */}
-      {header
+      {/* Header — shown for all page types */}
+      {!isTemplatePage && header
         ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products })
-        : <AutoHeader store={store} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} />
+        : <AutoHeader store={store} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cartCount={cartCount} />
       }
 
       {/* Page tabs (only if multiple pages) */}
-      <PageTabs store={store} currentPageId={currentPageId} onNavigate={setCurrentPageId} />
+      <PageTabs store={store} currentPageId={currentPageId} onNavigate={setCurrentPageId} cartCount={cartCount} />
 
       {/* Main content */}
       <main className="flex-1">
-        {body.map((section) => (
-          <Fragment key={section.id}>
-            {renderSection({ section, theme, selectedSectionId, onSelectSection, products })}
-          </Fragment>
-        ))}
-        {body.length === 0 && (
-          <div className="flex items-center justify-center py-32">
-            <div className="text-center">
-              <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
-                <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                </svg>
+        {isTemplatePage ? (
+          <TemplatePageRenderer
+            store={store}
+            pageType={pageType}
+            productId={currentPage.productId}
+            onNavigate={setCurrentPageId}
+          />
+        ) : (
+          <>
+            {body.map((section) => (
+              <Fragment key={section.id}>
+                {renderSection({ section, theme, selectedSectionId, onSelectSection, products })}
+              </Fragment>
+            ))}
+            {body.length === 0 && (
+              <div className="flex items-center justify-center py-32">
+                <div className="text-center">
+                  <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                    <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                  </div>
+                  <p className="text-sm" style={{ color: theme.colors.textMuted }}>
+                    This page has no sections yet.
+                  </p>
+                </div>
               </div>
-              <p className="text-sm" style={{ color: theme.colors.textMuted }}>
-                This page has no sections yet.
-              </p>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </main>
 
-      {/* Footer */}
-      {footer
+      {/* Footer — shown for all page types */}
+      {!isTemplatePage && footer
         ? renderSection({ section: footer, theme, selectedSectionId, onSelectSection, products })
         : <AutoFooter store={store} theme={theme} />
       }

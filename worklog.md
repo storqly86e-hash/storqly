@@ -165,3 +165,51 @@ Locked Features Status: NONE TOUCHED
 - Visual/chat editor: unchanged
 - Product count: unchanged (EXACTLY 3)
 - Button contrast/targeting: unchanged
+
+---
+Task ID: step2
+Agent: main
+Task: Step 2 — Template Page Components (CollectionPage, ProductDetailPage, CartPage, CheckoutPage)
+
+Work Log:
+- Extracted shared helpers from sections.tsx into helpers.ts: parseColorToRGB, contrastTextColor, stringToColor, formatPrice, getInitials, pyClass, pxClass, maxWidthClass, borderRadiusClass, gridCols
+- Updated sections.tsx to import from helpers.ts (removed ~140 lines of duplicate code, removed unused SectionStyle import)
+- Created template-pages/types.ts with TemplatePageProps interface (store, onNavigate, onViewProduct)
+- Created CollectionPage.tsx: product grid with search, category pills, Add to Cart with useCartStore, discount badges, hover effects, empty state
+- Created ProductDetailPage.tsx: full product detail with variant selectors, quantity picker, add-to-cart with green feedback animation, stock status, discount badge, key-based remount for state reset
+- Created CartPage.tsx: cart items list with quantity +/-, remove, clear all, order summary sidebar with subtotal/shipping/total, checkout/continue shopping buttons
+- Created CheckoutPage.tsx: contact info, shipping address, payment form (demo — no real payment), order summary sidebar, form validation, success confirmation state, free shipping threshold ($50+)
+- Created template-pages/index.ts barrel export
+- Updated StoreRenderer (index.tsx):
+  - Added TemplatePageRenderer that switches on page.type
+  - Template pages render instead of sections when pageType !== 'home'
+  - PageTabs now shows cart count badge
+  - AutoHeader now shows cart count badge
+  - Cart store integrated (useCartStore.getItemCount)
+  - Product detail uses key={productId} for fresh state per product
+  - Footer/AutoFooter shown for all page types
+- Fixed React Compiler lint errors: moved useMemo calls before early return, fixed dependency arrays, removed useEffect in favor of key-based remounting
+
+Test Results:
+- bun run lint: clean (0 errors, 0 warnings)
+- Dev server: no compilation errors, no runtime errors
+- Generated 'Cozy Home Haven' store: 0 normalizations, renders correctly (VLM verified Hero + 4 sections)
+- VLM confirmed: store preview renders correctly, header with store name visible, no visual defects, section list correct
+- Zero console errors during generation and rendering
+
+Locked Features Status: NONE TOUCHED
+- Generation reliability: unchanged (0 normalizations on test store)
+- Publish/save flow: unchanged
+- Mobile responsiveness: unchanged
+- Visual/chat editor: unchanged
+- Product count: unchanged (EXACTLY 3)
+- Button contrast/targeting: unchanged
+- sections.tsx rendering logic: unchanged (only extracted helpers, no behavioral changes)
+
+Stage Summary:
+- 6 new files created: helpers.ts, types.ts, CollectionPage.tsx, ProductDetailPage.tsx, CartPage.tsx, CheckoutPage.tsx, index.ts (barrel)
+- 2 existing files modified: sections.tsx (import refactor), index.tsx (template page routing)
+- All template pages are theme-aware (use store.theme for colors, fonts, border-radius)
+- All template pages use useCartStore for cart operations
+- Template pages are wired into StoreRenderer via page.type detection
+- Template pages not yet reachable from normal flow (no pages with type=collection/product/cart/checkout exist yet — Step 3 will create them)
