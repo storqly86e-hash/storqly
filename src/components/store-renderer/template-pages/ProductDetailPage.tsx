@@ -61,7 +61,16 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
       : product;
     addItem(itemToAdd, quantity);
     setAddedFeedback(true);
-    setTimeout(() => setAddedFeedback(false), 1500);
+    // Auto-navigate to cart page after brief feedback
+    const cartPage = store.pages.find((p) => p.type === 'cart');
+    if (cartPage) {
+      setTimeout(() => {
+        setAddedFeedback(false);
+        onNavigate(cartPage.id);
+      }, 600);
+    } else {
+      setTimeout(() => setAddedFeedback(false), 1500);
+    }
   };
 
   // Early return for missing product

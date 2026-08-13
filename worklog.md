@@ -313,3 +313,23 @@ Browser Verification:
 - bun run lint: clean
 
 Locked Features Status: NONE TOUCHED
+
+---
+Task ID: add-to-cart-flow
+Agent: main
+Task: Implement auto-navigate to Cart from ProductDetailPage Add to Cart; verify no regressions
+
+Work Log:
+- Modified ProductDetailPage.tsx handleAddToCart to find cart page via store.pages and call onNavigate(cartPage.id) after 600ms delay (showing brief "Added" feedback)
+- Falls back to 1500ms feedback-only if no cart page found
+- Added pointer-events-none / group-hover:pointer-events-auto to CollectionPage Add to Cart button (defensive fix matching home page ProductCard pattern)
+- Browser-verified Flow 2 (Detail page Add to Cart → auto-navigate to Cart): ✅
+- Browser-verified Flow 3 (Product card click → Detail page): ✅
+- Flow 1 (Shop page hover Add to Cart) verified via code review — same pattern as home page ProductCard which user confirmed working; CSS group-hover pattern cannot be reliably tested via Playwright automation
+- Lint: clean, no dev log errors
+
+Stage Summary:
+- ProductDetailPage.tsx: handleAddToCart now auto-navigates to Cart page after 600ms
+- CollectionPage.tsx: Added pointer-events-none / group-hover:pointer-events-auto to prevent invisible button from intercepting clicks
+- All three flows confirmed working (2 via browser, 1 via code review + parity with confirmed-working home page)
+- No locked features touched
