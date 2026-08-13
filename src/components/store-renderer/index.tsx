@@ -20,6 +20,10 @@ export interface StoreRendererProps {
   store: Store;
   onSelectSection?: (sectionId: string | null) => void;
   selectedSectionId?: string | null;
+  /** External page control (editor mode): when set, renderer syncs to this page ID */
+  externalCurrentPageId?: string | null;
+  /** Callback when renderer navigates internally (editor mode) */
+  onPageChange?: (pageId: string) => void;
 }
 
 // ─── Helper: extract header/footer from sections ────────────────────────
@@ -192,10 +196,26 @@ export function StoreRenderer({
   store,
   onSelectSection,
   selectedSectionId,
+  externalCurrentPageId,
+  onPageChange,
 }: StoreRendererProps) {
-  const [currentPageId, setCurrentPageId] = useState<string>(
+  // Internal page state (used when no external control)
+  const [internalPageId, setInternalPageId] = useState<string>(
     () => store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || ''
   );
+
+  // Use external page ID when available, otherwise use internal state
+  const currentPageId = externalCurrentPageId ?? internalPageId;
+
+  // Unified page setter that syncs externally when in editor mode
+  const setCurrentPageId = useCallback((pageId: string) => {
+    if (onPageChange) {
+      onPageChange(pageId);
+    } else {
+      setInternalPageId(pageId);
+    }
+    onSelectSection?.(null);
+  }, [onPageChange, onSelectSection]);
 
   // Dynamic product pages — created on-the-fly when clicking a product
   const [dynamicPages, setDynamicPages] = useState<StorePage[]>([]);
@@ -237,7 +257,8 @@ export function StoreRenderer({
       // Check if a dynamic page already exists
       const existing = effectivePages.find((p) => p.type === 'product' && p.productId === productId);
       if (existing) {
-        setCurrentPageId(existing.id);
+        // Dynamic pages use internal state even in editor mode
+        setInternalPageId(existing.id);
         return;
       }
       // Find the product
@@ -254,7 +275,8 @@ export function StoreRenderer({
         sections: [],
       };
       setDynamicPages((prev) => [...prev, newPage]);
-      setCurrentPageId(newPage.id);
+      // Dynamic pages use internal state even in editor mode
+      setInternalPageId(newPage.id);
     },
     [effectivePages, products]
   );
@@ -262,8 +284,7 @@ export function StoreRenderer({
   // Navigate to a page by ID
   const handleNavigate = useCallback((pageId: string) => {
     setCurrentPageId(pageId);
-    onSelectSection?.(null);
-  }, [onSelectSection]);
+  }, [setCurrentPageId]);
 
   // Home page: card click → navigate to Shop/Collection page
   const handleHomeCardClick = useCallback(

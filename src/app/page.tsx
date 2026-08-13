@@ -515,6 +515,8 @@ function PreviewPanel() {
   const store = useStoreEditor((s) => s.store)
   const selectedSectionId = useStoreEditor((s) => s.selectedSectionId)
   const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
+  const editorCurrentPageId = useStoreEditor((s) => s.editorCurrentPageId)
+  const setEditorCurrentPageId = useStoreEditor((s) => s.setEditorCurrentPageId)
 
   if (!store) return null
 
@@ -524,6 +526,8 @@ function PreviewPanel() {
         store={store}
         selectedSectionId={selectedSectionId}
         onSelectSection={setSelectedSectionId}
+        externalCurrentPageId={editorCurrentPageId}
+        onPageChange={setEditorCurrentPageId}
       />
     </div>
   )

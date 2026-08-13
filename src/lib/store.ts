@@ -25,6 +25,10 @@ interface StoreEditorState {
   selectedSectionId: string | null;
   setSelectedSectionId: (id: string | null) => void;
 
+  // Current page selected in the editor (synced with preview)
+  editorCurrentPageId: string | null;
+  setEditorCurrentPageId: (id: string | null) => void;
+
   // Chat messages
   chatMessages: ChatMessage[];
   addChatMessage: (msg: ChatMessage) => void;
@@ -64,8 +68,21 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
   setView: (view) => set({ view }),
 
   store: null,
-  setStore: (store) => set({ store, view: 'editor' }),
-  setStoreWithFallback: (store, isFallback, reason) => set({ store, view: 'editor', isFallbackStore: isFallback, fallbackReason: reason || '', isGenerating: false, generationStatus: '' }),
+  setStore: (store) => set({
+    store,
+    view: 'editor',
+    editorCurrentPageId: store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || null,
+    selectedSectionId: null,
+  }),
+  setStoreWithFallback: (store, isFallback, reason) => set({
+    store,
+    view: 'editor',
+    isFallbackStore: isFallback,
+    fallbackReason: reason || '',
+    isGenerating: false,
+    generationStatus: '',
+    editorCurrentPageId: store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || null,
+  }),
 
   isGenerating: false,
   setIsGenerating: (v) => set({ isGenerating: v }),
@@ -75,6 +92,9 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
   selectedSectionId: null,
   setSelectedSectionId: (id) => set({ selectedSectionId: id }),
+
+  editorCurrentPageId: null,
+  setEditorCurrentPageId: (id) => set({ editorCurrentPageId: id, selectedSectionId: null }),
 
   chatMessages: [],
   addChatMessage: (msg) => set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
@@ -369,6 +389,7 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
       isGenerating: false,
       generationStatus: '',
       selectedSectionId: null,
+      editorCurrentPageId: null,
       chatMessages: [],
       isPublishing: false,
       isPublished: false,

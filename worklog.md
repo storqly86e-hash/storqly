@@ -359,3 +359,29 @@ Stage Summary:
 - Shop page product cards: "View Details" button → Product Detail (same as card click)
 - Product Detail: Add to Cart adds item + auto-navigates to Cart (unchanged)
 - No locked features touched
+
+---
+Task ID: 4-editor-page-switching
+Agent: main
+Task: Step 4 — Editor Page Switching
+
+Work Log:
+- store.ts: Added `editorCurrentPageId` + `setEditorCurrentPageId` to Zustand (auto-inits to homepage on setStore/setStoreWithFallback, clears on reset)
+- index.tsx (StoreRenderer): Added `externalCurrentPageId` + `onPageChange` optional props for editor-mode page sync
+- index.tsx (StoreRenderer): Refactored to use `externalCurrentPageId ?? internalPageId` pattern; `setCurrentPageId` unified setter routes through `onPageChange` when in editor mode
+- index.tsx (StoreRenderer): Dynamic product pages always use internal state (even in editor mode) to avoid tab confusion
+- visual-editor/index.tsx: Added PAGE_TYPE_ICONS and PAGE_TYPE_LABELS maps for page type display
+- visual-editor/index.tsx: Added `editorPages` filter (home, collection, cart, checkout — excludes dynamic product pages)
+- visual-editor/index.tsx: Added `isTemplatePage` flag — controls whether section list or template placeholder is shown
+- visual-editor/index.tsx: Added page tab bar at top of section panel (scrollable, icon+label, active state highlighting)
+- visual-editor/index.tsx: Template pages show centered placeholder with type icon + descriptive text
+- visual-editor/index.tsx: Section list, properties panel, and Add Section button only shown for non-template pages
+- page.tsx (PreviewPanel): Wired `editorCurrentPageId` and `setEditorCurrentPageId` to StoreRenderer's external props
+- Browser verified: Home/Shop/Cart/Checkout tab switching all work, preview syncs, section editing works on Home, template placeholder shows on other pages
+
+Stage Summary:
+- Editor page switching fully functional with 4 synced page tabs
+- Bidirectional sync: editor tab click → preview updates; preview nav click → editor tab updates
+- Template pages (Shop/Cart/Checkout) show placeholder in editor, live preview in center panel
+- Home page retains full section editing (list, DnD, properties, add)
+- No locked features touched

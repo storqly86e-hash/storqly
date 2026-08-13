@@ -908,6 +908,24 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
 
 // ── Main VisualEditor Component ─────────────────────────────────────
 
+// ── Page type labels & icons for editor tabs ────────────────────────
+
+const PAGE_TYPE_ICONS: Record<string, LucideIcon> = {
+  home: Layout,
+  collection: Grid3X3,
+  product: Star,
+  cart: PanelBottom,
+  checkout: MousePointerClick,
+};
+
+const PAGE_TYPE_LABELS: Record<string, string> = {
+  home: 'Home',
+  collection: 'Shop',
+  product: 'Product',
+  cart: 'Cart',
+  checkout: 'Checkout',
+};
+
 export function VisualEditor() {
   const {
     store,
@@ -917,13 +935,24 @@ export function VisualEditor() {
     moveSection,
     addSection,
     removeSection,
+    editorCurrentPageId,
+    setEditorCurrentPageId,
   } = useStoreEditor();
 
-  // Get the current page (homepage for now)
-  const currentPage = useMemo(
-    () => store?.pages.find((p) => p.isHomepage) ?? store?.pages[0],
+  // Pages available for tab switching (real pages only, no dynamic product pages)
+  const editorPages = useMemo(
+    () => (store?.pages.filter((p) => !p.type || p.type === 'home' || p.type === 'collection' || p.type === 'cart' || p.type === 'checkout') ?? []),
     [store?.pages]
   );
+
+  // Current page for section editing (only home-type pages have editable sections)
+  const currentPage = useMemo(
+    () => store?.pages.find((p) => p.id === editorCurrentPageId) ?? store?.pages.find((p) => p.isHomepage) ?? store?.pages[0],
+    [store?.pages, editorCurrentPageId]
+  );
+
+  // Whether the currently selected page is a template (non-editable via visual editor)
+  const isTemplatePage = currentPage && currentPage.type && currentPage.type !== 'home';
 
   const sections = currentPage?.sections ?? [];
   const pageId = currentPage?.id ?? '';
@@ -995,6 +1024,14 @@ export function VisualEditor() {
     [pageId, sections, selectedSectionId, removeSection, setSelectedSectionId]
   );
 
+  // Handle page tab click (before early return to satisfy rules-of-hooks)
+  const handlePageTabClick = useCallback(
+    (pageId: string) => {
+      setEditorCurrentPageId(pageId);
+    },
+    [setEditorCurrentPageId]
+  );
+
   if (!store || !currentPage) {
     return (
       <div className="flex h-full items-center justify-center bg-zinc-950">
@@ -1009,59 +1046,102 @@ export function VisualEditor() {
       <div
         className={[
           'flex flex-col border-r border-zinc-800 min-h-0',
-          selectedSection ? 'w-64 lg:w-72' : 'w-full',
+          selectedSection && !isTemplatePage ? 'w-64 lg:w-72' : 'w-full',
         ].join(' ')}
       >
-        {/* Panel header */}
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <h3 className="text-sm font-semibold text-zinc-200">Sections</h3>
-          <span className="text-xs text-zinc-600 tabular-nums">
-            {sections.length}
-          </span>
-        </div>
-
-        {/* Section list with DnD */}
-        <ScrollArea className="flex-1 min-h-0">
-          <div className="p-2">
-            <DndContext
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={sections.map((s) => s.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-0.5">
-                  {sections.map((section) => (
-                    <SortableSectionItem
-                      key={section.id}
-                      section={section}
-                      isSelected={section.id === selectedSectionId}
-                      onSelect={() =>
-                        setSelectedSectionId(
-                          section.id === selectedSectionId ? null : section.id
-                        )
-                      }
-                      onToggleVisibility={() =>
-                        handleToggleVisibility(section.id)
-                      }
-                      onDelete={() => handleDeleteSection(section.id)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
+        {/* Page Tabs */}
+        {editorPages.length > 1 && (
+          <div className="flex items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-2" style={{scrollbarWidth: 'none'}}>
+            {editorPages.map((page) => {
+              const isActive = page.id === editorCurrentPageId;
+              const Icon = PAGE_TYPE_ICONS[page.type || 'home'] || Layout;
+              return (
+                <button
+                  key={page.id}
+                  onClick={() => handlePageTabClick(page.id)}
+                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                    isActive
+                      ? 'bg-zinc-800 text-zinc-100'
+                      : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+                  }`}
+                >
+                  <Icon className="h-3 w-3" />
+                  <span className="whitespace-nowrap">{page.name}</span>
+                </button>
+              );
+            })}
           </div>
-        </ScrollArea>
+        )}
 
-        {/* Add section button */}
-        <div className="border-t border-zinc-800 p-2">
-          <AddSectionPopover onAdd={handleAddSection} />
-        </div>
+        {/* Panel header — only for section-editable pages */}
+        {!isTemplatePage && (
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+            <h3 className="text-sm font-semibold text-zinc-200">Sections</h3>
+            <span className="text-xs text-zinc-600 tabular-nums">
+              {sections.length}
+            </span>
+          </div>
+        )}
+
+        {/* Section list with DnD — only for section-editable pages */}
+        {!isTemplatePage ? (
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-2">
+              <DndContext
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sections.map((s) => s.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-0.5">
+                    {sections.map((section) => (
+                      <SortableSectionItem
+                        key={section.id}
+                        section={section}
+                        isSelected={section.id === selectedSectionId}
+                        onSelect={() =>
+                          setSelectedSectionId(
+                            section.id === selectedSectionId ? null : section.id
+                          )
+                        }
+                        onToggleVisibility={() =>
+                          handleToggleVisibility(section.id)
+                        }
+                        onDelete={() => handleDeleteSection(section.id)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          </ScrollArea>
+        ) : (
+          <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800/60">
+              {(() => {
+                const TIcon = PAGE_TYPE_ICONS[currentPage.type || 'home'] || Layout;
+                return <TIcon className="h-6 w-6 text-zinc-500" />;
+              })()}
+            </div>
+            <p className="text-sm font-medium text-zinc-300">{PAGE_TYPE_LABELS[currentPage.type || 'home'] || 'Template'} Page</p>
+            <p className="mt-1.5 max-w-[200px] text-xs leading-relaxed text-zinc-600">
+              Switch to Home to edit sections.
+            </p>
+          </div>
+        )}
+
+        {/* Add section button — only for section-editable pages */}
+        {!isTemplatePage && (
+          <div className="border-t border-zinc-800 p-2">
+            <AddSectionPopover onAdd={handleAddSection} />
+          </div>
+        )}
       </div>
 
-      {/* Properties Panel */}
-      {selectedSection && (
+      {/* Properties Panel — only for section-editable pages */}
+      {selectedSection && !isTemplatePage && (
         <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 min-h-0 border-r border-zinc-800">
           <PropertiesPanel section={selectedSection} pageId={pageId} />
         </div>
