@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 
 type Phase = 'input' | 'loading' | 'output';
 
+const MAX_CONTINUES = 3; // Max auto-continue retries when proxy cuts the stream
+
 // ─── Animation ─────────────────────────────────────────────────────
 
 const overlayVariants = {
@@ -33,6 +35,68 @@ const cardVariants = {
   exit: { opacity: 0, y: 10, scale: 0.98, transition: { duration: 0.2 } },
 };
 
+// ─── SSE stream reader (reusable for initial + continues) ───────────
+// Returns: 'result' | 'stream-ended' | 'aborted'
+async function readSSE(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  signal: AbortSignal,
+  onDelta: (text: string) => void,
+  onResult: (text: string) => void,
+  onError: (msg: string) => void,
+): Promise<'result' | 'stream-ended' | 'aborted'> {
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let currentEvent = '';
+  let gotResult = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (signal.aborted) return 'aborted';
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7).trim();
+        continue;
+      }
+      if (line.startsWith(':')) continue; // SSE comment / heartbeat
+      if (line.startsWith('data: ')) {
+        try {
+          const data = JSON.parse(line.slice(6));
+
+          if (currentEvent === 'delta' && data.content) {
+            onDelta(data.content);
+            continue;
+          }
+
+          if (currentEvent === 'result' && data.content !== undefined) {
+            onResult(data.content);
+            gotResult = true;
+            return 'result';
+          }
+
+          if (currentEvent === 'error' && data.message) {
+            onError(data.message);
+            return 'result'; // error is terminal
+          }
+        } catch (parseErr: unknown) {
+          if (
+            parseErr instanceof SyntaxError ||
+            (parseErr instanceof Error && parseErr.message.startsWith('JSON'))
+          ) continue;
+          throw parseErr;
+        }
+      }
+    }
+  }
+
+  return gotResult ? 'result' : 'stream-ended';
+}
+
 // ─── Component ─────────────────────────────────────────────────────
 
 export default function MarketingKit({
@@ -46,6 +110,7 @@ export default function MarketingKit({
   const [prompt, setPrompt] = useState('');
   const [result, setResult] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [isContinuing, setIsContinuing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
 
@@ -58,103 +123,99 @@ export default function MarketingKit({
     setPhase('loading');
     setError(null);
     setResult('');
+    setIsContinuing(false);
 
     const controller = new AbortController();
     abortRef.current = controller;
+    const originalPrompt = prompt.trim();
+    let accumulated = '';
+    let receivedFirstToken = false;
 
     try {
-      const res = await fetch('/api/marketing-kit/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: prompt.trim() }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        throw new Error(`Server error (${res.status}). Please try again.`);
-      }
-
-      if (!res.body) {
-        throw new Error('No response stream. Please try again.');
-      }
-
-      // Consume SSE stream — real token-by-token streaming
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let settled = false;
-      let currentEvent = '';
-      let accumulated = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      // ── Main loop: initial request + auto-continues ──
+      for (let round = 0; round <= MAX_CONTINUES; round++) {
         if (controller.signal.aborted) return;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const bodyPayload = round === 0
+          ? { prompt: originalPrompt }
+          : { prompt: originalPrompt, continueFrom: accumulated };
 
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim();
-            continue;
-          }
-          if (line.startsWith(':')) continue; // SSE comment
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
+        const res = await fetch('/api/marketing-kit/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(bodyPayload),
+          signal: controller.signal,
+        });
 
-              // Progressive streaming: each token chunk
-              if (currentEvent === 'delta' && data.content) {
-                accumulated += data.content;
-                setResult(accumulated);
-                // Switch from loading spinner to output on first token
-                if (!settled) {
-                  setPhase('output');
-                  settled = true;
-                }
-                continue;
-              }
+        if (!res.ok) {
+          throw new Error(`Server error (${res.status}). Please try again.`);
+        }
 
-              // Final complete content (replaces accumulated for consistency)
-              if (currentEvent === 'result' && data.content !== undefined) {
-                if (!data.content || data.content.length === 0) {
-                  throw new Error('AI returned empty content. Try a more detailed prompt.');
-                }
-                setResult(data.content);
-                setPhase('output');
-                settled = true;
-                return;
-              }
+        if (!res.body) {
+          throw new Error('No response stream. Please try again.');
+        }
 
-              // Server-side error
-              if (currentEvent === 'error' && data.message) {
-                throw new Error(data.message);
-              }
-
-              // Ignore ping/progress/unknown events
-            } catch (parseErr: unknown) {
-              // Re-throw only our intentional errors, swallow JSON parse on non-JSON lines
-              if (
-                parseErr instanceof SyntaxError ||
-                (parseErr instanceof Error && parseErr.message.startsWith('JSON'))
-              ) continue;
-              throw parseErr;
+        const status = await readSSE(
+          res.body.getReader(),
+          controller.signal,
+          // onDelta — accumulate and render
+          (text: string) => {
+            accumulated += text;
+            setResult(accumulated);
+            if (!receivedFirstToken) {
+              setPhase('output');
+              receivedFirstToken = true;
             }
+          },
+          // onResult — AI finished normally
+          (finalContent: string) => {
+            setResult(finalContent);
+            setPhase('output');
+          },
+          // onError
+          (msg: string) => {
+            throw new Error(msg);
+          },
+        );
+
+        if (status === 'aborted') return;
+
+        // AI completed normally — we're done
+        if (status === 'result') return;
+
+        // Stream ended without result event (proxy killed it)
+        // Auto-continue if we have partial content
+        if (status === 'stream-ended') {
+          if (!accumulated || accumulated.length < 100) {
+            // Too little content to continue — just show what we have
+            if (accumulated) {
+              setPhase('output');
+            }
+            return;
+          }
+
+          if (round < MAX_CONTINUES) {
+            console.log(`[MK Client] Stream cut at ${accumulated.length} chars, auto-continuing (round ${round + 1})...`);
+            setIsContinuing(true);
+            // Brief pause before reconnecting
+            await new Promise((r) => setTimeout(r, 1500));
+            continue; // Loop back to start a new request
+          } else {
+            // Max continues reached — show what we have
+            console.log(`[MK Client] Max continues (${MAX_CONTINUES}) reached. Final: ${accumulated.length} chars`);
+            setPhase('output');
+            return;
           }
         }
-      }
-
-      if (!settled) {
-        throw new Error('Generation ended unexpectedly. Please try again.');
       }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Generation failed';
- setError(msg);
+      setError(msg);
       setPhase('input');
       toast.error(msg);
+    } finally {
+      setIsContinuing(false);
     }
   }, [prompt]);
 
@@ -333,6 +394,13 @@ export default function MarketingKit({
                   {/* Action bar */}
                   <div className="sticky top-0 z-10 flex items-center justify-between border-b border-white/[0.06] bg-[#0f0f11]/90 px-6 py-3 backdrop-blur-sm">
                     <div className="flex items-center gap-2">
+                      {/* Continuing indicator */}
+                      {isContinuing && (
+                        <span className="flex items-center gap-1.5 text-xs text-amber-400">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          Continuing...
+                        </span>
+                      )}
                       <button
                         onClick={handleCopy}
                         className="flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/[0.06] hover:text-white"
