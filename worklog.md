@@ -361,27 +361,50 @@ Stage Summary:
 - No locked features touched
 
 ---
-Task ID: 4-editor-page-switching
+Task ID: shop-detail-regression-fix
 Agent: main
-Task: Step 4 — Editor Page Switching
+Task: Fix Shop→Product Detail navigation regression in editor mode
 
 Work Log:
-- store.ts: Added `editorCurrentPageId` + `setEditorCurrentPageId` to Zustand (auto-inits to homepage on setStore/setStoreWithFallback, clears on reset)
-- index.tsx (StoreRenderer): Added `externalCurrentPageId` + `onPageChange` optional props for editor-mode page sync
-- index.tsx (StoreRenderer): Refactored to use `externalCurrentPageId ?? internalPageId` pattern; `setCurrentPageId` unified setter routes through `onPageChange` when in editor mode
-- index.tsx (StoreRenderer): Dynamic product pages always use internal state (even in editor mode) to avoid tab confusion
-- visual-editor/index.tsx: Added PAGE_TYPE_ICONS and PAGE_TYPE_LABELS maps for page type display
-- visual-editor/index.tsx: Added `editorPages` filter (home, collection, cart, checkout — excludes dynamic product pages)
-- visual-editor/index.tsx: Added `isTemplatePage` flag — controls whether section list or template placeholder is shown
-- visual-editor/index.tsx: Added page tab bar at top of section panel (scrollable, icon+label, active state highlighting)
-- visual-editor/index.tsx: Template pages show centered placeholder with type icon + descriptive text
-- visual-editor/index.tsx: Section list, properties panel, and Add Section button only shown for non-template pages
-- page.tsx (PreviewPanel): Wired `editorCurrentPageId` and `setEditorCurrentPageId` to StoreRenderer's external props
-- Browser verified: Home/Shop/Cart/Checkout tab switching all work, preview syncs, section editing works on Home, template placeholder shows on other pages
+- Diagnosed: handleViewProduct in StoreRenderer called setInternalPageId() directly, bypassing the unified setCurrentPageId() helper
+- In editor mode, `currentPageId = externalCurrentPageId ?? internalPageId` — externalCurrentPageId always wins
+- So setInternalPageId() was a dead-end in editor mode; navigation was silently swallowed
+- Fix: Changed both setInternalPageId calls to setCurrentPageId in handleViewProduct
+- Updated dependency array from `[effectivePages, products]` to `[effectivePages, products, setCurrentPageId]`
+- Removed incorrect comment 'Dynamic pages use internal state even in editor mode'
+- User verified all 5 flow checks passed (Home→Shop, Shop→Detail button, Shop→Detail card, Detail→Cart, Home regression)
 
 Stage Summary:
-- Editor page switching fully functional with 4 synced page tabs
-- Bidirectional sync: editor tab click → preview updates; preview nav click → editor tab updates
-- Template pages (Shop/Cart/Checkout) show placeholder in editor, live preview in center panel
-- Home page retains full section editing (list, DnD, properties, add)
-- No locked features touched
+- 1 file changed: src/components/store-renderer/index.tsx (2 lines changed, 1 dep added)
+- Step 4 now LOCKED per user confirmation
+
+---
+Task ID: marketing-kit
+Agent: main
+Task: Implement Marketing/Business Kit Generator (isolated feature, zero locked-file touches)
+
+Work Log:
+- Created src/app/api/marketing-kit/generate/route.ts: standalone POST endpoint using z-ai-web-dev-sdk directly (bypasses orchestrator), no JSON schema, no repair pipeline, free-form markdown output, 120s timeout, 1 retry, auth-error recovery
+- Created src/components/marketing-kit/index.tsx: full-page overlay component with 3 phases (input→loading→output), dark theme, markdown rendering via react-markdown with custom styled components, Copy to Clipboard, Download as .md, Generate Another flow
+- Modified src/app/page.tsx (MINIMAL, purely additive): added MarketingKit import, FileText icon import, mkOpen state in LandingPage, 'Business Tools' button between prompt area and features section, MarketingKit overlay render
+- Files NOT touched (confirmed): store.ts, store-schema.ts, ai-orchestrator.ts, normalize-store.ts, sanitize-prompt.ts, cart-store.ts, sections.tsx, visual-editor, chat-panel, template-pages, all /api/store/ routes
+
+Browser Verification:
+- Landing page: 'Business Tools' button visible and clickable ✅
+- Marketing Kit overlay: opens with heading, textarea, disabled Generate Kit button ✅
+- Prompt fill: 350-char GlowRoot skincare prompt entered ✅
+- Generation: succeeded with 12,202 chars of markdown in 56s (1 attempt) ✅
+- Output rendering: 5 sections with proper h2/h3/h4 hierarchy, all content present ✅
+- Copy button: working ✅
+- Generate Another: resets to input phase with previous prompt preserved ✅
+- Close: returns to clean landing page ✅
+- Zero regression: generated 'Succulent Haven' store, verified full flow (Home→Shop→Detail→Cart) all working ✅
+- bun run lint: clean (0 errors, 0 warnings)
+- Zero browser console errors
+
+Stage Summary:
+- 2 new files created, 1 existing file minimally modified (4 additive changes)
+- Complete isolation: no imports from or exports to any store-builder module
+- Marketing Kit is a standalone content-generation tool with no connection to Store data
+- Initial timeout was 60s (too short for long-form content); increased to 120s after first test failure
+

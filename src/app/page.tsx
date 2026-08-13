@@ -7,6 +7,7 @@ import { StoreRenderer } from '@/components/store-renderer'
 import ChatPanel from '@/components/chat-panel'
 import VisualEditor from '@/components/visual-editor'
 import type { Store } from '@/lib/store-schema'
+import MarketingKit from '@/components/marketing-kit'
 import {
   Sparkles,
   Layers,
@@ -27,6 +28,7 @@ import {
   Check,
   Copy,
   ExternalLink,
+  FileText,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -90,6 +92,7 @@ const progressMessages = [
 
 function LandingPage() {
   const [promptText, setPromptText] = useState('')
+  const [mkOpen, setMkOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -456,6 +459,20 @@ function LandingPage() {
         </div>
       </section>
 
+      {/* ── Business Tools Link ── */}
+      <div className="px-5 pb-6">
+        <div className="mx-auto flex max-w-5xl justify-center">
+          <button
+            onClick={() => setMkOpen(true)}
+            className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-xs font-medium text-zinc-400 transition-all duration-200 hover:border-[#a855f7]/30 hover:bg-[#a855f7]/5 hover:text-[#c084fc]"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Business Tools
+            <ArrowRight className="h-3 w-3 opacity-50" />
+          </button>
+        </div>
+      </div>
+
       {/* ── Features Section ── */}
       <section className="px-5 pb-24 sm:pb-32">
         <motion.div
@@ -488,6 +505,9 @@ function LandingPage() {
           ))}
         </motion.div>
       </section>
+
+      {/* ── Marketing Kit Overlay ── */}
+      <MarketingKit isOpen={mkOpen} onClose={() => setMkOpen(false)} />
     </>
   )
 }
