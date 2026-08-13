@@ -70,29 +70,68 @@ export default function MarketingKit({
         signal: controller.signal,
       });
 
-      // Defensive: check content-type before attempting JSON parse
-      const contentType = res.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        await res.text().catch(() => {}); // consume body
-        throw new Error(
-          res.ok
-            ? 'The server returned an unexpected response. Please try again.'
-            : `Server error (${res.status}). Please try again.`
-        );
-      }
-
-      const data = await res.json();
-
       if (!res.ok) {
-        throw new Error(data.error || `Request failed (${res.status})`);
+        throw new Error(`Server error (${res.status}). Please try again.`);
       }
 
-      if (!data.content || data.content.length === 0) {
-        throw new Error('AI returned empty content. Try a more detailed prompt.');
+      if (!res.body) {
+        throw new Error('No response stream. Please try again.');
       }
 
-      setResult(data.content);
-      setPhase('output');
+      // Consume SSE stream (keeps proxy alive via heartbeats)
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let settled = false;
+      let currentEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (controller.signal.aborted) return;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+            continue;
+          }
+          if (line.startsWith(':')) continue; // heartbeat comment
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+
+              if (currentEvent === 'result' && data.content !== undefined) {
+                if (!data.content || data.content.length === 0) {
+                  throw new Error('AI returned empty content. Try a more detailed prompt.');
+                }
+                setResult(data.content);
+                setPhase('output');
+                settled = true;
+                return;
+              }
+
+              if (currentEvent === 'error' && data.message) {
+                throw new Error(data.message);
+              }
+            } catch (parseErr: unknown) {
+              // Re-throw only our intentional errors, swallow JSON parse on non-JSON lines
+              if (
+                parseErr instanceof SyntaxError ||
+                (parseErr instanceof Error && parseErr.message.startsWith('JSON'))
+              ) continue;
+              throw parseErr;
+            }
+          }
+        }
+      }
+
+      if (!settled) {
+        throw new Error('Generation ended unexpectedly. Please try again.');
+      }
     } catch (err: unknown) {
       if (controller.signal.aborted) return;
       const msg = err instanceof Error ? err.message : 'Generation failed';
