@@ -10,7 +10,8 @@
 // Safety nets:
 // - SSE heartbeats every 4s to keep the proxy connection alive
 // - Hard time budget: if >50s elapsed, return fallback immediately
-// - NEVER returns a non-200 status code
+// - Auth guard: returns 401 JSON before creating the SSE stream (defense-in-depth)
+//   The frontend intercepts logged-out users client-side; this is the server backup.
 
 import { NextRequest } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
@@ -18,6 +19,7 @@ import { normalizeStore } from '@/lib/normalize-store';
 import { sanitizePrompt } from '@/lib/sanitize-prompt';
 import { enrichProductImages } from '@/lib/unsplash';
 import type { Store } from '@/lib/store-schema';
+import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 // ─── Output size caps (HARD LIMITS — never exceeded) ───────────
 // These are enforced at TWO layers:
@@ -151,6 +153,15 @@ function extractStoreName(prompt: string): string {
 
 // ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
+  // Auth guard — checked BEFORE creating the SSE stream.
+  // JWT session verification is in-memory crypto only (~10-25ms), no DB hit.
+  try {
+    await requireAuth();
+  } catch (e) {
+    if (e instanceof AuthError) return authErrorResponse(e);
+    throw e;
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

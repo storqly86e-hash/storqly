@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import { useStoreEditor } from '@/lib/store'
 import { StoreRenderer } from '@/components/store-renderer'
 import ChatPanel from '@/components/chat-panel'
@@ -92,6 +93,7 @@ const progressMessages = [
 // ─── Landing Page ─────────────────────────────────────────────────────
 
 function LandingPage() {
+  const { data: session } = useSession()
   const [promptText, setPromptText] = useState('')
   const [mkOpen, setMkOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
@@ -131,6 +133,12 @@ function LandingPage() {
     if (!trimmed) {
       setError('Please describe your store to get started.')
       textareaRef.current?.focus()
+      return
+    }
+
+    // Auth gate — block generation for logged-out users (show modal instead)
+    if (!session?.user?.id) {
+      setAuthOpen(true)
       return
     }
 
@@ -273,7 +281,7 @@ function LandingPage() {
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
-  }, [promptText, setIsGenerating, setStore, setStoreWithFallback, clearTimers])
+  }, [promptText, session, setIsGenerating, setStore, setStoreWithFallback, clearTimers, setAuthOpen])
 
   // Cleanup on unmount
   useEffect(() => {

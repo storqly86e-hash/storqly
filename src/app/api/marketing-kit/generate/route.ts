@@ -7,9 +7,11 @@
 //
 // No JSON schema, no repair pipeline, no connection to Store data.
 // Uses z-ai-web-dev-sdk directly (bypasses the store orchestrator).
+// Auth guard: returns 401 JSON before creating the SSE stream.
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import ZAI from 'z-ai-web-dev-sdk';
+import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 const TIMEOUT_MS = 180_000;
 const MAX_RETRIES = 1;
@@ -53,6 +55,14 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ─── POST handler — Real token streaming via SSE ─────────────────
 export async function POST(req: NextRequest) {
+  // Auth guard — checked BEFORE creating the SSE stream.
+  try {
+    await requireAuth();
+  } catch (e) {
+    if (e instanceof AuthError) return authErrorResponse(e);
+    throw e;
+  }
+
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({

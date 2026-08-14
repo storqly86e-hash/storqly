@@ -148,3 +148,42 @@ Stage Summary:
 - SignOut fix confirmed working: `signOut({ redirect: false })` + `window.location.href = '/'` is domain-agnostic
 - Dev log clean: register 200, sign-in 200, session 200, signout 200, session 200
 - Fix works because `window.location.href = '/'` is always relative to the current browser origin
+
+---
+Task ID: Step 5 — Auth-Gated Store Generation
+Agent: Main Agent
+Task: Add auth guards to all 5 protected routes + frontend intercept on generate
+
+Work Log:
+- Backend guards (6 files, ~40 lines added total):
+  1. /api/store/generate: requireAuth() before ReadableStream creation, returns 401 JSON
+  2. /api/store/save: requireAuth() + sets userId on store create
+  3. /api/store/publish: requireAuth() + sets userId on store create
+  4. /api/store/chat: requireAuth() at top of handler
+  5. /api/marketing-kit/generate: requireAuth() before ReadableStream creation, returns 401 JSON
+- Frontend intercept (1 file, 5 lines):
+  - Added useSession() to LandingPage component
+  - Added auth check in handleGenerate: if (!session?.user?.id) { setAuthOpen(true); return }
+  - Added session + setAuthOpen to useCallback deps
+- Latency verification:
+  - Cold auth check (first request): 191ms (includes Turbopack compile)
+  - Warm auth check (subsequent): 27ms (JWT verify only, no DB hit)
+  - All 5 routes return 401 with {"error":"Authentication required"} for unauthenticated requests
+- Zero-regression check:
+  - Generate route: same line structure, only +10 lines (import + 7-line guard block)
+  - All AI pipeline, normalization, fallback, SSE, heartbeat logic untouched
+  - Lint: clean (0 errors, 0 warnings)
+- Browser E2E verification (agent-browser):
+  1. ✅ Logged-out → type prompt → click Generate → auth modal opens (no API call, no loading state)
+  2. ✅ Register new account → auto-switch to Sign In → sign in → modal closes
+  3. ✅ Prompt text preserved after login → click Generate → generation starts
+  4. ✅ Store generated: "Brew Haven" with 3 products, 4 sections, multi-page navigation
+  5. ✅ Dev log: zero errors. Console: zero errors (1 expected layout warning)
+
+Stage Summary:
+- Files modified: 6 (generate/route.ts, save/route.ts, publish/route.ts, chat/route.ts, marketing-kit/generate/route.ts, page.tsx)
+- Total new code: ~40 lines across 6 files
+- Auth guard latency: 27ms warm (JWT crypto only, no database)
+- Design: defense-in-depth (frontend intercepts + backend guards)
+- Save/publish now associate userId with new stores
+- Backlog noted: .env.local persistence, Unsplash key needed

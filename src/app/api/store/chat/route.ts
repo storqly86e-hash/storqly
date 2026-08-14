@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeAI, extractJSON, repairJSON } from '@/lib/ai-orchestrator';
 import type { Store, ChatMessage, ChatEditOperation } from '@/lib/store-schema';
+import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 // ─── Build system prompt with FULL section content ──────────────
 function buildChatSystemPrompt(store: Store): string {
@@ -285,6 +286,8 @@ function buildSummary(operations: ChatEditOperation[], strippedFields: string[])
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    await requireAuth();
+
     const body = await req.json();
     const { message, store, history } = body as {
       message?: string;
@@ -406,6 +409,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: summary, operations: sanitized });
   } catch (err: unknown) {
+    if (err instanceof AuthError) return authErrorResponse(err);
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Chat Edit] Unexpected error:', msg);
     return NextResponse.json(

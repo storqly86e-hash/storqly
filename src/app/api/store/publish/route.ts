@@ -8,10 +8,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import type { Store } from '@/lib/store-schema';
+import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
+    const session = await requireAuth();
+    const userId = session.user.id;
+
     const body = await req.json();
     const { store } = body as { store?: Store };
 
@@ -45,6 +49,7 @@ export async function POST(req: NextRequest) {
         schema: serializedStore,
         published: true,
         publishedAt: now,
+        userId,
       },
     });
 
@@ -54,6 +59,7 @@ export async function POST(req: NextRequest) {
       publishedAt: record.publishedAt?.toISOString() ?? null,
     });
   } catch (err: unknown) {
+    if (err instanceof AuthError) return authErrorResponse(err);
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Store Publish] Unexpected error:', msg);
 
