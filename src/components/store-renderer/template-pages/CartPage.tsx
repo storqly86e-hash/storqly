@@ -4,6 +4,7 @@ import { Minus, Plus, Trash2, ShoppingBag, ArrowLeft, ArrowRight } from 'lucide-
 import type { TemplatePageProps } from './types';
 import { useCartStore } from '@/lib/cart-store';
 import { formatPrice, contrastTextColor, stringToColor, borderRadiusClass } from '../helpers';
+import { StoreImage } from '../store-image';
 
 export function CartPage({ store, page, onNavigate }: TemplatePageProps) {
   const theme = store.theme;
@@ -89,16 +90,15 @@ export function CartPage({ store, page, onNavigate }: TemplatePageProps) {
               {/* Thumbnail */}
               <div
                 className={`h-20 w-20 flex-shrink-0 overflow-hidden sm:h-24 sm:w-24 ${radius}`}
-                style={{ backgroundColor: item.image || stringToColor(item.productId) }}
+                style={{ backgroundColor: stringToColor(item.productId) }}
               >
-                {!item.image && (
-                  <div className="flex h-full w-full items-center justify-center">
-                    <div
-                      className="h-10 w-10 rounded-full opacity-30"
-                      style={{ backgroundColor: theme.colors.primary }}
-                    />
-                  </div>
-                )}
+                <StoreImage
+                  src={item.image || ''}
+                  alt={item.name}
+                  fallbackColor={stringToColor(item.productId)}
+                  className="h-full w-full object-cover"
+                  iconSize="sm"
+                />
               </div>
 
               {/* Info */}

@@ -6,6 +6,7 @@ import type { TemplatePageProps } from './types';
 import type { StoreProduct } from '@/lib/store-schema';
 import { useCartStore } from '@/lib/cart-store';
 import { formatPrice, contrastTextColor, stringToColor, borderRadiusClass } from '../helpers';
+import { StoreImage } from '../store-image';
 
 export function ProductDetailPage({ store, productId, onNavigate }: TemplatePageProps & { productId?: string }) {
   const theme = store.theme;
@@ -122,12 +123,13 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
           className={`${radius} relative aspect-square w-full overflow-hidden`}
           style={{ backgroundColor: imgColor }}
         >
-          <div className="flex h-full w-full items-center justify-center">
-            <div
-              className="h-24 w-24 rounded-full opacity-25"
-              style={{ backgroundColor: theme.colors.primary }}
-            />
-          </div>
+          <StoreImage
+            src={product.images[0] || ''}
+            alt={product.name}
+            fallbackColor={imgColor}
+            className="h-full w-full object-cover"
+            iconSize="lg"
+          />
           {!product.inStock && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/60">
               <span className="rounded-full bg-gray-900 px-4 py-2 text-sm font-medium text-white">
@@ -336,12 +338,13 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
                     className="relative aspect-square w-full overflow-hidden"
                     style={{ backgroundColor: imgC }}
                   >
-                    <div className="flex h-full w-full items-center justify-center">
-                      <div
-                        className="h-12 w-12 rounded-full opacity-25"
-                        style={{ backgroundColor: theme.colors.primary }}
-                      />
-                    </div>
+                    <StoreImage
+                      src={p.images[0] || ''}
+                      alt={p.name}
+                      fallbackColor={imgC}
+                      className="absolute inset-0 h-full w-full object-cover"
+                      iconSize="md"
+                    />
                     {hasD && p.compareAtPrice && (
                       <div className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
                         {Math.round(((p.compareAtPrice - p.price) / p.compareAtPrice) * 100)}% Off

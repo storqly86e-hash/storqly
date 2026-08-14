@@ -44,6 +44,7 @@ import type {
   StoreProduct,
 } from '@/lib/store-schema';
 import { useState } from 'react';
+import { StoreImage } from './store-image';
 
 
 // ─── Section Wrapper ────────────────────────────────────────────────────
@@ -159,17 +160,18 @@ function ProductCard({
       role={onViewProduct ? 'button' : undefined}
       tabIndex={onViewProduct ? 0 : undefined}
     >
- {/* Image placeholder */}
+      {/* Product image with real image + fallback */}
       <div
         className="relative aspect-square w-full overflow-hidden"
         style={{ backgroundColor: imgColor }}
       >
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div
-            className="h-16 w-16 rounded-full opacity-30"
-            style={{ backgroundColor: theme.colors.primary }}
-          />
-        </div>
+        <StoreImage
+          src={product.images[0] || ''}
+          alt={product.name}
+          fallbackColor={imgColor}
+          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          iconSize="lg"
+        />
         {/* Out of stock overlay */}
         {!product.inStock && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/60">
@@ -268,15 +270,15 @@ export function HeaderSection({
               src={content.logo}
               alt={content.storeName}
               className="h-8 w-auto object-contain"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden'); }}
             />
-          ) : (
-            <span
-              className="text-lg font-bold tracking-tight"
-              style={{ color: theme.colors.text }}
-            >
-              {content.storeName}
-            </span>
-          )}
+          ) : null}
+          <span
+            className={`text-lg font-bold tracking-tight ${content.logo ? 'hidden' : ''}`}
+            style={{ color: theme.colors.text }}
+          >
+            {content.storeName}
+          </span>
         </div>
 
         {/* Navigation */}
@@ -532,16 +534,17 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
         {content.images.map((img, i) => (
           <div key={i} className={`${borderRadius} overflow-hidden group`}>
             <div
-              className={`aspect-[4/3] w-full ${borderRadius} bg-gray-200 transition-transform duration-300 group-hover:scale-[1.02]`}
+              className={`aspect-[4/3] w-full ${borderRadius} transition-transform duration-300 group-hover:scale-[1.02]`}
               style={{
                 backgroundColor: stringToColor(img.src || `img-${i}`, theme),
               }}
             >
-              <div className="flex h-full items-center justify-center">
-                <svg className="h-8 w-8 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
-                </svg>
-              </div>
+              <StoreImage
+                src={img.src}
+                alt={img.alt || img.caption || `Gallery image ${i + 1}`}
+                fallbackColor={stringToColor(img.src || `img-${i}`, theme)}
+                className="h-full w-full object-cover"
+              />
             </div>
             {img.caption && (
               <p className="mt-2 text-xs opacity-65">
@@ -596,10 +599,12 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
             {/* Author */}
             <div className="mt-4 flex items-center gap-3">
               {item.avatar ? (
-                <img
+                <StoreImage
                   src={item.avatar}
                   alt={item.author}
+                  fallbackColor={theme.colors.primary}
                   className="h-9 w-9 rounded-full object-cover"
+                  iconSize="sm"
                 />
               ) : (
                 <div
@@ -803,9 +808,10 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
           >
             {cat.image ? (
               <div className="aspect-[3/2] w-full overflow-hidden">
-                <img
+                <StoreImage
                   src={cat.image}
                   alt={cat.name}
+                  fallbackColor={stringToColor(cat.slug, theme)}
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
                 />
               </div>

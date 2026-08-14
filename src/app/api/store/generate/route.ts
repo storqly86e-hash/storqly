@@ -16,6 +16,7 @@ import { NextRequest } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
 import { normalizeStore } from '@/lib/normalize-store';
 import { sanitizePrompt } from '@/lib/sanitize-prompt';
+import { enrichProductImages } from '@/lib/unsplash';
 import type { Store } from '@/lib/store-schema';
 
 // ─── Output size caps (HARD LIMITS — never exceeded) ───────────
@@ -253,6 +254,19 @@ export async function POST(req: NextRequest) {
         }
 
         const store = normResult.store;
+
+        // ── Enrich product images via Unsplash API ──
+        send('progress', { stage: 'images', message: 'Finding product images...' });
+        try {
+          const imgResult = await enrichProductImages(store);
+          if (imgResult.enriched > 0) {
+            console.log(`[Store Generate] Images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
+          }
+        } catch (imgErr) {
+          const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
+          console.warn(`[Store Generate] Image enrichment failed (non-fatal): ${imgMsg}`);
+        }
+
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
         console.log(`[Store Generate] ✅ Success in ${totalMs}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
 

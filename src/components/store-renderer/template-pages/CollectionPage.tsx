@@ -9,6 +9,7 @@ import {
   stringToColor,
   borderRadiusClass,
 } from '../helpers';
+import { StoreImage } from '../store-image';
 
 export function CollectionPage({ store, page, onViewProduct }: TemplatePageProps) {
   const theme = store.theme;
@@ -180,12 +181,13 @@ export function CollectionPage({ store, page, onViewProduct }: TemplatePageProps
                   className="relative aspect-square w-full overflow-hidden"
                   style={{ backgroundColor: imgColor }}
                 >
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div
-                      className="h-16 w-16 rounded-full opacity-30"
-                      style={{ backgroundColor: theme.colors.primary }}
-                    />
-                  </div>
+                  <StoreImage
+                    src={product.images[0] || ''}
+                    alt={product.name}
+                    fallbackColor={imgColor}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    iconSize="lg"
+                  />
                   {!product.inStock && (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/60">
                       <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white">
