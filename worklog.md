@@ -67,3 +67,47 @@ Stage Summary:
 - Lint: clean (0 errors, 0 warnings)
 - Dev server: zero errors in log
 - Ready for Step 4 (Auth UI)
+
+---
+Task ID: Phase A Step 4
+Agent: Main Agent
+Task: Auth UI — login/register modal, nav auth button, SessionProvider integration
+
+Work Log:
+- Created src/components/providers/session-provider.tsx — client-side SessionProvider wrapper
+- Updated src/app/layout.tsx — wrapped children in <AuthSessionProvider> (2 lines added)
+- Created src/components/auth-modal.tsx — full auth modal with:
+  - Tabs: Sign In / Create Account (using shadcn Tabs + Dialog)
+  - SignInForm: email/password, calls signIn('credentials') from next-auth/react, shows errors
+  - RegisterForm: name/email/password, calls /api/auth/register, auto-switches to Sign In tab on success
+  - AuthButton: shows "Sign In" (logged out) or user name+avatar+sign-out button (logged in)
+  - Loading skeleton during session load, matches dark theme
+- Updated src/app/page.tsx (3 surgical edits):
+  1. Import AuthModal + AuthButton
+  2. Landing page header: added AuthButton (desktop shows text+button, mobile shows button only), AuthModal
+  3. Editor toolbar: added AuthButton + separator before Save/Publish, AuthModal
+- Browser verification (agent-browser):
+  - Landing page renders with hero, features, textarea, Generate button, Business Tools — all intact
+  - "Sign In" button visible in nav for logged-out users
+  - Clicking "Sign In" opens modal with Sign In / Create Account tabs
+  - Register: fill name/email/password → submit → toast "Account created" → auto-switches to Sign In tab
+  - Sign In: fill email/password → submit → modal closes → nav shows user name + Sign out button
+  - Page reload: session persists (Sign out button still visible)
+  - Sign out: returns to "Sign In" button
+  - Zero console errors
+- API verification:
+  - Store generation works without auth (anonymous-first)
+  - Invalid credentials redirect to NextAuth error (client catches and shows inline error)
+  - Session includes user.id as designed
+
+Stage Summary:
+- Files created: 2 (session-provider.tsx, auth-modal.tsx)
+- Files modified: 2 (layout.tsx — 2 lines, page.tsx — 3 surgical edits)
+- 3 explicit confirmations:
+  1. ✅ Landing page renders identically for logged-out visitor (hero, features, textarea, generate button all present — "Sign In" button is the only addition)
+  2. ✅ Store generation works without auth (POST /api/store/generate returns SSE without any auth header)
+  3. ✅ Auth modal works end-to-end: register → auto-switch to login → login → modal closes → session persists on refresh
+- Lint: clean (0 errors, 0 warnings)
+- Dev server: zero errors
+- Browser: zero console errors
+- Ready for Step 5 (Store ownership)

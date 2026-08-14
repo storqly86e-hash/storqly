@@ -30,6 +30,7 @@ import {
   ExternalLink,
   FileText,
 } from 'lucide-react'
+import AuthModal, { AuthButton } from '@/components/auth-modal'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -93,6 +94,7 @@ const progressMessages = [
 function LandingPage() {
   const [promptText, setPromptText] = useState('')
   const [mkOpen, setMkOpen] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -303,11 +305,19 @@ function LandingPage() {
           <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] bg-clip-text text-transparent">
             Storqly
           </span>
-          <span className="hidden text-sm text-zinc-500 sm:block">
-            AI-Powered Store Builder
-          </span>
+          <div className="hidden sm:flex items-center gap-4">
+            <span className="text-sm text-zinc-500">
+              AI-Powered Store Builder
+            </span>
+            <AuthButton onSignIn={() => setAuthOpen(true)} />
+          </div>
+          <div className="flex sm:hidden">
+            <AuthButton onSignIn={() => setAuthOpen(true)} />
+          </div>
         </nav>
       </header>
+
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
 
       {/* ── Hero Section ── */}
       <section className="relative flex flex-1 flex-col items-center justify-center px-5 pt-32 pb-20 sm:pt-40 sm:pb-28">
@@ -669,6 +679,7 @@ function EditorToolbar({
   const [isSaving, setIsSaving] = useState(false)
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [authOpen, setAuthOpen] = useState(false)
 
   const handleBack = () => {
     reset()
@@ -797,6 +808,8 @@ function EditorToolbar({
               </a>
             </div>
           )}
+          <AuthButton onSignIn={() => setAuthOpen(true)} />
+          <div className="h-5 w-px bg-zinc-800" />
           <span className="mr-2 text-xs font-medium text-zinc-500 hidden md:inline truncate max-w-[200px]">
             {store?.name || 'Untitled Store'}
           </span>
@@ -900,6 +913,7 @@ function EditorToolbar({
           </motion.div>
         )}
       </AnimatePresence>
+      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
     </>
   )
 }
