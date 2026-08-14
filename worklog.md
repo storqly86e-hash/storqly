@@ -131,3 +131,20 @@ Stage Summary:
 - Lint: clean
 - Curl E2E: register ✅, sign-in ✅, session ✅, sign-out ✅, session-destroyed ✅
 - User verification needed on proxy URL (sandbox Turbopack OOM prevents agent-browser testing)
+---
+Task ID: SignOut Fix Re-verification
+Agent: Main Agent
+Task: Restore lost .env.local, re-verify signOut fix via agent-browser
+
+Work Log:
+- Found .env.local was lost between sessions (NEXTAUTH_SECRET and NEXTAUTH_URL missing)
+- Restored .env.local with new NEXTAUTH_SECRET + NEXTAUTH_URL + UNSPLASH_ACCESS_KEY placeholder
+- Restarted dev server — confirmed no more NEXTAUTH_URL/NO_SECRET warnings
+- Agent-browser E2E: register → sign-in → session active → sign-out → session cleared → URL stays on current origin
+- Dev log: zero errors, all requests return 200
+
+Stage Summary:
+- .env.local restored (was lost between sessions)
+- SignOut fix confirmed working: `signOut({ redirect: false })` + `window.location.href = '/'` is domain-agnostic
+- Dev log clean: register 200, sign-in 200, session 200, signout 200, session 200
+- Fix works because `window.location.href = '/'` is always relative to the current browser origin
