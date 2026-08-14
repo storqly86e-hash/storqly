@@ -1,0 +1,986 @@
+    50→    50→    50→
+    51→    51→    51→interface SectionWrapperProps {
+    52→    52→    52→  section: Section;
+    53→    53→    53→  theme: StoreTheme;
+    54→    54→    54→  selectedSectionId?: string | null;
+    55→    55→    55→  onSelectSection?: (sectionId: string | null) => void;
+    56→    56→    56→  children: React.ReactNode;
+    57→    57→    57→}
+    58→    58→    58→
+    59→    59→    59→function SectionWrapper({
+    60→    60→    60→  section,
+    61→    61→    61→  theme,
+    62→    62→    62→  selectedSectionId,
+    63→    63→    63→  onSelectSection,
+    64→    64→    64→  children,
+    65→    65→    65→}: SectionWrapperProps) {
+    66→    66→    66→  const isSelected = selectedSectionId === section.id;
+    67→    67→    67→  const style = section.style;
+    68→    68→    68→
+    69→    69→    69→  const sectionBg = style.backgroundColor || theme.colors.background;
+    70→    70→    70→  const sectionText = style.textColor || theme.colors.text;
+    71→    71→    71→
+    72→    72→    72→  const bgImage = style.backgroundImage
+    73→    73→    73→    ? `url(${style.backgroundImage})`
+    74→    74→    74→    : undefined;
+    75→    75→    75→
+    76→    76→    76→  const outerClasses = [
+    77→    77→    77→    'relative transition-all duration-200 cursor-pointer',
+    78→    78→    78→    pyClass(style.paddingY),
+    79→    79→    79→    isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+    80→    80→    80→  ].join(' ');
+    81→    81→    81→
+    82→    82→    82→  return (
+    83→    83→    83→    <div
+    84→    84→    84→      className={outerClasses}
+    85→    85→    85→      style={{
+    86→    86→    86→        backgroundColor: sectionBg,
+    87→    87→    87→        color: sectionText,
+    88→    88→    88→        backgroundImage: bgImage,
+    89→    89→    89→        backgroundSize: 'cover',
+    90→    90→    90→        backgroundPosition: 'center',
+    91→    91→    91→      }}
+    92→    92→    92→      onClick={(e) => {
+    93→    93→    93→        e.stopPropagation();
+    94→    94→    94→        onSelectSection?.(isSelected ? null : section.id);
+    95→    95→    95→      }}
+    96→    96→    96→      data-section-id={section.id}
+    97→    97→    97→      data-section-type={section.type}
+    98→    98→    98→    >
+    99→    99→    99→      {/* Overlay for background images */}
+   100→   100→   100→      {style.backgroundImage && style.overlay && (
+   101→   101→   101→        <div className="absolute inset-0 bg-black/50 pointer-events-none" />
+   102→   102→   102→      )}
+   103→   103→   103→      <div
+   104→   104→   104→        className={`relative z-10 mx-auto ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}
+   105→   105→   105→      >
+   106→   106→   106→        {/* Selected section label */}
+   107→   107→   107→        {isSelected && (
+   108→   108→   108→          <div className="absolute -top-3 left-4 z-20 rounded-full bg-[#a855f7] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow-lg">
+   109→   109→   109→            {section.type.replace(/-/g, ' ')}
+   110→   110→   110→          </div>
+   111→   111→   111→        )}
+   112→   112→   112→        {children}
+   113→   113→   113→      </div>
+   114→   114→   114→    </div>
+   115→   115→   115→  );
+   116→   116→   116→}
+   117→   117→   117→
+   118→   118→   118→// ─── Product Card (shared) ─────────────────────────────────────────────
+   119→   119→   119→
+   120→   120→   120→function ProductCard({
+   121→   121→   121→  product,
+   122→   122→   122→  theme,
+   123→   123→   123→  showAddToCart,
+   124→   124→   124→  borderRadius,
+   125→   125→   125→  buttonBgOverride,
+   126→   126→   126→  buttonTextOverride,
+   127→   127→   127→  onViewProduct,
+   128→   128→   128→}: {
+   129→   129→   129→  product: StoreProduct;
+   130→   130→   130→  theme: StoreTheme;
+   131→   131→   131→  showAddToCart: boolean;
+   132→   132→   132→  borderRadius: string;
+   133→   133→   133→  buttonBgOverride?: string;
+   134→   134→   134→  buttonTextOverride?: string;
+   135→   135→   135→  onViewProduct?: (productId: string) => void;
+   136→   136→   136→}) {
+   137→   137→   137→  const [hovered, setHovered] = useState(false);
+   138→   138→   138→  const [addedFeedback, setAddedFeedback] = useState(false);
+   139→   139→   139→  const addToCart = useCartStore((s) => s.addItem);
+   140→   140→   140→  const imgColor = stringToColor(product.id, theme);
+   141→   141→   141→  const hasDiscount = product.compareAtPrice && product.compareAtPrice > product.price;
+   142→   142→   142→
+   143→   143→   143→  const handleAddToCart = (e: React.MouseEvent) => {
+   144→   144→   144→    e.stopPropagation();
+   145→   145→   145→    addToCart(product);
+   146→   146→   146→    setAddedFeedback(true);
+   147→   147→   147→    setTimeout(() => setAddedFeedback(false), 1200);
+   148→   148→   148→  };
+   149→   149→   149→
+   150→   150→   150→  return (
+   151→   151→   151→    <div
+   152→   152→   152→      className={`${borderRadius} ${onViewProduct ? 'cursor-pointer' : ''} overflow-hidden bg-white border border-gray-100 shadow-sm transition-shadow duration-200 group`}
+   153→   153→   153→      style={{
+   154→   154→   154→        borderColor: theme.colors.border,
+   155→   155→   155→      }}
+   156→   156→   156→      onMouseEnter={() => setHovered(true)}
+   157→   157→   157→      onMouseLeave={() => setHovered(false)}
+   158→   158→   158→      onClick={onViewProduct ? () => onViewProduct(product.id) : undefined}
+   159→   159→   159→      role={onViewProduct ? 'button' : undefined}
+   160→   160→   160→      tabIndex={onViewProduct ? 0 : undefined}
+   161→   161→   161→    >
+   162→   162→   162→ {/* Image placeholder */}
+   163→   163→   163→      <div
+   164→   164→   164→        className="relative aspect-square w-full overflow-hidden"
+   165→   165→   165→        style={{ backgroundColor: imgColor }}
+   166→   166→   166→      >
+   167→   167→   167→        <div className="absolute inset-0 flex items-center justify-center">
+   168→   168→   168→          <div
+   169→   169→   169→            className="h-16 w-16 rounded-full opacity-30"
+   170→   170→   170→            style={{ backgroundColor: theme.colors.primary }}
+   171→   171→   171→          />
+   172→   172→   172→        </div>
+   173→   173→   173→        {/* Out of stock overlay */}
+   174→   174→   174→        {!product.inStock && (
+   175→   175→   175→          <div className="absolute inset-0 flex items-center justify-center bg-white/60">
+   176→   176→   176→            <span className="rounded-full bg-gray-900 px-3 py-1 text-xs font-medium text-white">
+   177→   177→   177→              Sold Out
+   178→   178→   178→            </span>
+   179→   179→   179→          </div>
+   180→   180→   180→        )}
+   181→   181→   181→        {/* Discount badge */}
+   182→   182→   182→        {hasDiscount && product.compareAtPrice && (
+   183→   183→   183→          <div className="absolute left-2 top-2 rounded-full bg-red-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+   184→   184→   184→            {Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}% Off
+   185→   185→   185→          </div>
+   186→   186→   186→        )}
+   187→   187→   187→      </div>
+   188→   188→   188→      {/* Info — explicitly reset color to prevent section textColor bleeding into white card */}
+   189→   189→   189→      <div className="p-3 sm:p-4" style={{ color: theme.colors.text }}>
+   190→   190→   190→        {product.category && (
+   191→   191→   191→          <p className="mb-1 text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+   192→   192→   192→            {product.category}
+   193→   193→   193→          </p>
+   194→   194→   194→        )}
+   195→   195→   195→        <h3 className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: theme.colors.text }}>
+   196→   196→   196→          {product.name}
+   197→   197→   197→        </h3>
+   198→   198→   198→        <div className="mt-1.5 flex items-center gap-2">
+   199→   199→   199→          <span className="text-sm font-bold" style={{ color: theme.colors.primary }}>
+   200→   200→   200→            {formatPrice(product.price)}
+   201→   201→   201→          </span>
+   202→   202→   202→          {hasDiscount && product.compareAtPrice && (
+   203→   203→   203→            <span className="text-xs line-through" style={{ color: theme.colors.textMuted }}>
+   204→   204→   204→              {formatPrice(product.compareAtPrice)}
+   205→   205→   205→            </span>
+   206→   206→   206→          )}
+   207→   207→   207→        </div>
+   208→   208→   208→        {showAddToCart && product.inStock && (
+   209→   209→   209→          <button
+   210→   210→   210→            className={`mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 cursor-pointer ${
+   211→   211→   211→              hovered
+   212→   212→   212→                ? 'opacity-100 translate-y-0'
+   213→   213→   213→                : 'opacity-0 translate-y-1 pointer-events-none'
+   214→   214→   214→            }`}
+   215→   215→   215→            style={{
+   216→   216→   216→              backgroundColor: addedFeedback ? '#16a34a' : (buttonBgOverride || theme.colors.primary),
+   217→   217→   217→              color: addedFeedback ? '#ffffff' : (buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary)),
+   218→   218→   218→            }}
+   219→   219→   219→            onClick={handleAddToCart}
+   220→   220→   220→          >
+   221→   221→   221→            {addedFeedback ? 'Added!' : 'Add to Cart'}
+   222→   222→   222→          </button>
+   223→   223→   223→        )}
+   224→   224→   224→      </div>
+   225→   225→   225→    </div>
+   226→   226→   226→  );
+   227→   227→   227→}
+   228→   228→   228→
+   229→   229→   229→
+   230→   230→   230→// ═══════════════════════════════════════════════════════════════════════
+   231→   231→   231→// SECTION RENDERERS
+   232→   232→   232→// ═══════════════════════════════════════════════════════════════════════
+   233→   233→   233→
+   234→   234→   234→// ─── 1. Header ──────────────────────────────────────────────────────────
+   235→   235→   235→
+   236→   236→   236→export function HeaderSection({
+   237→   237→   237→  section,
+   238→   238→   238→  theme,
+   239→   239→   239→  selectedSectionId,
+   240→   240→   240→  onSelectSection,
+   241→   241→   241→}: SectionRendererProps) {
+   242→   242→   242→  const content = section.content as unknown as HeaderContent;
+   243→   243→   243→  const isSelected = selectedSectionId === section.id;
+   244→   244→   244→
+   245→   245→   245→  return (
+   246→   246→   246→    <header
+   247→   247→   247→      className={`sticky top-0 z-40 border-b transition-all duration-200 ${
+   248→   248→   248→        isSelected
+   249→   249→   249→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+   250→   250→   250→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+   251→   251→   251→      }`}
+   252→   252→   252→      style={{
+   253→   253→   253→        backgroundColor: theme.colors.surface,
+   254→   254→   254→        borderColor: theme.colors.border,
+   255→   255→   255→      }}
+   256→   256→   256→      onClick={(e) => {
+   257→   257→   257→        e.stopPropagation();
+   258→   258→   258→        onSelectSection?.(isSelected ? null : section.id);
+   259→   259→   259→      }}
+   260→   260→   260→      data-section-id={section.id}
+   261→   261→   261→      data-section-type={section.type}
+   262→   262→   262→    >
+   263→   263→   263→      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+   264→   264→   264→        {/* Logo / Store Name */}
+   265→   265→   265→        <div className="flex items-center gap-3">
+   266→   266→   266→          {content.logo ? (
+   267→   267→   267→            <img
+   268→   268→   268→              src={content.logo}
+   269→   269→   269→              alt={content.storeName}
+   270→   270→   270→              className="h-8 w-auto object-contain"
+   271→   271→   271→            />
+   272→   272→   272→          ) : (
+   273→   273→   273→            <span
+   274→   274→   274→              className="text-lg font-bold tracking-tight"
+   275→   275→   275→              style={{ color: theme.colors.text }}
+   276→   276→   276→            >
+   277→   277→   277→              {content.storeName}
+   278→   278→   278→            </span>
+   279→   279→   279→          )}
+   280→   280→   280→        </div>
+   281→   281→   281→
+   282→   282→   282→        {/* Navigation */}
+   283→   283→   283→        <nav className="hidden items-center gap-6 md:flex">
+   284→   284→   284→          {content.menuItems.map((item) => (
+   285→   285→   285→            <span
+   286→   286→   286→              key={item.label}
+   287→   287→   287→              className="text-sm font-medium transition-colors hover:opacity-70"
+   288→   288→   288→              style={{ color: theme.colors.textMuted }}
+   289→   289→   289→            >
+   290→   290→   290→              {item.label}
+   291→   291→   291→            </span>
+   292→   292→   292→          ))}
+   293→   293→   293→        </nav>
+   294→   294→   294→
+   295→   295→   295→        {/* Right icons */}
+   296→   296→   296→        <div className="flex items-center gap-4">
+   297→   297→   297→          {content.showSearch && (
+   298→   298→   298→            <button style={{ color: theme.colors.textMuted }} aria-label="Search">
+   299→   299→   299→              <Search className="h-5 w-5" />
+   300→   300→   300→            </button>
+   301→   301→   301→          )}
+   302→   302→   302→          {content.showCart && (
+   303→   303→   303→            <button className="relative" style={{ color: theme.colors.textMuted }} aria-label="Cart">
+   304→   304→   304→              <ShoppingCart className="h-5 w-5" />
+   305→   305→   305→              <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: theme.colors.primary }}>
+   306→   306→   306→                0
+   307→   307→   307→              </span>
+   308→   308→   308→            </button>
+   309→   309→   309→          )}
+   310→   310→   310→          {/* Mobile menu toggle placeholder */}
+   311→   311→   311→          <button className="md:hidden" style={{ color: theme.colors.textMuted }} aria-label="Menu">
+   312→   312→   312→            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+   313→   313→   313→              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+   314→   314→   314→            </svg>
+   315→   315→   315→          </button>
+   316→   316→   316→        </div>
+   317→   317→   317→      </div>
+   318→   318→   318→    </header>
+   319→   319→   319→  );
+   320→   320→   320→}
+   321→   321→   321→
+   322→   322→   322→// ─── 2. Hero ────────────────────────────────────────────────────────────
+   323→   323→   323→
+   324→   324→   324→export function HeroSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+   325→   325→   325→  const content = section.content as unknown as HeroContent;
+   326→   326→   326→  const style = section.style;
+   327→   327→   327→  const isSelected = selectedSectionId === section.id;
+   328→   328→   328→
+   329→   329→   329→  const heightMap = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
+   330→   330→   330→  const alignMap = {
+   331→   331→   331→    left: 'items-start text-left',
+   332→   332→   332→    center: 'items-center text-center',
+   333→   333→   333→    right: 'items-end text-right',
+   334→   334→   334→  };
+   335→   335→   335→
+   336→   336→   336→  // Only apply theme gradient as default background when no custom color or image is set.
+   337→   337→   337→  // If style.backgroundColor is set, respect it — don't cover it with a gradient.
+   338→   338→   338→  const bgGradient = !style.backgroundImage && !style.backgroundColor
+   339→   339→   339→    ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
+   340→   340→   340→    : undefined;
+   341→   341→   341→
+   342→   342→   342→  const outerClasses = [
+   343→   343→   343→    'relative flex transition-all duration-200 cursor-pointer',
+   344→   344→   344→    heightMap[content.height] || heightMap.md,
+   345→   345→   345→    alignMap[content.alignment],
+   346→   346→   346→    pyClass(style.paddingY),
+   347→   347→   347→    isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+   348→   348→   348→  ].join(' ');
+   349→   349→   349→
+   350→   350→   350→  return (
+   351→   351→   351→    <div
+   352→   352→   352→      className={outerClasses}
+   353→   353→   353→      style={{
+   354→   354→   354→        backgroundColor: style.backgroundColor || theme.colors.primary,
+   355→   355→   355→        backgroundImage: style.backgroundImage ? `url(${style.backgroundImage})` : bgGradient,
+   356→   356→   356→        backgroundSize: 'cover',
+   357→   357→   357→        backgroundPosition: 'center',
+   358→   358→   358→        color: style.textColor || '#ffffff',
+   359→   359→   359→      }}
+   360→   360→   360→      onClick={(e) => {
+   361→   361→   361→        e.stopPropagation();
+   362→   362→   362→        onSelectSection?.(isSelected ? null : section.id);
+   363→   363→   363→      }}
+   364→   364→   364→      data-section-id={section.id}
+   365→   365→   365→      data-section-type={section.type}
+   366→   366→   366→    >
+   367→   367→   367→      {/* Overlay */}
+   368→   368→   368→      {style.backgroundImage && style.overlay && (
+   369→   369→   369→        <div className="absolute inset-0 bg-black/50 pointer-events-none" />
+   370→   370→   370→      )}
+   371→   371→   371→      {/* Subtle overlay and decorative elements — only with gradient or image backgrounds */}
+   372→   372→   372→      {!style.backgroundImage && !style.backgroundColor && (
+   373→   373→   373→        <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
+   374→   374→   374→      )}
+   375→   375→   375→      {!style.backgroundImage && !style.backgroundColor && (
+   376→   376→   376→        <>
+   377→   377→   377→          <div className="absolute right-10 top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl" />
+   378→   378→   378→          <div className="absolute bottom-10 left-10 h-32 w-32 rounded-full bg-white/5 blur-2xl" />
+   379→   379→   379→        </>
+   380→   380→   380→      )}
+   381→   381→   381→
+   382→   382→   382→      <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
+   383→   383→   383→        <h1 className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   384→   384→   384→          {content.headline}
+   385→   385→   385→        </h1>
+   386→   386→   386→        {content.subheadline && (
+   387→   387→   387→          <p className="mt-4 max-w-xl text-base opacity-80 sm:text-lg md:text-xl">
+   388→   388→   388→            {content.subheadline}
+   389→   389→   389→          </p>
+   390→   390→   390→        )}
+   391→   391→   391→        {content.ctaText && (
+   392→   392→   392→          <button className="mt-8 inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold shadow-lg transition-transform hover:scale-105 sm:text-base"
+   393→   393→   393→            style={{
+   394→   394→   394→              backgroundColor: section.style.buttonBackgroundColor || '#ffffff',
+   395→   395→   395→              color: section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || '#ffffff'),
+   396→   396→   396→            }}>
+   397→   397→   397→            {content.ctaText}
+   398→   398→   398→            <ArrowRight className="h-4 w-4" />
+   399→   399→   399→          </button>
+   400→   400→   400→        )}
+   401→   401→   401→      </div>
+   402→   402→   402→    </div>
+   403→   403→   403→  );
+   404→   404→   404→}
+   405→   405→   405→
+   406→   406→   406→// ─── 3. Featured Products ───────────────────────────────────────────────
+   407→   407→   407→
+   408→   408→   408→export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
+   409→   409→   409→  const content = section.content as unknown as FeaturedProductsContent;
+   410→   410→   410→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   411→   411→   411→  const featuredProducts = useMemo(
+   412→   412→   412→    () => content.productIds.map((id) => products.find((p) => p.id === id)).filter(Boolean) as StoreProduct[],
+   413→   413→   413→    [content.productIds, products],
+   414→   414→   414→  );
+   415→   415→   415→
+   416→   416→   416→  return (
+   417→   417→   417→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   418→   418→   418→      {content.headline && (
+   419→   419→   419→        <h2 className="mb-2 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   420→   420→   420→          {content.headline}
+   421→   421→   421→        </h2>
+   422→   422→   422→      )}
+   423→   423→   423→      {content.subtitle && (
+   424→   424→   424→        <p className="mb-8 text-sm opacity-65">
+   425→   425→   425→          {content.subtitle}
+   426→   426→   426→        </p>
+   427→   427→   427→      )}
+   428→   428→   428→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   429→   429→   429→        {featuredProducts.map((product) => (
+   430→   430→   430→          <ProductCard
+   431→   431→   431→            key={product.id}
+   432→   432→   432→            product={product}
+   433→   433→   433→            theme={theme}
+   434→   434→   434→            showAddToCart={content.showAddToCart && !forceHideAddToCart}
+   435→   435→   435→            borderRadius={borderRadius}
+   436→   436→   436→            buttonBgOverride={section.style.buttonBackgroundColor}
+   437→   437→   437→            buttonTextOverride={section.style.buttonTextColor}
+   438→   438→   438→            onViewProduct={onViewProduct}
+   439→   439→   439→          />
+   440→   440→   440→        ))}
+   441→   441→   441→      </div>
+   442→   442→   442→    </SectionWrapper>
+   443→   443→   443→  );
+   444→   444→   444→}
+   445→   445→   445→
+   446→   446→   446→// ─── 4. Product Grid ───────────────────────────────────────────────────
+   447→   447→   447→
+   448→   448→   448→export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
+   449→   449→   449→  const content = section.content as unknown as ProductGridContent;
+   450→   450→   450→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   451→   451→   451→
+   452→   452→   452→  const filteredProducts = useMemo(() => {
+   453→   453→   453→    let prods = products;
+   454→   454→   454→    if (content.filterByCategory) {
+   455→   455→   455→      prods = prods.filter((p) => p.category === content.filterByCategory);
+   456→   456→   456→    }
+   457→   457→   457→    return prods;
+   458→   458→   458→  }, [products, content.filterByCategory]);
+   459→   459→   459→
+   460→   460→   460→  return (
+   461→   461→   461→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   462→   462→   462→      {content.headline && (
+   463→   463→   463→        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   464→   464→   464→          {content.headline}
+   465→   465→   465→        </h2>
+   466→   466→   466→      )}
+   467→   467→   467→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   468→   468→   468→        {filteredProducts.map((product) => (
+   469→   469→   469→          <ProductCard
+   470→   470→   470→            key={product.id}
+   471→   471→   471→            product={product}
+   472→   472→   472→            theme={theme}
+   473→   473→   473→            showAddToCart={content.showAddToCart && !forceHideAddToCart}
+   474→   474→   474→            borderRadius={borderRadius}
+   475→   475→   475→            buttonBgOverride={section.style.buttonBackgroundColor}
+   476→   476→   476→            buttonTextOverride={section.style.buttonTextColor}
+   477→   477→   477→            onViewProduct={onViewProduct}
+   478→   478→   478→          />
+   479→   479→   479→        ))}
+   480→   480→   480→      </div>
+   481→   481→   481→      {filteredProducts.length === 0 && (
+   482→   482→   482→        <div className="py-16 text-center opacity-65">
+   483→   483→   483→          <p className="text-sm">No products found.</p>
+   484→   484→   484→        </div>
+   485→   485→   485→      )}
+   486→   486→   486→    </SectionWrapper>
+   487→   487→   487→  );
+   488→   488→   488→}
+   489→   489→   489→
+   490→   490→   490→// ─── 5. Text Banner ─────────────────────────────────────────────────────
+   491→   491→   491→
+   492→   492→   492→export function TextBannerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   493→   493→   493→  const content = section.content as unknown as TextBannerContent;
+   494→   494→   494→  const alignMap = {
+   495→   495→   495→    left: 'text-left',
+   496→   496→   496→    center: 'text-center',
+   497→   497→   497→    right: 'text-right',
+   498→   498→   498→  };
+   499→   499→   499→  const sizeMap = {
+   500→   500→   500→    sm: { headline: 'text-xl sm:text-2xl', body: 'text-sm' },
+   501→   501→   501→    md: { headline: 'text-2xl sm:text-3xl md:text-4xl', body: 'text-base' },
+   502→   502→   502→    lg: { headline: 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl', body: 'text-lg' },
+   503→   503→   503→  };
+   504→   504→   504→  const sizes = sizeMap[content.size] || sizeMap.md;
+   505→   505→   505→
+   506→   506→   506→  return (
+   507→   507→   507→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   508→   508→   508→      <div className={`${alignMap[content.alignment]}`}>
+   509→   509→   509→        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   510→   510→   510→          {content.headline}
+   511→   511→   511→        </h2>
+   512→   512→   512→        {content.body && (
+   513→   513→   513→          <p className={`mt-3 max-w-2xl ${sizes.body} opacity-65`}>
+   514→   514→   514→            {content.body}
+   515→   515→   515→          </p>
+   516→   516→   516→        )}
+   517→   517→   517→      </div>
+   518→   518→   518→    </SectionWrapper>
+   519→   519→   519→  );
+   520→   520→   520→}
+   521→   521→   521→
+   522→   522→   522→// ─── 6. Image Gallery ───────────────────────────────────────────────────
+   523→   523→   523→
+   524→   524→   524→export function ImageGallerySection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   525→   525→   525→  const content = section.content as unknown as ImageGalleryContent;
+   526→   526→   526→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   527→   527→   527→  const gapMap = { sm: 'gap-2', md: 'gap-4', lg: 'gap-6' };
+   528→   528→   528→
+   529→   529→   529→  return (
+   530→   530→   530→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   531→   531→   531→      <div className={`grid ${gridCols(content.columns)} ${gapMap[content.gap] || gapMap.md}`}>
+   532→   532→   532→        {content.images.map((img, i) => (
+   533→   533→   533→          <div key={i} className={`${borderRadius} overflow-hidden group`}>
+   534→   534→   534→            <div
+   535→   535→   535→              className={`aspect-[4/3] w-full ${borderRadius} bg-gray-200 transition-transform duration-300 group-hover:scale-[1.02]`}
+   536→   536→   536→              style={{
+   537→   537→   537→                backgroundColor: stringToColor(img.src || `img-${i}`, theme),
+   538→   538→   538→              }}
+   539→   539→   539→            >
+   540→   540→   540→              <div className="flex h-full items-center justify-center">
+   541→   541→   541→                <svg className="h-8 w-8 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+   542→   542→   542→                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+   543→   543→   543→                </svg>
+   544→   544→   544→              </div>
+   545→   545→   545→            </div>
+   546→   546→   546→            {img.caption && (
+   547→   547→   547→              <p className="mt-2 text-xs opacity-65">
+   548→   548→   548→                {img.caption}
+   549→   549→   549→              </p>
+   550→   550→   550→            )}
+   551→   551→   551→          </div>
+   552→   552→   552→        ))}
+   553→   553→   553→      </div>
+   554→   554→   554→    </SectionWrapper>
+   555→   555→   555→  );
+   556→   556→   556→}
+   557→   557→   557→
+   558→   558→   558→// ─── 7. Testimonials ────────────────────────────────────────────────────
+   559→   559→   559→
+   560→   560→   560→export function TestimonialsSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   561→   561→   561→  const content = section.content as unknown as TestimonialsContent;
+   562→   562→   562→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   563→   563→   563→
+   564→   564→   564→  return (
+   565→   565→   565→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   566→   566→   566→      {content.headline && (
+   567→   567→   567→        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   568→   568→   568→          {content.headline}
+   569→   569→   569→        </h2>
+   570→   570→   570→      )}
+   571→   571→   571→      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+   572→   572→   572→        {content.items.map((item) => (
+   573→   573→   573→          <div
+   574→   574→   574→            key={item.id}
+   575→   575→   575→            className={`${borderRadius} p-6 shadow-sm transition-shadow hover:shadow-md`}
+   576→   576→   576→            style={{
+   577→   577→   577→              backgroundColor: theme.colors.surface,
+   578→   578→   578→              border: `1px solid ${theme.colors.border}`,
+   579→   579→   579→            }}
+   580→   580→   580→          >
+   581→   581→   581→            {/* Stars */}
+   582→   582→   582→            {item.rating && (
+   583→   583→   583→              <div className="mb-3 flex gap-0.5">
+   584→   584→   584→                {Array.from({ length: 5 }).map((_, i) => (
+   585→   585→   585→                  <Star
+   586→   586→   586→                    key={i}
+   587→   587→   587→                    className={`h-4 w-4 ${i < item.rating! ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`}
+   588→   588→   588→                  />
+   589→   589→   589→                ))}
+   590→   590→   590→              </div>
+   591→   591→   591→            )}
+   592→   592→   592→            {/* Quote */}
+   593→   593→   593→            <p className="text-sm leading-relaxed">
+   594→   594→   594→              &ldquo;{item.quote}&rdquo;
+   595→   595→   595→            </p>
+   596→   596→   596→            {/* Author */}
+   597→   597→   597→            <div className="mt-4 flex items-center gap-3">
+   598→   598→   598→              {item.avatar ? (
+   599→   599→   599→                <img
+   600→   600→   600→                  src={item.avatar}
+   601→   601→   601→                  alt={item.author}
+   602→   602→   602→                  className="h-9 w-9 rounded-full object-cover"
+   603→   603→   603→                />
+   604→   604→   604→              ) : (
+   605→   605→   605→                <div
+   606→   606→   606→                  className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+   607→   607→   607→                  style={{ backgroundColor: theme.colors.primary }}
+   608→   608→   608→                >
+   609→   609→   609→                  {getInitials(item.author)}
+   610→   610→   610→                </div>
+   611→   611→   611→              )}
+   612→   612→   612→              <div>
+   613→   613→   613→                <p className="text-sm font-semibold">
+   614→   614→   614→                  {item.author}
+   615→   615→   615→                </p>
+   616→   616→   616→                {item.role && (
+   617→   617→   617→                  <p className="text-xs opacity-65">
+   618→   618→   618→                    {item.role}
+   619→   619→   619→                  </p>
+   620→   620→   620→                )}
+   621→   621→   621→              </div>
+   622→   622→   622→            </div>
+   623→   623→   623→          </div>
+   624→   624→   624→        ))}
+   625→   625→   625→      </div>
+   626→   626→   626→    </SectionWrapper>
+   627→   627→   627→  );
+   628→   628→   628→}
+   629→   629→   629→
+   630→   630→   630→// ─── 8. Newsletter ──────────────────────────────────────────────────────
+   631→   631→   631→
+   632→   632→   632→export function NewsletterSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   633→   633→   633→  const content = section.content as unknown as NewsletterContent;
+   634→   634→   634→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   635→   635→   635→
+   636→   636→   636→  return (
+   637→   637→   637→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   638→   638→   638→      <div className="mx-auto max-w-xl text-center">
+   639→   639→   639→        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
+   640→   640→   640→          <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
+   641→   641→   641→        </div>
+   642→   642→   642→        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   643→   643→   643→          {content.headline}
+   644→   644→   644→        </h2>
+   645→   645→   645→        {content.subtitle && (
+   646→   646→   646→          <p className="mt-2 text-sm opacity-65">
+   647→   647→   647→            {content.subtitle}
+   648→   648→   648→          </p>
+   649→   649→   649→        )}
+   650→   650→   650→        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+   651→   651→   651→          <input
+   652→   652→   652→            type="email"
+   653→   653→   653→            placeholder={content.placeholderText || 'Enter your email'}
+   654→   654→   654→            className={`flex-1 ${borderRadius} border px-4 py-3 text-sm outline-none transition-colors`}
+   655→   655→   655→            style={{
+   656→   656→   656→              backgroundColor: theme.colors.background,
+   657→   657→   657→              borderColor: theme.colors.border,
+   658→   658→   658→              color: theme.colors.text,
+   659→   659→   659→            }}
+   660→   660→   660→            readOnly
+   661→   661→   661→          />
+   662→   662→   662→          <button
+   663→   663→   663→            className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+   664→   664→   664→            style={{
+   665→   665→   665→              backgroundColor: section.style.buttonBackgroundColor || theme.colors.primary,
+   666→   666→   666→              color: section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || theme.colors.primary),
+   667→   667→   667→            }}
+   668→   668→   668→          >
+   669→   669→   669→            {content.buttonText}
+   670→   670→   670→          </button>
+   671→   671→   671→        </div>
+   672→   672→   672→      </div>
+   673→   673→   673→    </SectionWrapper>
+   674→   674→   674→  );
+   675→   675→   675→}
+   676→   676→   676→
+   677→   677→   677→// ─── 9. FAQ ─────────────────────────────────────────────────────────────
+   678→   678→   678→
+   679→   679→   679→export function FAQSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   680→   680→   680→  const content = section.content as unknown as FAQContent;
+   681→   681→   681→  const [openId, setOpenId] = useState<string | null>(null);
+   682→   682→   682→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   683→   683→   683→
+   684→   684→   684→  return (
+   685→   685→   685→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   686→   686→   686→      <div className="mx-auto max-w-2xl">
+   687→   687→   687→        {content.headline && (
+   688→   688→   688→          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   689→   689→   689→            {content.headline}
+   690→   690→   690→          </h2>
+   691→   691→   691→        )}
+   692→   692→   692→        <div className="space-y-3">
+   693→   693→   693→          {content.items.map((item) => {
+   694→   694→   694→            const isOpen = openId === item.id;
+   695→   695→   695→            return (
+   696→   696→   696→              <div
+   697→   697→   697→                key={item.id}
+   698→   698→   698→                className={`${borderRadius} border transition-colors`}
+   699→   699→   699→                style={{ borderColor: theme.colors.border }}
+   700→   700→   700→              >
+   701→   701→   701→                <button
+   702→   702→   702→                  className="flex w-full items-center justify-between px-5 py-4 text-left"
+   703→   703→   703→                  onClick={(e) => {
+   704→   704→   704→                    e.stopPropagation();
+   705→   705→   705→                    setOpenId(isOpen ? null : item.id);
+   706→   706→   706→                  }}
+   707→   707→   707→                >
+   708→   708→   708→                  <span className="text-sm font-semibold">
+   709→   709→   709→                    {item.question}
+   710→   710→   710→                  </span>
+   711→   711→   711→                  {isOpen ? (
+   712→   712→   712→                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+   713→   713→   713→                  ) : (
+   714→   714→   714→                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+   715→   715→   715→                  )}
+   716→   716→   716→                </button>
+   717→   717→   717→                {isOpen && (
+   718→   718→   718→                  <div
+   719→   719→   719→                    className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
+   720→   720→   720→                    style={{
+   721→   721→   721→                      borderColor: theme.colors.border,
+   722→   722→   722→                    }}
+   723→   723→   723→                  >
+   724→   724→   724→                    {item.answer}
+   725→   725→   725→                  </div>
+   726→   726→   726→                )}
+   727→   727→   727→              </div>
+   728→   728→   728→            );
+   729→   729→   729→          })}
+   730→   730→   730→        </div>
+   731→   731→   731→      </div>
+   732→   732→   732→    </SectionWrapper>
+   733→   733→   733→  );
+   734→   734→   734→}
+   735→   735→   735→
+   736→   736→   736→// ─── 10. CTA ─────────────────────────────────────────────────────────────
+   737→   737→   737→
+   738→   738→   738→export function CTASection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   739→   739→   739→  const content = section.content as unknown as CTAContent;
+   740→   740→   740→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   741→   741→   741→
+   742→   742→   742→  // Build base button style from content.style variant
+   743→   743→   743→  const btnBgOverride = section.style.buttonBackgroundColor;
+   744→   744→   744→  const btnTextOverride = section.style.buttonTextColor;
+   745→   745→   745→  const effectiveBtnBg = btnBgOverride || theme.colors.primary;
+   746→   746→   746→  const effectiveBtnText = btnTextOverride || contrastTextColor(effectiveBtnBg);
+   747→   747→   747→
+   748→   748→   748→  const btnStyleMap = {
+   749→   749→   749→    solid: { backgroundColor: effectiveBtnBg, color: effectiveBtnText, border: 'none' },
+   750→   750→   750→    outline: { backgroundColor: 'transparent', color: effectiveBtnText, border: `2px solid ${effectiveBtnBg}` },
+   751→   751→   751→    gradient: {
+   752→   752→   752→      background: `linear-gradient(135deg, ${effectiveBtnBg}, ${theme.colors.secondary})`,
+   753→   753→   753→      color: effectiveBtnText,
+   754→   754→   754→      border: 'none',
+   755→   755→   755→    },
+   756→   756→   756→  };
+   757→   757→   757→  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
+   758→   758→   758→
+   759→   759→   759→  return (
+   760→   760→   760→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   761→   761→   761→      <div className={`mx-auto max-w-2xl text-center`}
+   762→   762→   762→        style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
+   763→   763→   763→      >
+   764→   764→   764→        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   765→   765→   765→          {content.headline}
+   766→   766→   766→        </h2>
+   767→   767→   767→        {content.body && (
+   768→   768→   768→          <p className="mt-3 text-sm opacity-65">
+   769→   769→   769→            {content.body}
+   770→   770→   770→          </p>
+   771→   771→   771→        )}
+   772→   772→   772→        <button
+   773→   773→   773→          className={`${borderRadius} mt-6 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+   774→   774→   774→          style={btnStyle}
+   775→   775→   775→        >
+   776→   776→   776→          {content.ctaText}
+   777→   777→   777→          <ArrowRight className="h-4 w-4" />
+   778→   778→   778→        </button>
+   779→   779→   779→      </div>
+   780→   780→   780→    </SectionWrapper>
+   781→   781→   781→  );
+   782→   782→   782→}
+   783→   783→   783→
+   784→   784→   784→// ─── 11. Categories ─────────────────────────────────────────────────────
+   785→   785→   785→
+   786→   786→   786→export function CategoriesSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   787→   787→   787→  const content = section.content as unknown as CategoriesContent;
+   788→   788→   788→  const borderRadius = borderRadiusClass(theme.borderRadius);
+   789→   789→   789→
+   790→   790→   790→  return (
+   791→   791→   791→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   792→   792→   792→      {content.headline && (
+   793→   793→   793→        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+   794→   794→   794→          {content.headline}
+   795→   795→   795→        </h2>
+   796→   796→   796→      )}
+   797→   797→   797→      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+   798→   798→   798→        {content.items.map((cat) => (
+   799→   799→   799→          <div
+   800→   800→   800→            key={cat.id}
+   801→   801→   801→            className={`${borderRadius} overflow-hidden border transition-shadow hover:shadow-md group cursor-pointer`}
+   802→   802→   802→            style={{ borderColor: theme.colors.border }}
+   803→   803→   803→          >
+   804→   804→   804→            {cat.image ? (
+   805→   805→   805→              <div className="aspect-[3/2] w-full overflow-hidden">
+   806→   806→   806→                <img
+   807→   807→   807→                  src={cat.image}
+   808→   808→   808→                  alt={cat.name}
+   809→   809→   809→                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+   810→   810→   810→                />
+   811→   811→   811→              </div>
+   812→   812→   812→            ) : (
+   813→   813→   813→              <div
+   814→   814→   814→                className="flex aspect-[3/2] w-full items-center justify-center"
+   815→   815→   815→                style={{ backgroundColor: stringToColor(cat.slug, theme) }}
+   816→   816→   816→              >
+   817→   817→   817→                <svg className="h-10 w-10 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+   818→   818→   818→                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 7.125C2.25 6.504 2.754 6 3.375 6h6c.621 0 1.125.504 1.125 1.125v3.75c0 .621-.504 1.125-1.125 1.125h-6a1.125 1.125 0 01-1.125-1.125v-3.75zM14.25 8.625c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v8.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 01-1.125-1.125v-8.25zM3.75 16.125c0-.621.504-1.125 1.125-1.125h5.25c.621 0 1.125.504 1.125 1.125v2.25c0 .621-.504 1.125-1.125 1.125h-5.25a1.125 1.125 0 01-1.125-1.125v-2.25z" />
+   819→   819→   819→                </svg>
+   820→   820→   820→              </div>
+   821→   821→   821→            )}
+   822→   822→   822→            <div className="p-3 sm:p-4">
+   823→   823→   823→              <h3 className="text-sm font-semibold">
+   824→   824→   824→                {cat.name}
+   825→   825→   825→              </h3>
+   826→   826→   826→              {cat.productCount !== undefined && (
+   827→   827→   827→                <p className="mt-0.5 text-xs opacity-65">
+   828→   828→   828→                  {cat.productCount} {cat.productCount === 1 ? 'product' : 'products'}
+   829→   829→   829→                </p>
+   830→   830→   830→              )}
+   831→   831→   831→            </div>
+   832→   832→   832→          </div>
+   833→   833→   833→        ))}
+   834→   834→   834→      </div>
+   835→   835→   835→    </SectionWrapper>
+   836→   836→   836→  );
+   837→   837→   837→}
+   838→   838→   838→
+   839→   839→   839→// ─── 12. Footer ─────────────────────────────────────────────────────────
+   840→   840→   840→
+   841→   841→   841→export function FooterSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   842→   842→   842→  const content = section.content as unknown as FooterContent;
+   843→   843→   843→
+   844→   844→   844→  return (
+   845→   845→   845→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   846→   846→   846→      <div className="space-y-8">
+   847→   847→   847→        {/* Tagline row */}
+   848→   848→   848→        <div>
+   849→   849→   849→          <span className="text-lg font-bold">
+   850→   850→   850→            {content.storeName}
+   851→   851→   851→          </span>
+   852→   852→   852→          {content.tagline && (
+   853→   853→   853→            <p className="mt-1 text-sm opacity-65">
+   854→   854→   854→              {content.tagline}
+   855→   855→   855→            </p>
+   856→   856→   856→          )}
+   857→   857→   857→        </div>
+   858→   858→   858→
+   859→   859→   859→        {/* Link columns */}
+   860→   860→   860→        <div className="grid grid-cols-2 gap-8 sm:grid-cols-3 lg:grid-cols-4">
+   861→   861→   861→          {content.columns.map((col) => (
+   862→   862→   862→            <div key={col.title}>
+   863→   863→   863→              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider">
+   864→   864→   864→                {col.title}
+   865→   865→   865→              </h4>
+   866→   866→   866→              <ul className="space-y-2">
+   867→   867→   867→                {col.links.map((link) => (
+   868→   868→   868→                  <li key={link.label}>
+   869→   869→   869→                    <span className="cursor-pointer text-sm transition-colors hover:opacity-70 opacity-65">
+   870→   870→   870→                      {link.label}
+   871→   871→   871→                    </span>
+   872→   872→   872→                  </li>
+   873→   873→   873→                ))}
+   874→   874→   874→              </ul>
+   875→   875→   875→            </div>
+   876→   876→   876→          ))}
+   877→   877→   877→        </div>
+   878→   878→   878→
+   879→   879→   879→        {/* Bottom row */}
+   880→   880→   880→        <div className="flex flex-col items-center justify-between gap-3 border-t pt-6 sm:flex-row" style={{ borderColor: theme.colors.border }}>
+   881→   881→   881→          {content.copyrightText && (
+   882→   882→   882→            <p className="text-xs opacity-65">
+   883→   883→   883→              {content.copyrightText}
+   884→   884→   884→            </p>
+   885→   885→   885→          )}
+   886→   886→   886→          {/* Social icons placeholder */}
+   887→   887→   887→          {content.socialLinks && content.socialLinks.length > 0 && (
+   888→   888→   888→            <div className="flex gap-3">
+   889→   889→   889→              {content.socialLinks.map((social) => (
+   890→   890→   890→                <span
+   891→   891→   891→                  key={social.platform}
+   892→   892→   892→                  className="flex h-8 w-8 items-center justify-center rounded-full transition-colors hover:opacity-70"
+   893→   893→   893→                  style={{ backgroundColor: `${theme.colors.primary}15`, color: theme.colors.primary }}
+   894→   894→   894→                  title={social.platform}
+   895→   895→   895→                >
+   896→   896→   896→                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+   897→   897→   897→                    <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="1.5" />
+   898→   898→   898→                  </svg>
+   899→   899→   899→                </span>
+   900→   900→   900→              ))}
+   901→   901→   901→            </div>
+   902→   902→   902→          )}
+   903→   903→   903→        </div>
+   904→   904→   904→      </div>
+   905→   905→   905→    </SectionWrapper>
+   906→   906→   906→  );
+   907→   907→   907→}
+   908→   908→   908→
+   909→   909→   909→// ─── 13. Rich Text ──────────────────────────────────────────────────────
+   910→   910→   910→
+   911→   911→   911→export function RichTextSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   912→   912→   912→  const content = section.content as unknown as RichTextContent;
+   913→   913→   913→
+   914→   914→   914→  return (
+   915→   915→   915→    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+   916→   916→   916→      <div
+   917→   917→   917→        className="prose prose-sm max-w-none sm:prose-base"
+   918→   918→   918→        dangerouslySetInnerHTML={{ __html: content.html }}
+   919→   919→   919→      />
+   920→   920→   920→    </SectionWrapper>
+   921→   921→   921→  );
+   922→   922→   922→}
+   923→   923→   923→
+   924→   924→   924→// ─── 14. Spacer ─────────────────────────────────────────────────────────
+   925→   925→   925→
+   926→   926→   926→export function SpacerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   927→   927→   927→  const content = section.content as unknown as SpacerContent;
+   928→   928→   928→  const heightMap = { sm: 'h-6', md: 'h-12', lg: 'h-20', xl: 'h-32' };
+   929→   929→   929→  const isSelected = selectedSectionId === section.id;
+   930→   930→   930→
+   931→   931→   931→  return (
+   932→   932→   932→    <div
+   933→   933→   933→      className={`relative transition-all duration-200 ${heightMap[content.height] || heightMap.md} ${
+   934→   934→   934→        isSelected
+   935→   935→   935→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+   936→   936→   936→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+   937→   937→   937→      }`}
+   938→   938→   938→      onClick={(e) => {
+   939→   939→   939→        e.stopPropagation();
+   940→   940→   940→        onSelectSection?.(isSelected ? null : section.id);
+   941→   941→   941→      }}
+   942→   942→   942→      data-section-id={section.id}
+   943→   943→   943→      data-section-type={section.type}
+   944→   944→   944→    >
+   945→   945→   945→      {/* Dashed guide when selected */}
+   946→   946→   946→      {isSelected && (
+   947→   947→   947→        <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 border-t-2 border-dashed border-[#a855f7]/50" />
+   948→   948→   948→      )}
+   949→   949→   949→    </div>
+   950→   950→   950→  );
+   951→   951→   951→}
+   952→   952→   952→
+   953→   953→   953→// ─── 15. Divider ────────────────────────────────────────────────────────
+   954→   954→   954→
+   955→   955→   955→export function DividerSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+   956→   956→   956→  const isSelected = selectedSectionId === section.id;
+   957→   957→   957→
+   958→   958→   958→  return (
+   959→   959→   959→    <div
+   960→   960→   960→      className={`relative transition-all duration-200 py-2 ${
+   961→   961→   961→        isSelected
+   962→   962→   962→          ? 'ring-2 ring-[#a855f7] ring-offset-2'
+   963→   963→   963→          : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
+   964→   964→   964→      }`}
+   965→   965→   965→      onClick={(e) => {
+   966→   966→   966→        e.stopPropagation();
+   967→   967→   967→        onSelectSection?.(isSelected ? null : section.id);
+   968→   968→   968→      }}
+   969→   969→   969→      data-section-id={section.id}
+   970→   970→   970→      data-section-type={section.type}
+   971→   971→   971→    >
+   972→   972→   972→      <div className="mx-auto max-w-6xl px-6">
+   973→   973→   973→        <Minus className="mx-auto h-px w-full" style={{ color: theme.colors.border }} />
+   974→   974→   974→      </div>
+   975→   975→   975→    </div>
+   976→   976→   976→  );
+   977→   977→   977→}
+   978→   978→   978→
+   979→   979→   979→// ─── Section Renderer Props (shared) ────────────────────────────────────
+   980→   980→   980→
+   981→   981→   981→interface SectionRendererProps {
+   982→   982→   982→  section: Section;
+   983→   983→   983→  theme: StoreTheme;
+   984→   984→   984→  selectedSectionId?: string | null;
+   985→   985→   985→  onSelectSection?: (sectionId: string | null) => void;
+   986→   986→   986→  products: StoreProduct[];
+   987→   987→   987→  onViewProduct?: (productId: string) => void;
+   988→   988→   988→  onNavigate?: (pageId: string) => void;
+   989→   989→   989→  /** When true, force-hide the Add to Cart button on product cards (e.g. home page) */
+   990→   990→   990→  forceHideAddToCart?: boolean;
+   991→   991→   991→}
+   992→   992→   992→
+   993→   993→   993→// ─── Main Section Router ────────────────────────────────────────────────
+   994→   994→   994→
+   995→   995→   995→export function renderSection(props: SectionRendererProps): React.ReactNode {
+   996→   996→   996→  const { section } = props;
+   997→   997→   997→
+   998→   998→   998→  if (!section.visible) return null;
+   999→   999→   999→
+  1000→  1000→  1000→  switch (section.type) {
+  1001→  1001→  1001→    case 'header':
+  1002→  1002→  1002→      return <HeaderSection {...props} />;
+  1003→  1003→  1003→    case 'hero':
+  1004→  1004→  1004→      return <HeroSection {...props} />;
+  1005→  1005→  1005→    case 'featured-products':
+  1006→  1006→  1006→      return <FeaturedProductsSection {...props} />;
+  1007→  1007→  1007→    case 'product-grid':
+  1008→  1008→  1008→      return <ProductGridSection {...props} />;
+  1009→  1009→  1009→    case 'text-banner':
+  1010→  1010→  1010→      return <TextBannerSection {...props} />;
+  1011→  1011→  1011→    case 'image-gallery':
+  1012→  1012→  1012→      return <ImageGallerySection {...props} />;
+  1013→  1013→  1013→    case 'testimonials':
+  1014→  1014→  1014→      return <TestimonialsSection {...props} />;
+  1015→  1015→  1015→    case 'newsletter':
+  1016→  1016→  1016→      return <NewsletterSection {...props} />;
+  1017→  1017→  1017→    case 'faq':
+  1018→  1018→  1018→      return <FAQSection {...props} />;
+  1019→  1019→  1019→    case 'cta':
+  1020→  1020→  1020→      return <CTASection {...props} />;
+  1021→  1021→  1021→    case 'categories':
+  1022→  1022→  1022→      return <CategoriesSection {...props} />;
+  1023→  1023→  1023→    case 'footer':
+  1024→  1024→  1024→      return <FooterSection {...props} />;
+  1025→  1025→  1025→    case 'rich-text':
+  1026→  1026→  1026→      return <RichTextSection {...props} />;
+  1027→  1027→  1027→    case 'spacer':
+  1028→  1028→  1028→      return <SpacerSection {...props} />;
+  1029→  1029→  1029→    case 'divider':
+  1030→  1030→  1030→      return <DividerSection {...props} />;
+  1031→  1031→  1031→    default:
+  1032→  1032→  1032→      return null;
+  1033→  1033→  1033→  }
+  1034→  1034→  1034→}
+  1035→  1035→  1035→
