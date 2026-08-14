@@ -54,6 +54,12 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
   const activePrice = selectedVariant?.price ?? product?.price ?? 0;
   const activeInStock = selectedVariant ? selectedVariant.inStock : (product?.inStock ?? false);
 
+  // Other products for "You Might Also Like"
+  const otherProducts = useMemo(() => {
+    if (!product) return [];
+    return store.products.filter((p) => p.id !== product.id);
+  }, [store.products, product]);
+
   const handleAddToCart = () => {
     if (!product || !activeInStock) return;
     const itemToAdd: StoreProduct = selectedVariant
@@ -302,6 +308,66 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
           )}
         </div>
       </div>
+
+      {/* You Might Also Like */}
+      {otherProducts.length > 0 && (
+        <div className="mt-16 border-t pt-10" style={{ borderColor: theme.colors.border }}>
+          <h2
+            className="mb-6 text-lg font-bold"
+            style={{ color: theme.colors.text }}
+          >
+            You Might Also Like
+          </h2>
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+            {otherProducts.map((p) => {
+              const imgC = stringToColor(p.id);
+              const hasD = !!(p.compareAtPrice && p.compareAtPrice > p.price);
+              return (
+                <div
+                  key={p.id}
+                  className={`${radius} group cursor-pointer overflow-hidden border transition-shadow duration-200 hover:shadow-md`}
+                  style={{
+                    borderColor: theme.colors.border,
+                    backgroundColor: '#ffffff',
+                  }}
+                  onClick={() => onViewProduct?.(p.id)}
+                >
+                  <div
+                    className="relative aspect-square w-full overflow-hidden"
+                    style={{ backgroundColor: imgC }}
+                  >
+                    <div className="flex h-full w-full items-center justify-center">
+                      <div
+                        className="h-12 w-12 rounded-full opacity-25"
+                        style={{ backgroundColor: theme.colors.primary }}
+                      />
+                    </div>
+                    {hasD && p.compareAtPrice && (
+                      <div className="absolute left-1.5 top-1.5 rounded-full bg-red-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
+                        {Math.round(((p.compareAtPrice - p.price) / p.compareAtPrice) * 100)}% Off
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-2.5 sm:p-3">
+                    <h3
+                      className="text-xs font-semibold leading-snug line-clamp-2"
+                      style={{ color: theme.colors.text }}
+                    >
+                      {p.name}
+                    </h3>
+                    <span
+                      className="mt-1 block text-xs font-bold"
+                      style={{ color: theme.colors.primary }}
+                    >
+                      {formatPrice(p.price)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

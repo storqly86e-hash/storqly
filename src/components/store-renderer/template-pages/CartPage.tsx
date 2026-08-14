@@ -5,9 +5,12 @@ import type { TemplatePageProps } from './types';
 import { useCartStore } from '@/lib/cart-store';
 import { formatPrice, contrastTextColor, stringToColor, borderRadiusClass } from '../helpers';
 
-export function CartPage({ store, onNavigate }: TemplatePageProps) {
+export function CartPage({ store, page, onNavigate }: TemplatePageProps) {
   const theme = store.theme;
   const radius = borderRadiusClass(theme.borderRadius);
+  const meta = page?.metadata;
+  const headline = meta?.headline || 'Shopping Cart';
+  const emptyMessage = meta?.emptyMessage || 'Looks like you have not added anything to your cart yet. Start shopping to fill it up!';
 
   const items = useCartStore((s) => s.items);
   const updateQuantity = useCartStore((s) => s.updateQuantity);
@@ -31,10 +34,10 @@ export function CartPage({ store, onNavigate }: TemplatePageProps) {
           <ShoppingBag className="h-10 w-10" style={{ color: theme.colors.textMuted }} />
         </div>
         <h2 className="text-xl font-bold" style={{ color: theme.colors.text }}>
-          Your cart is empty
+          {headline}
         </h2>
         <p className="mt-2 text-sm text-center max-w-sm" style={{ color: theme.colors.textMuted }}>
-          Looks like you haven't added anything to your cart yet. Start shopping to fill it up!
+          {emptyMessage}
         </p>
         <button
           className={`mt-6 ${radius} px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80`}
@@ -56,7 +59,7 @@ export function CartPage({ store, onNavigate }: TemplatePageProps) {
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: theme.colors.text }}>
-            Shopping Cart
+            {headline}
           </h1>
           <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
             {items.length} {items.length === 1 ? 'item' : 'items'}

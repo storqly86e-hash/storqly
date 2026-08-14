@@ -595,7 +595,51 @@ function ensureTemplatePages(store: Store, log: ReturnType<typeof createLogger>)
   }
 }
 
-/** Ensure at least 1 product is marked as featured (for featured-products sections) */
+/** Fill in default metadata for template pages using store name for branding */
+function ensurePageMetadata(store: Store, log: ReturnType<typeof createLogger>): void {
+  const name = store.name || 'My Store';
+
+  // Generate branded metadata from store name (deterministic — no AI needed)
+  const branded: Record<string, Record<string, string>> = {
+    collection: {
+      headline: `The ${name} Collection`,
+      subtitle: `Curated pieces for every style`,
+    },
+    cart: {
+      headline: `Your ${name} Selection`,
+      emptyMessage: `Your ${name} collection awaits. Start exploring our pieces!`,
+    },
+    checkout: {
+      successHeadline: `Welcome to ${name}!`,
+      successMessage: `Thank you for your order from ${name}. Your items are on the way!`,
+    },
+  };
+
+  let fixed = 0;
+  for (const page of store.pages) {
+    const typeDefaults = branded[page.type || ''];
+    if (!typeDefaults) continue;
+
+    if (!page.metadata || typeof page.metadata !== 'object') {
+      page.metadata = { ...typeDefaults };
+      fixed += Object.keys(typeDefaults).length;
+      continue;
+    }
+
+    // Only fill in keys the AI explicitly generated; keep AI text if present
+    const missing = Object.keys(typeDefaults).filter((k) => !page.metadata[k] || typeof page.metadata[k] !== 'string' || page.metadata[k].trim().length === 0);
+    for (const key of missing) {
+      page.metadata[key] = typeDefaults[key];
+      fixed++;
+    }
+  }
+
+  if (fixed > 0) {
+    log.log({ field: 'page metadata', action: 'defaulted', to: `filled ${fixed} metadata values with branded defaults for ${name}` });
+  }
+}
+
+/** Ensure at least one product is marked as featured (for featured-products sections) */
 function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogger>): void {
   const featuredCount = store.products.filter((p) => p.featured).length;
   if (featuredCount < 1 && store.products.length >= 1) {
@@ -715,6 +759,7 @@ export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult |
   ensureHomepage(store, log);
   ensureFeaturedProducts(store, log);
   ensureTemplatePages(store, log);
+  ensurePageMetadata(store, log);
 
   // ── Build result ──
   const logEntries = log.getLogs();

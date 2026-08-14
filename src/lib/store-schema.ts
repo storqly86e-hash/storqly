@@ -217,6 +217,8 @@ export interface StorePage {
   isHomepage: boolean;
   productId?: string; // for 'product' type — references a product in store.products
   sections: Section[];
+  /** Brand-specific metadata for template pages (Shop, Cart, Checkout). Theme-aware text overrides. */
+  metadata?: Record<string, string>;
 }
 
 export interface Store {

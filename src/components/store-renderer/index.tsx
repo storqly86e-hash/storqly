@@ -161,18 +161,20 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
 
 function TemplatePageRenderer({
   store,
+  page,
   pageType,
   productId,
   onNavigate,
   onViewProduct,
 }: {
   store: Store;
+  page?: StorePage;
   pageType: PageType;
   productId?: string;
   onNavigate: (pageId: string) => void;
   onViewProduct?: (productId: string) => void;
 }) {
-  const props = { store, onNavigate, onViewProduct };
+  const props = { store, page, onNavigate, onViewProduct };
 
   switch (pageType) {
     case 'collection':
@@ -322,6 +324,7 @@ export function StoreRenderer({
         {isTemplatePage ? (
           <TemplatePageRenderer
             store={{ ...store, pages: effectivePages }}
+            page={currentPage}
             pageType={pageType}
             productId={currentPage.productId}
             onNavigate={handleNavigate}

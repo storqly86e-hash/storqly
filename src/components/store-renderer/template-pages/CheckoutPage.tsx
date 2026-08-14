@@ -19,9 +19,12 @@ interface FormData {
   cardCvc: string;
 }
 
-export function CheckoutPage({ store, onNavigate }: TemplatePageProps) {
+export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
   const theme = store.theme;
   const radius = borderRadiusClass(theme.borderRadius);
+  const meta = page?.metadata;
+  const successHeadline = meta?.successHeadline || 'Order Confirmed!';
+  const successMessage = meta?.successMessage || 'Thank you for your order. This is a demo checkout - no payment was processed. In a production store, your order would be on its way!';
 
   const items = useCartStore((s) => s.items);
   const getSubtotal = useCartStore((s) => s.getSubtotal);
@@ -114,11 +117,10 @@ export function CheckoutPage({ store, onNavigate }: TemplatePageProps) {
           </svg>
         </div>
         <h2 className="text-2xl font-bold" style={{ color: theme.colors.text }}>
-          Order Confirmed!
+          {successHeadline}
         </h2>
         <p className="mt-2 text-sm text-center max-w-md" style={{ color: theme.colors.textMuted }}>
-          Thank you for your order. This is a demo checkout — no payment was processed.
-          In a production store, your order would be on its way!
+          {successMessage}
         </p>
         <button
           className={`mt-6 ${radius} px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80`}

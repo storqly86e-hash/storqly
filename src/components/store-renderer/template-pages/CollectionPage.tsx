@@ -10,12 +10,16 @@ import {
   borderRadiusClass,
 } from '../helpers';
 
-export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
+export function CollectionPage({ store, page, onViewProduct }: TemplatePageProps) {
   const theme = store.theme;
   const products = store.products;
   const radius = borderRadiusClass(theme.borderRadius);
+  const meta = page?.metadata;
 
   const [search, setSearch] = useState('');
+
+  const headline = meta?.headline || 'All Products';
+  const subtitle = meta?.subtitle || '';
 
   const filtered = useMemo(() => {
     if (!search.trim()) return products;
@@ -34,6 +38,9 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
     return Array.from(cats).sort();
   }, [products]);
 
+  const emptyMsg = meta?.emptyMessage || 'Products will appear here once they are added to your store.';
+
+  // Empty state
   if (products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-32 px-6">
@@ -44,10 +51,10 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
           <Package className="h-8 w-8" style={{ color: theme.colors.textMuted }} />
         </div>
         <p className="text-lg font-medium" style={{ color: theme.colors.text }}>
-          No products yet
+          {headline}
         </p>
-        <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
-          Products will appear here once they're added to your store.
+        <p className="mt-1 text-sm text-center max-w-sm" style={{ color: theme.colors.textMuted }}>
+          {emptyMsg}
         </p>
       </div>
     );
@@ -55,18 +62,44 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
-      {/* Page title */}
-      <div className="mb-8">
-        <h1
-          className="text-2xl font-bold tracking-tight sm:text-3xl"
-          style={{ color: theme.colors.text }}
+      {/* Brand hero banner */
+      {subtitle ? (
+        <div
+          className="mb-10 rounded-xl px-8 py-10 text-center sm:px-12"
+          style={{ backgroundColor: theme.colors.primary }}
         >
-          All Products
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
-          {products.length} {products.length === 1 ? 'product' : 'products'}
-        </p>
-      </div>
+          <h1
+            className="text-2xl font-bold tracking-tight sm:text-3xl"
+            style={{ color: contrastTextColor(theme.colors.primary) }}
+          >
+            {headline}
+          </h1>
+          <p
+            className="mt-2 text-sm sm:text-base"
+            style={{ color: contrastTextColor(theme.colors.primary), opacity: 0.85 }}
+          >
+            {subtitle}
+          </p>
+          <p
+            className="mt-3 text-xs"
+            style={{ color: contrastTextColor(theme.colors.primary), opacity: 0.6 }}
+          >
+            {products.length} {products.length === 1 ? 'product' : 'products'}
+          </p>
+        </div>
+      ) : (
+        <div className="mb-8">
+          <h1
+            className="text-2xl font-bold tracking-tight sm:text-3xl"
+            style={{ color: theme.colors.text }}
+          >
+            {headline}
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: theme.colors.textMuted }}>
+            {products.length} {products.length === 1 ? 'product' : 'products'}
+          </p>
+        </div>
+      )}
 
       {/* Search bar */}
       {products.length > 3 && (
@@ -144,7 +177,6 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
                 }}
                 onClick={() => onViewProduct?.(product.id)}
               >
-                {/* Image area */}
                 <div
                   className="relative aspect-square w-full overflow-hidden"
                   style={{ backgroundColor: imgColor }}
@@ -174,7 +206,6 @@ export function CollectionPage({ store, onViewProduct }: TemplatePageProps) {
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="p-3 sm:p-4" style={{ color: theme.colors.text }}>
                   {product.category && (
                     <p
