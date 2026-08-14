@@ -337,7 +337,13 @@ export function AuthButton({
           variant="ghost"
           size="icon"
           className="h-8 w-8 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
-          onClick={() => signOut({ callbackUrl: '/' })}
+          onClick={async () => {
+            // Use redirect:false to prevent NextAuth from constructing an
+            // absolute URL using NEXTAUTH_URL (which breaks on proxy domains).
+            // We handle the redirect ourselves using a relative path.
+            await signOut({ redirect: false })
+            window.location.href = '/'
+          }}
           aria-label="Sign out"
         >
           <LogOut className="h-3.5 w-3.5" />

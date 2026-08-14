@@ -111,3 +111,23 @@ Stage Summary:
 - Dev server: zero errors
 - Browser: zero console errors
 - Ready for Step 5 (Store ownership)
+
+---
+Task ID: Step 4 Bugfix — Sign Out Proxy Redirect
+Agent: Main Agent
+Task: Fix signOut() redirecting to hardcoded localhost:3000 on proxy domains
+
+Work Log:
+- Diagnosed: NEXTAUTH_URL=http://localhost:3000 in .env.local caused NextAuth to construct absolute redirect URLs using localhost
+- Fix: Changed signOut from `signOut({ callbackUrl: '/' })` to `signOut({ redirect: false })` + `window.location.href = '/'`
+- This bypasses NextAuth's URL construction entirely — `window.location.href = '/'` is always relative to the current origin
+- KEPT NEXTAUTH_URL in .env.local (required for NextAuth internals / CSRF / provider config)
+- Verified via curl: register→sign-in→session→signout→session-destroyed, all correct
+
+Stage Summary:
+- Files modified: 1 (auth-modal.tsx — 1 line changed in onClick handler)
+- Signout now works on any domain (localhost, proxy, production) — no hardcoded URLs
+- signIn already used `redirect: false` so was unaffected
+- Lint: clean
+- Curl E2E: register ✅, sign-in ✅, session ✅, sign-out ✅, session-destroyed ✅
+- User verification needed on proxy URL (sandbox Turbopack OOM prevents agent-browser testing)
