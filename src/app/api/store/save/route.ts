@@ -34,6 +34,14 @@ export async function POST(req: NextRequest) {
       where: { id: store.id },
     });
 
+    // Ownership enforcement: if record exists and is owned by a different user, block
+    if (existing?.userId && existing.userId !== userId) {
+      return NextResponse.json(
+        { error: 'You do not have permission to edit this store.' },
+        { status: 403 }
+      );
+    }
+
     const record = await db.store.upsert({
       where: { id: store.id },
       update: {

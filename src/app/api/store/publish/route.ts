@@ -29,6 +29,17 @@ export async function POST(req: NextRequest) {
     const serializedStore = JSON.stringify(store);
     const now = new Date();
 
+    // Ownership enforcement: if record exists and is owned by a different user, block
+    const existing = await db.store.findUnique({
+      where: { id: store.id },
+    });
+    if (existing?.userId && existing.userId !== userId) {
+      return NextResponse.json(
+        { error: 'You do not have permission to publish this store.' },
+        { status: 403 }
+      );
+    }
+
     // Upsert: create or update the store record
     const record = await db.store.upsert({
       where: { id: store.id },

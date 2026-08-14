@@ -1,11 +1,15 @@
 // ========================================
-// Published Store Lookup API
+// Store Lookup API
 // ========================================
 // GET /api/store/lookup?slug=xxx
-// Returns the published store's schema JSON for a given slug.
+//
+// Access rules:
+//   Published stores   → public (anyone can view)
+//   Unpublished stores → requires auth + ownership match
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,9 +27,44 @@ export async function GET(req: NextRequest) {
       where: { slug: slug.trim() },
     });
 
-    if (!record || !record.published) {
+    if (!record) {
       return NextResponse.json(
-        { error: 'Store not found or not published.' },
+        { error: 'Store not found.' },
+        { status: 404 }
+      );
+    }
+
+    // Published stores are public — no auth required
+    if (record.published) {
+      let storeData: unknown;
+      try {
+        storeData = JSON.parse(record.schema);
+      } catch {
+        return NextResponse.json(
+          { error: 'Store data is corrupted.' },
+          { status: 500 }
+        );
+      }
+
+      return NextResponse.json({
+        store: storeData,
+        publishedAt: record.publishedAt?.toISOString() ?? null,
+      });
+    }
+
+    // Unpublished stores require auth + ownership
+    let session;
+    try {
+      session = await requireAuth();
+    } catch (e) {
+      if (e instanceof AuthError) return authErrorResponse(e);
+      throw e;
+    }
+
+    // Ownership check: record must be owned by the authenticated user
+    if (record.userId && record.userId !== session.user.id) {
+      return NextResponse.json(
+        { error: 'Store not found.' },
         { status: 404 }
       );
     }
@@ -42,9 +81,10 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       store: storeData,
-      publishedAt: record.publishedAt?.toISOString() ?? null,
+      publishedAt: null,
     });
   } catch (err: unknown) {
+    if (err instanceof AuthError) return authErrorResponse(err);
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Store Lookup] Unexpected error:', msg);
     return NextResponse.json(

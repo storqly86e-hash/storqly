@@ -224,3 +224,39 @@ Work Log:
 Stage Summary:
 - Step 5 LOCKED. Do not modify auth guard logic in generate/save/publish/chat/marketing-kit without flagging first.
 - Locked features list: generation reliability, publish, mobile, visual/chat editor, dual-sync, multi-page Steps 1-5, Marketing Kit, Auth Steps 1-5 (including guards), 502 auto-retry
+---
+Task ID: Store Ownership Enforcement
+Agent: Main Agent
+Task: Add ownership checks to save/publish/lookup so users can only modify their own stores
+
+Work Log:
+- Added ownership check to /api/store/save: if existing record has userId !== current user → 403
+- Added ownership check to /api/store/publish: same pattern → 403
+- Rewrote /api/store/lookup with split logic:
+  - Published stores: public (no auth), identical to before
+  - Unpublished stores: require auth + ownership match; non-owners get 404 (not 403, to avoid info leak)
+- Confirmed page.tsx needs NO changes — existing PublishedStoreViewer error handling already shows "Store Not Found" for 404
+- Regression: save/route.ts only +7 lines (ownership check block), publish/route.ts only +10 lines, all other code untouched
+
+8-test API verification suite (curl, two users):
+  1. ✅ First save (no existing DB record) → 200, owned by User A
+  2. ✅ Same user saves again → 200 (ownership match)
+  3. ✅ User B tries to save User A's store → 403, store name unchanged
+  4. ✅ User B tries to publish User A's store → 403
+  5. ✅ User B looks up User A's unpublished store → 404 (not 403)
+  6. ✅ User A looks up own unpublished store → 200
+  7. ✅ Anonymous looks up unpublished store → 401
+  8. ✅ User A publishes → public lookup (no auth) → 200
+
+Latency (steady state):
+  - Save with ownership check: ~10-15ms (findUnique + string compare = ~2ms overhead)
+  - Lookup published (public): ~5ms
+  - Lookup non-existent slug: ~7-9ms
+
+Stage Summary:
+- Files modified: 3 (save/route.ts, publish/route.ts, lookup/route.ts)
+- Files NOT modified: page.tsx (existing error handling sufficient)
+- Lint: clean (0 errors, 0 warnings)
+- Dev log: zero errors
+- Edge case confirmed: in-memory-only stores get their first save without false-positive 403 (no existing DB record → skip ownership check → create with userId)
+- Security: ownership failures return 404 (lookup) or 403 (save/publish) — no information leakage
