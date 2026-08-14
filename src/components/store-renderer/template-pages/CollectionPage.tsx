@@ -62,7 +62,6 @@ export function CollectionPage({ store, page, onViewProduct }: TemplatePageProps
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
-      {/* Brand hero banner */
       {subtitle ? (
         <div
           className="mb-10 rounded-xl px-8 py-10 text-center sm:px-12"
