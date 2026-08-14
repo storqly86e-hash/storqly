@@ -207,3 +207,20 @@ Stage Summary:
 - Fix: auto-retry once with 2s pause on 502/503/504 + network errors
 - Files changed: src/app/page.tsx, src/components/marketing-kit/index.tsx, src/components/chat-panel/index.tsx
 - Verified end-to-end via agent-browser
+
+---
+Task ID: Step 5 — Lock Confirmation
+Agent: Main Agent
+Task: Record Step 5 as locked per standing protocol
+
+Work Log:
+- User verified all 9 manual test steps on actual proxy URL:
+  1. Logged-out Generate → blocked, modal opens, no request sent
+  2. Register → login → modal closes, prompt preserved
+  3. Generate (authenticated) → works normally
+  4. Auth guards confirmed live on all 5 routes: generate, save, publish, chat, marketing-kit
+- Added 502 auto-retry fix during this session (transient gateway error during Turbopack recompile)
+
+Stage Summary:
+- Step 5 LOCKED. Do not modify auth guard logic in generate/save/publish/chat/marketing-kit without flagging first.
+- Locked features list: generation reliability, publish, mobile, visual/chat editor, dual-sync, multi-page Steps 1-5, Marketing Kit, Auth Steps 1-5 (including guards), 502 auto-retry
