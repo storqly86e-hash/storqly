@@ -114,18 +114,45 @@ export default function ChatPanel() {
       try {
         // Send to API with current store and last 20 messages
         const last20 = chatMessages.slice(-20);
-        const res = await fetch('/api/store/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: trimmed,
-            store: store,
-            history: last20,
-          }),
-        });
 
-        if (!res.ok) {
-          throw new Error(`Request failed with status ${res.status}`);
+        // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
+        const RETRYABLE = [502, 503, 504];
+        let res: Response | undefined;
+        let retryCount = 0;
+        const maxRetries = 1;
+
+        while (retryCount <= maxRetries) {
+          try {
+            res = await fetch('/api/store/chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                message: trimmed,
+                store: store,
+                history: last20,
+              }),
+            });
+
+            if (!res.ok && RETRYABLE.includes(res.status) && retryCount < maxRetries) {
+              retryCount++;
+              console.warn(`[Chat] Gateway error ${res.status}, retrying in 2s...`);
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            break;
+          } catch (fetchErr: unknown) {
+            if (fetchErr instanceof TypeError && retryCount < maxRetries) {
+              retryCount++;
+              console.warn(`[Chat] Network error, retrying in 2s...`);
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            throw fetchErr;
+          }
+        }
+
+        if (!res!.ok) {
+          throw new Error(`Request failed with status ${res!.status}`);
         }
 
         const data = await res.json();

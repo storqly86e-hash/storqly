@@ -140,15 +140,41 @@ export default function MarketingKit({
           ? { prompt: originalPrompt }
           : { prompt: originalPrompt, continueFrom: accumulated };
 
-        const res = await fetch('/api/marketing-kit/generate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bodyPayload),
-          signal: controller.signal,
-        });
+        // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
+        const RETRYABLE = [502, 503, 504];
+        let res: Response | undefined;
+        let retryCount = 0;
+        const maxRetries = 1;
 
-        if (!res.ok) {
-          throw new Error(`Server error (${res.status}). Please try again.`);
+        while (retryCount <= maxRetries) {
+          try {
+            res = await fetch('/api/marketing-kit/generate', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(bodyPayload),
+              signal: controller.signal,
+            });
+
+            if (!res.ok && RETRYABLE.includes(res.status) && retryCount < maxRetries) {
+              retryCount++;
+              console.warn(`[MK Client] Gateway error ${res.status}, retrying in 2s...`);
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            break;
+          } catch (fetchErr: unknown) {
+            if (fetchErr instanceof TypeError && retryCount < maxRetries) {
+              retryCount++;
+              console.warn(`[MK Client] Network error, retrying in 2s...`);
+              await new Promise((r) => setTimeout(r, 2000));
+              continue;
+            }
+            throw fetchErr;
+          }
+        }
+
+        if (!res!.ok) {
+          throw new Error(`Server error (${res!.status}). Please try again.`);
         }
 
         if (!res.body) {

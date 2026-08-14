@@ -170,17 +170,49 @@ function LandingPage() {
     try {
       console.log('[Storqly] Starting SSE store generation for prompt:', trimmed)
 
-      const res = await fetch('/api/store/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: trimmed }),
-        signal: controller.signal,
-      })
+      // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
+      // Caddy returns 502 when Turbopack is briefly unavailable during recompilation.
+      // One retry with a 2s pause is enough to let the server finish recompiling.
+      const RETRYABLE_STATUSES = [502, 503, 504]
+      let res: Response | undefined
+      let retryCount = 0
+      const maxRetries = 1
 
-      if (!res.ok) {
-        let errorMsg = `Server error (${res.status})`
+      while (retryCount <= maxRetries) {
         try {
-          const errorData = await res.json()
+          res = await fetch('/api/store/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: trimmed }),
+            signal: controller.signal,
+          })
+
+          // If the status is retryable, wait and loop again
+          if (!res.ok && RETRYABLE_STATUSES.includes(res.status) && retryCount < maxRetries) {
+            retryCount++
+            console.warn(`[Storqly] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 2s...`)
+            setGenerationStatus('Connection issue — retrying...')
+            await new Promise(r => setTimeout(r, 2000))
+            continue
+          }
+          break // Success or non-retryable error — exit loop
+        } catch (fetchErr: unknown) {
+          // Network-level error (DNS failure, connection refused, etc.)
+          if (fetchErr instanceof TypeError && retryCount < maxRetries) {
+            retryCount++
+            console.warn(`[Storqly] Network error, retrying (${retryCount}/${maxRetries}) in 2s...`)
+            setGenerationStatus('Connection issue — retrying...')
+            await new Promise(r => setTimeout(r, 2000))
+            continue
+          }
+          throw fetchErr // Re-throw if out of retries or not a network error
+        }
+      }
+
+      if (!res!.ok) {
+        let errorMsg = `Server error (${res!.status})`
+        try {
+          const errorData = await res!.json()
           errorMsg = errorData.error || errorMsg
         } catch { /* ignore parse error */ }
         throw new Error(errorMsg)

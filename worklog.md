@@ -187,3 +187,23 @@ Stage Summary:
 - Design: defense-in-depth (frontend intercepts + backend guards)
 - Save/publish now associate userId with new stores
 - Backlog noted: .env.local persistence, Unsplash key needed
+
+---
+Task ID: 502-fix
+Agent: Main Agent
+Task: Fix transient 502 gateway error on store generation by adding auto-retry logic
+
+Work Log:
+- Investigated 502 error: caused by Caddy returning 502 when Turbopack dev server is temporarily unavailable during recompilation
+- Added auto-retry logic (1 retry, 2s delay) for 502/503/504 status codes in 3 components:
+  1. src/app/page.tsx handleGenerate — SSE stream fetch (shows "Connection issue — retrying..." status)
+  2. src/components/marketing-kit/index.tsx handleGenerate — SSE stream fetch
+  3. src/components/chat-panel/index.tsx handleSend — JSON fetch
+- Also handles network-level errors (TypeError from fetch) with same retry logic
+- Lint passed clean, browser verified: registered → logged in → generated "Bean Counter" store → 200 OK, zero errors
+
+Stage Summary:
+- Root cause: transient gateway 502 when Turbopack is recompiling during request
+- Fix: auto-retry once with 2s pause on 502/503/504 + network errors
+- Files changed: src/app/page.tsx, src/components/marketing-kit/index.tsx, src/components/chat-panel/index.tsx
+- Verified end-to-end via agent-browser
