@@ -35,7 +35,7 @@ import AuthModal, { AuthButton } from '@/components/auth-modal'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'sonner'
+import { toast, Toaster } from '@/components/ui/sonner'
 import {
   PanelGroup,
   Panel,
@@ -1026,6 +1026,7 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
   return (
     <>
       <StoreRenderer store={store} />
+      <Toaster />
       {/* Minimal footer for published stores */}
       <div className="fixed bottom-3 right-3 z-40">
         <a
@@ -1057,20 +1058,23 @@ export default function Home() {
   }
 
   return (
-    <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>
-      {view === 'landing' ? <LandingPage /> : <EditorView />}
+    <>
+      <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>
+        {view === 'landing' ? <LandingPage /> : <EditorView />}
 
-      {view === 'landing' && (
-        <footer className="mt-auto border-t border-white/[0.05] px-5 py-6">
-          <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 sm:flex-row">
-            <p className="text-sm text-zinc-600">© 2025 Storqly. AI-first commerce.</p>
-            <p className="text-xs text-zinc-700">
-              Build, customize, and launch — powered by AI.
-            </p>
-            <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-11-072515Z-279ad2e</p>
-          </div>
-        </footer>
-      )}
-    </main>
+        {view === 'landing' && (
+          <footer className="mt-auto border-t border-white/[0.05] px-5 py-6">
+            <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 sm:flex-row">
+              <p className="text-sm text-zinc-600">© 2025 Storqly. AI-first commerce.</p>
+              <p className="text-xs text-zinc-700">
+                Build, customize, and launch — powered by AI.
+              </p>
+              <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-11-072515Z-279ad2e</p>
+            </div>
+          </footer>
+        )}
+      </main>
+      <Toaster />
+    </>
   )
 }

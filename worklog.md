@@ -281,3 +281,30 @@ Stage Summary:
 - Side effect: NEXTAUTH_SECRET regenerated → all old sessions invalidated (expected, one-time)
 - UNSPLASH_ACCESS_KEY still placeholder — user to provide real key
 - Files modified: .gitignore (+2 lines), .env.local (created, committed)
+
+---
+Task ID: Toast System Fix
+Agent: Main Agent
+Task: Fix all Sonner toasts not rendering (Save, Publish, error toasts all silent)
+
+Work Log:
+- User reported Save toast (with store ID/slug) not appearing after clicking Save
+- Agent Browser E2E reproduction confirmed: Save API returns 200, but Toaster DOM has 0 children
+- Further testing showed Publish toast.success() also fails — toasts are fundamentally broken across the entire app
+- Root cause: Turbopack module deduplication issue — `import { toast } from 'sonner'` in page.tsx and `import { Toaster } from 'sonner'` via layout.tsx resolve to DIFFERENT sonner module instances, so the toast function's internal store never connects to the Toaster component's subscriber
+- Fix applied (3-part):
+  1. Exported `toast` from `@/components/ui/sonner.tsx` alongside `Toaster`
+  2. Changed ALL toast imports across 5 files from `'sonner'` to `'@/components/ui/sonner'` (page.tsx, auth-modal.tsx, visual-editor/index.tsx, marketing-kit/index.tsx, chat-panel/index.tsx)
+  3. Moved `<Toaster />` from layout.tsx into page.tsx (both Home and PublishedStoreViewer returns) to ensure same bundle
+- Removed unused Toaster import from layout.tsx
+- Agent Browser verification:
+  - Save toast: ✅ shows "Draft saved — ID: xxx... Slug: yyy" (1 child in Toaster DOM)
+  - Publish toast: ✅ shows "Store published successfully!" (1 child in Toaster DOM)
+- Lint: clean (0 errors, 0 warnings)
+
+Stage Summary:
+- Root cause: Turbopack creates separate module instances for `'sonner'` imported from different files/bundles, breaking the toast→Toaster state connection
+- Fix: single import path (`@/components/ui/sonner`) for both `toast` and `Toaster` ensures they share the same sonner module instance
+- Files modified: 7 (sonner.tsx, layout.tsx, page.tsx, auth-modal.tsx, visual-editor/index.tsx, marketing-kit/index.tsx, chat-panel/index.tsx)
+- This fix also enables the user's requested Save ID/slug toast feature to actually work
+- The original Save toast code change (from previous session) was correct all along — it just couldn't render due to this bug

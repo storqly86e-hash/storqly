@@ -13,7 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 
 // ─── Types ─────────────────────────────────────────────────────────
 

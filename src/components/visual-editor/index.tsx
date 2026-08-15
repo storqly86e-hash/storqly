@@ -57,7 +57,7 @@ import {
   PopoverContent,
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
+import { toast } from '@/components/ui/sonner';
 import { type LucideIcon, useState, useCallback, useMemo } from 'react';
 
 // ── Section type icon mapping ───────────────────────────────────────

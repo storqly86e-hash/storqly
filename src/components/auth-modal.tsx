@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { signIn, signOut } from 'next-auth/react'
 import { useSession } from 'next-auth/react'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/sonner'
 import { Loader2, LogOut, User } from 'lucide-react'
 
 import {
