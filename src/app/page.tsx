@@ -228,16 +228,31 @@ function LandingPage() {
       }
     }, 3000)
 
+    // ── Helper: clean up on any error path (no throw, no crash overlay) ──
+    const finishWithError = (message: string) => {
+      clearTimers()
+      setError(message)
+      setIsGenerating(false)
+      setGenerationStatus('')
+      setElapsedSeconds(0)
+      toast.error('Store generation failed', { description: message })
+    }
+
+    const finishOk = () => {
+      clearTimers()
+      setIsGenerating(false)
+      setGenerationStatus('')
+      setElapsedSeconds(0)
+    }
+
     try {
       console.log('[Storqly] Starting SSE store generation for prompt:', trimmed)
 
       // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
-      // Caddy returns 502 when Turbopack is briefly unavailable during recompilation.
-      // One retry with a 2s pause is enough to let the server finish recompiling.
       const RETRYABLE_STATUSES = [502, 503, 504]
       let res: Response | undefined
       let retryCount = 0
-      const maxRetries = 1
+      const maxRetries = 2
 
       while (retryCount <= maxRetries) {
         try {
@@ -251,9 +266,9 @@ function LandingPage() {
           // If the status is retryable, wait and loop again
           if (!res.ok && RETRYABLE_STATUSES.includes(res.status) && retryCount < maxRetries) {
             retryCount++
-            console.warn(`[Storqly] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 2s...`)
+            console.warn(`[Storqly] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 3s...`)
             setGenerationStatus('Connection issue — retrying...')
-            await new Promise(r => setTimeout(r, 2000))
+            await new Promise(r => setTimeout(r, 3000))
             continue
           }
           break // Success or non-retryable error — exit loop
@@ -261,12 +276,20 @@ function LandingPage() {
           // Network-level error (DNS failure, connection refused, etc.)
           if (fetchErr instanceof TypeError && retryCount < maxRetries) {
             retryCount++
-            console.warn(`[Storqly] Network error, retrying (${retryCount}/${maxRetries}) in 2s...`)
+            console.warn(`[Storqly] Network error, retrying (${retryCount}/${maxRetries}) in 3s...`)
             setGenerationStatus('Connection issue — retrying...')
-            await new Promise(r => setTimeout(r, 2000))
+            await new Promise(r => setTimeout(r, 3000))
             continue
           }
-          throw fetchErr // Re-throw if out of retries or not a network error
+          // Out of retries or not a network error — handle gracefully
+          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+          if (controller.signal.aborted) {
+            finishWithError('Generation was cancelled.')
+          } else {
+            console.warn('[Storqly] Network error after retries:', msg)
+            finishWithError('Could not connect to the server. Please check your connection and try again.')
+          }
+          return
         }
       }
 
@@ -276,12 +299,17 @@ function LandingPage() {
           const errorData = await res!.json()
           errorMsg = errorData.error || errorMsg
         } catch { /* ignore parse error */ }
-        throw new Error(errorMsg)
+        console.warn('[Storqly] HTTP error:', errorMsg)
+        finishWithError(errorMsg)
+        return
       }
 
       // ── Consume SSE stream ──
       const reader = res.body?.getReader()
-      if (!reader) throw new Error('No response stream received.')
+      if (!reader) {
+        finishWithError('No response stream received from server.')
+        return
+      }
 
       const decoder = new TextDecoder()
       let buffer = ''
@@ -294,23 +322,17 @@ function LandingPage() {
         buffer += decoder.decode(value, { stream: true })
 
         // Parse SSE events from buffer
-        // SSE format: "event: <name>\ndata: <json>\n\n" or ": comment\n\n"
         const lines = buffer.split('\n')
-        // Keep incomplete last line in buffer
         buffer = lines.pop() || ''
 
         let currentEvent = ''
         for (const line of lines) {
-          if (line.startsWith(':')) {
-            // SSE comment (heartbeat) — skip
-            continue
-          }
+          if (line.startsWith(':')) continue
           if (line.startsWith('event: ')) {
             currentEvent = line.slice(7).trim()
           } else if (line.startsWith('data: ')) {
             const dataStr = line.slice(6)
 
-            // Handle SSE events
             if (currentEvent === 'progress') {
               receivedSSEProgress = true
               try {
@@ -321,11 +343,12 @@ function LandingPage() {
               try {
                 const data = JSON.parse(dataStr)
                 if (!data.store) {
-                  throw new Error('The AI response was missing store data.')
+                  console.warn('[Storqly] Result event missing store data')
+                  finishWithError('The AI response was missing store data.')
+                  return
                 }
                 console.log('[Storqly] Store generated via SSE. isFallback:', data._isFallback, 'name:', data.store.name)
                 resolved = true
-                clearTimers()
 
                 if (data._isFallback) {
                   toast.warning('AI service unavailable — showing starter template. Try again in a moment.', { duration: 6000 })
@@ -334,49 +357,55 @@ function LandingPage() {
                   setStore(data.store)
                 }
 
-                // Soft cap toast — must be visible, not just logged
+                // Soft cap toast
                 if (data._productCapHit) {
                   toast.info(
                     `Generated ${data._generatedCount} products — for larger catalogs, you can add more via the chat editor.`,
                     { duration: 8000 }
                   )
                 }
+
+                finishOk()
+                return
               } catch (parseErr) {
                 const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-                console.error('[Storqly] Failed to parse result event:', msg)
-                throw new Error(msg)
+                console.warn('[Storqly] Failed to parse result event:', msg)
+                finishWithError(msg)
+                return
               }
             } else if (currentEvent === 'error') {
               try {
                 const data = JSON.parse(dataStr)
-                throw new Error(data.message || 'Generation failed')
-              } catch (e) {
-                if (e instanceof Error && e.message !== 'Generation failed') throw e
-                throw new Error('Generation failed')
+                const serverMsg = data.message || 'Generation failed'
+                console.warn('[Storqly] Server error event:', serverMsg)
+                finishWithError(serverMsg)
+                return
+              } catch {
+                finishWithError('Generation failed')
+                return
               }
             }
-            // Reset event after processing its data
             currentEvent = ''
           }
         }
       }
 
       if (!resolved) {
-        throw new Error('Stream ended without a result. The server may have disconnected.')
+        console.warn('[Storqly] Stream ended without a result event')
+        finishWithError('Stream ended without a result. The server may have disconnected.')
       }
     } catch (err: unknown) {
+      // Last-resort safety net — should rarely be reached now
       clearTimers()
-
       let message = 'Something went wrong. Please try again.'
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
           message = 'Generation was cancelled.'
         } else {
-          console.error('[Storqly] Generation error:', err)
+          console.warn('[Storqly] Unexpected error (caught by safety net):', err.message)
           message = err.message
         }
       }
-
       setError(message)
       setIsGenerating(false)
       setGenerationStatus('')

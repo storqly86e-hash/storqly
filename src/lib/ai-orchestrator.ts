@@ -408,9 +408,10 @@ export async function executeAI(
   let lastError = 'Unknown error';
 
   for (let i = 0; i < maxRetries; i++) {
-    // Exponential backoff: 0s, 3s, 8s (longer on rate limits — 30s base to clear typical 60s windows)
+    // Exponential backoff: 0s, 8s, 12s (short on rate limits — the caller's fallback is the real safety net;
+    // long backoffs just waste the user's time, especially for SSE streaming endpoints)
     if (i > 0) {
-      const baseDelay = isRateLimitError(lastError) ? 30000 : 3000;
+      const baseDelay = isRateLimitError(lastError) ? 8000 : 3000;
       const delay = baseDelay * Math.pow(1.5, i - 1);
       console.warn(`[AI Orchestrator] Waiting ${(delay / 1000).toFixed(1)}s before retry ${i + 1} for ${taskType}...`);
       await sleep(delay);

@@ -259,8 +259,8 @@ export async function POST(req: NextRequest) {
         ], {
           systemPrompt: buildPhase1SystemPrompt(phase1Count),
           temperature: 0.6,
-          timeout: 50_000,
-          maxRetries: 3,
+          timeout: 40_000,
+          maxRetries: 2,
           responseFormat: 'json_object',
         });
 
@@ -363,6 +363,8 @@ export async function POST(req: NextRequest) {
                     existingNames,
                   ),
                   responseFormat: 'json_object',
+                  maxRetries: 1,
+                  timeout: 30_000,
                 });
 
                 if (!batchResult.success || !batchResult.content) {

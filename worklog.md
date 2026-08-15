@@ -481,3 +481,30 @@ Stage Summary:
 - Retry resilience: 3 attempts with 30s/45s exponential backoff + fresh ZAI connection per retry
 - Fallback quality: all 3 products visible on homepage, correct store name extraction, visible toast
 - Cannot verify AI generation until rate limit clears (environmental issue, not code)
+---
+Task ID: Regression Fix — 502/Fetch Errors + Crash Overlay
+Agent: Main Agent
+Task: Fix two user-reported errors (502 crash overlay + Failed to fetch) and identify root cause.
+
+Work Log:
+- Read dev.log: ALL recent generate requests hit 429 (rate limited), 3 retries each taking 75s total
+- Analyzed Caddyfile: proxy timeouts are 600s — NOT the cause of 502
+- Analyzed ai-orchestrator.ts retry logic: 429 base delay was 30s with 1.5x multiplier → 30s + 45s = 75s of pure waiting
+- Analyzed page.tsx error handling: 6 `throw new Error()` calls in handleGenerate + `console.error(err)` passing Error object
+- Root cause: 75-second retry before fallback + `throw` + `console.error(ErrorObj)` triggering Next.js dev error overlay
+
+Fixes applied (3 files):
+1. src/lib/ai-orchestrator.ts: Reduced 429 base delay from 30,000ms → 8,000ms
+2. src/app/api/store/generate/route.ts: Phase 1 maxRetries 3→2 + timeout 50s→40s; Phase 2 maxRetries 1 + timeout 30s
+3. src/app/page.tsx: Replaced ALL 6 `throw new Error()` with `finishWithError(msg)` + `return`; replaced `console.error(err)` with `console.warn(err.message)`; added `finishOk()` helper; increased HTTP retry count 1→2 with 3s delay; safety-net catch still exists but uses console.warn
+
+Timing improvement: 75s → ~10s for rate-limited scenarios (8s backoff × 1 retry + fast API response)
+
+Lint: clean (0 errors)
+Dev server: compiled successfully after all changes
+
+Stage Summary:
+- Root cause: 429 retry backoff too aggressive (30s base) + throw-based error handling triggering Next.js dev error overlay
+- 3 files modified, 0 new files
+- Fallback store now reaches user in ~10s instead of 75s when AI is rate-limited
+- All error paths now use state-based handling (toast + error message) instead of throw
