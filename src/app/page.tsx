@@ -30,6 +30,9 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  Pencil,
+  Clock,
+  Store as StoreIcon,
 } from 'lucide-react'
 import AuthModal, { AuthButton } from '@/components/auth-modal'
 import { Button } from '@/components/ui/button'
@@ -92,11 +95,25 @@ const progressMessages = [
 
 // ─── Landing Page ─────────────────────────────────────────────────────
 
+type StoreListItem = {
+  id: string
+  name: string
+  slug: string
+  description: string
+  published: boolean
+  createdAt: string
+  updatedAt: string
+  thumbnail: string | null
+}
+
 function LandingPage() {
   const { data: session } = useSession()
   const [promptText, setPromptText] = useState('')
   const [mkOpen, setMkOpen] = useState(false)
   const [authOpen, setAuthOpen] = useState(false)
+  const [myStores, setMyStores] = useState<StoreListItem[]>([])
+  const [storesLoading, setStoresLoading] = useState(false)
+  const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -117,6 +134,50 @@ function LandingPage() {
   const clearTimers = useCallback(() => {
     if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
     if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null }
+  }, [])
+
+  // ── Fetch user's stores on login ──
+  useEffect(() => {
+    if (!session?.user?.id) {
+      setMyStores([])
+      return
+    }
+    let cancelled = false
+    setStoresLoading(true)
+    fetch('/api/store/list')
+      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
+      .then((data) => { if (!cancelled) setMyStores(data.stores ?? []) })
+      .catch(() => { if (!cancelled) setMyStores([]) })
+      .finally(() => { if (!cancelled) setStoresLoading(false) })
+    return () => { cancelled = true }
+  }, [session?.user?.id])
+
+  // ── Edit store: fetch full data via lookup, then load into editor ──
+  const handleEditStore = useCallback(async (slug: string) => {
+    setEditingSlug(slug)
+    try {
+      const res = await fetch(`/api/store/lookup?slug=${encodeURIComponent(slug)}`)
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      setStore(data.store)
+    } catch {
+      toast.error('Failed to load store. It may have been deleted.')
+    } finally {
+      setEditingSlug(null)
+    }
+  }, [setStore])
+
+  // Format relative time
+  const formatTimeAgo = useCallback((iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}h ago`
+    const days = Math.floor(hours / 24)
+    if (days < 30) return `${days}d ago`
+    return new Date(iso).toLocaleDateString()
   }, [])
 
   const handleCancel = useCallback(() => {
@@ -508,6 +569,110 @@ function LandingPage() {
           </motion.div>
         </div>
       </section>
+
+      {/* ── My Stores ── */}
+      {session?.user?.id && (storesLoading || myStores.length > 0) && (
+        <section className="px-5 pb-10">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-5 flex items-center gap-3">
+              <StoreIcon className="h-5 w-5 text-zinc-400" />
+              <h2 className="text-lg font-semibold text-white">My Stores</h2>
+              {!storesLoading && (
+                <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-medium text-zinc-400">
+                  {myStores.length}
+                </span>
+              )}
+            </div>
+
+            {storesLoading ? (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {[1, 2, 3].map((n) => (
+                  <div key={n} className="animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+                    <div className="mb-3 h-24 rounded-lg bg-zinc-800" />
+                    <div className="mb-2 h-4 w-3/4 rounded bg-zinc-800" />
+                    <div className="h-3 w-1/2 rounded bg-zinc-800/60" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {myStores.map((s) => (
+                  <div
+                    key={s.id}
+                    className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.04]"
+                  >
+                    {/* Thumbnail area */}
+                    <div className="flex h-28 items-center justify-center rounded-t-xl bg-gradient-to-br from-zinc-800 to-zinc-900">
+                      {s.thumbnail ? (
+                        <img
+                          src={s.thumbnail}
+                          alt={s.name}
+                          className="h-full w-full rounded-t-xl object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                        />
+                      ) : (
+                        <span className="text-3xl font-bold text-zinc-700">
+                          {s.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-4">
+                      {/* Name + status badge */}
+                      <div className="mb-1 flex items-start justify-between gap-2">
+                        <h3 className="truncate text-sm font-semibold text-white">
+                          {s.name}
+                        </h3>
+                        <span
+                          className={s.published
+                            ? 'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400'
+                            : 'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400'}
+                        >
+                          {s.published ? 'Published' : 'Draft'}
+                        </span>
+                      </div>
+
+                      {/* Timestamp */}
+                      <p className="mb-3 flex items-center gap-1 text-xs text-zinc-500">
+                        <Clock className="h-3 w-3" />
+                        {formatTimeAgo(s.updatedAt)}
+                      </p>
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => handleEditStore(s.slug)}
+                          disabled={editingSlug === s.slug}
+                          className="h-7 gap-1.5 rounded-lg bg-white/[0.06] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.1] hover:text-white"
+                        >
+                          {editingSlug === s.slug ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Pencil className="h-3 w-3" />
+                          )}
+                          Edit
+                        </Button>
+                        {s.published && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { window.location.href = `/?store=${s.slug}` }}
+                            className="h-7 gap-1.5 rounded-lg px-3 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+                          >
+                            <Eye className="h-3 w-3" />
+                            View
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* ── Business Tools Link ── */}
       <div className="px-5 pb-6">

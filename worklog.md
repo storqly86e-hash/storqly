@@ -307,4 +307,43 @@ Stage Summary:
 - Fix: single import path (`@/components/ui/sonner`) for both `toast` and `Toaster` ensures they share the same sonner module instance
 - Files modified: 7 (sonner.tsx, layout.tsx, page.tsx, auth-modal.tsx, visual-editor/index.tsx, marketing-kit/index.tsx, chat-panel/index.tsx)
 - This fix also enables the user's requested Save ID/slug toast feature to actually work
+
+---
+Task ID: Step 6 — My Stores Listing
+Agent: Main Agent
+Task: Add "My Stores" section to landing page so logged-in users can find and resume editing their stores
+
+Work Log:
+- Created GET /api/store/list (auth-required, returns user's stores ordered by updatedAt desc)
+- List API extracts thumbnail from first product image in stored JSON schema
+- Returns lightweight metadata (id, name, slug, description, published, timestamps, thumbnail) — full store fetched on-demand via existing /api/store/lookup
+- Added StoreListItem type and fetch logic to LandingPage component
+- Added handleEditStore: fetches full store via lookup API, then calls setStore() to load into editor
+- Added formatTimeAgo utility for relative timestamps (just now, Xm, Xh, Xd, date)
+- Added "My Stores" UI section between hero and features on landing page:
+  - Only shown when user is logged in AND has stores (or is loading)
+  - Skeleton loading state (3 pulse cards)
+  - Grid: 1 col mobile, 2 cols tablet, 3 cols desktop
+  - Store cards: thumbnail (product image or initial letter), name, status badge (Draft/Published), relative time
+  - Actions: Edit button (all stores) + View button (published only)
+- Added Pencil, Clock, StoreIcon imports from lucide-react
+- Fixed ESLint parsing error with template literal in className (switched to ternary)
+
+Agent Browser E2E verification:
+  1. ✅ Logged out → no "My Stores" section
+  2. ✅ Alice (2 stores) → "My Stores" shows both stores
+  3. ✅ Published store (My Candle Shop) → Edit + View buttons
+  4. ✅ Draft store (Coffee Corner) → Edit button only (no View)
+  5. ✅ Click Edit → full editor loads with store data intact
+  6. ✅ Click View → read-only published store viewer ("Built with Storqly" footer, no editor toolbar)
+  7. ✅ Sign out → "My Stores" disappears
+  8. ✅ Bob (0 stores, logged in) → "My Stores" section hidden
+  9. ✅ Toast system confirmed working ("Signed in successfully", "Account created!")
+
+Stage Summary:
+- Files created: 1 (src/app/api/store/list/route.ts)
+- Files modified: 1 (src/app/page.tsx — ~120 lines added for state, fetch, UI section)
+- Reuses existing /api/store/lookup for Edit flow (zero new editor plumbing)
+- Thumbnail extraction: first product image from stored JSON, falls back to initial letter
+- Lint: clean (0 errors, 0 warnings)
 - The original Save toast code change (from previous session) was correct all along — it just couldn't render due to this bug
