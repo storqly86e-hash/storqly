@@ -332,6 +332,14 @@ function LandingPage() {
                 } else {
                   setStore(data.store)
                 }
+
+                // Soft cap toast — must be visible, not just logged
+                if (data._productCapHit) {
+                  toast.info(
+                    `Generated ${data._generatedCount} products — for larger catalogs, you can add more via the chat editor.`,
+                    { duration: 8000 }
+                  )
+                }
               } catch (parseErr) {
                 const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
                 console.error('[Storqly] Failed to parse result event:', msg)
@@ -1212,7 +1220,6 @@ export default function Home() {
   const view = useStoreEditor((s) => s.view)
   const searchParams = useSearchParams()
   const storeSlug = searchParams.get('store')
-
   // If ?store=slug is present, show the published store viewer (read-only)
   if (storeSlug) {
     return (

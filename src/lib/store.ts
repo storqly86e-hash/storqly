@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Store, Section, SectionStyle, ChatMessage, ChatEditOperation } from './store-schema';
+import type { Store, StorePage, Section, SectionStyle, ChatMessage, ChatEditOperation } from './store-schema';
 import { createBlankStore } from './store-schema';
 
 export type AppView = 'landing' | 'editor';
@@ -46,6 +46,9 @@ interface StoreEditorState {
   removeSection: (pageId: string, sectionId: string) => void;
   moveSection: (pageId: string, fromIndex: number, toIndex: number) => void;
   updateStoreName: (name: string) => void;
+  addCustomPage: (name: string) => string | null; // returns new page ID or null
+  removeCustomPage: (pageId: string) => void;
+  renameCustomPage: (pageId: string, name: string) => void;
 
   // Whether the current store is a fallback (not AI-generated)
   isFallbackStore: boolean;
@@ -233,6 +236,49 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
           };
           break;
         }
+
+        case 'add-page': {
+          const { name, slug, sections } = op.payload;
+          const newPage: StorePage = {
+            id: crypto.randomUUID(),
+            name,
+            slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+            type: 'custom',
+            isHomepage: false,
+            sections: sections || [],
+          };
+          updatedStore = {
+            ...updatedStore,
+            pages: [...updatedStore.pages, newPage],
+          };
+          break;
+        }
+
+        case 'remove-page': {
+          const { pageId } = op.payload;
+          // Only remove custom pages, never remove home/collection/cart/checkout
+          const target = updatedStore.pages.find(p => p.id === pageId);
+          if (target && target.type === 'custom') {
+            updatedStore = {
+              ...updatedStore,
+              pages: updatedStore.pages.filter(p => p.id !== pageId),
+            };
+          }
+          break;
+        }
+
+        case 'rename-page': {
+          const { pageId, name, slug } = op.payload;
+          updatedStore = {
+            ...updatedStore,
+            pages: updatedStore.pages.map(p =>
+              p.id === pageId
+                ? { ...p, name, ...(slug ? { slug } : { slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }) }
+                : p
+            ),
+          };
+          break;
+        }
       }
     }
 
@@ -368,6 +414,68 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
         name,
         slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
         updatedAt: new Date().toISOString(),
+      },
+    });
+  },
+
+  addCustomPage: (name) => {
+    const { store } = get();
+    if (!store) return null;
+    const id = crypto.randomUUID();
+    const newPage: StorePage = {
+      id,
+      name,
+      slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+      type: 'custom',
+      isHomepage: false,
+      sections: [],
+    };
+    set({
+      store: {
+        ...store,
+        updatedAt: new Date().toISOString(),
+        pages: [...store.pages, newPage],
+      },
+      editorCurrentPageId: id,
+      selectedSectionId: null,
+    });
+    return id;
+  },
+
+  removeCustomPage: (pageId) => {
+    const { store, editorCurrentPageId } = get();
+    if (!store) return;
+    const target = store.pages.find(p => p.id === pageId);
+    if (!target || target.type !== 'custom') return; // Only custom pages
+    const remaining = store.pages.filter(p => p.id !== pageId);
+    // If we deleted the currently active page, switch to home
+    const homePage = remaining.find(p => p.isHomepage);
+    const newCurrentPage = editorCurrentPageId === pageId
+      ? (homePage?.id || remaining[0]?.id || null)
+      : editorCurrentPageId;
+    set({
+      store: {
+        ...store,
+        updatedAt: new Date().toISOString(),
+        pages: remaining,
+      },
+      editorCurrentPageId: newCurrentPage,
+      selectedSectionId: null,
+    });
+  },
+
+  renameCustomPage: (pageId, name) => {
+    const { store } = get();
+    if (!store) return;
+    set({
+      store: {
+        ...store,
+        updatedAt: new Date().toISOString(),
+        pages: store.pages.map(p =>
+          p.id === pageId && p.type === 'custom'
+            ? { ...p, name, slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') }
+            : p
+        ),
       },
     });
   },

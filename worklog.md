@@ -1,4 +1,48 @@
 ---
+Task ID: Soft Cap + Custom Pages
+Agent: Main Agent
+Task: (1) Add MAX_PRACTICAL_PRODUCTS=30 soft cap with visible toast. (2) Implement custom pages (Part 2).
+
+Work Log:
+- Added MAX_PRACTICAL_PRODUCTS=30 constant to generate/route.ts
+- Soft cap logs when triggered: "Soft cap: user requested 50, capped to 30"
+- SSE result event now includes _productCapHit, _requestedCount, _generatedCount fields
+- Frontend handles _productCapHit with toast.info (8s duration, visible message)
+- Regression test: "a coffee shop" → 3 products, no cap triggered, default behavior unchanged
+- Added 'custom' to PageType in store-schema.ts
+- Added add-page, remove-page, rename-page to ChatEditOperation union in store-schema.ts
+- Added addCustomPage(), removeCustomPage(), renameCustomPage() to Zustand store (store.ts)
+- addCustomPage auto-creates page with type:'custom', empty sections, auto-navigates to it
+- removeCustomPage only deletes type==='custom' pages, switches to home if active page deleted
+- renameCustomPage only renames type==='custom' pages, auto-generates slug
+- Added add-page/remove-page/rename-page operations to chat AI system prompt (chat/route.ts)
+- Added summary cases for new operations in buildSummary()
+- Updated visual editor: includes custom pages in editorPages filter
+- Added "Page" button with Popover for adding new custom pages (name input + Add button)
+- Added MoreHorizontal context menu on custom page tabs (Rename + Delete)
+- Added inline rename input on custom page tabs (Enter to commit, Escape to cancel)
+- Updated PAGE_TYPE_ICONS and PAGE_TYPE_LABELS for 'custom' type (FileText icon)
+- Updated isTemplatePage check: custom pages are section-editable (like home)
+- Updated store renderer: custom pages render with sections (not template), appear in navigation
+- Replaced hamburger menu with mobile nav showing all non-product pages
+
+Test Results:
+- Soft cap: 50-product request → "Soft cap: user requested 50, capped to 30" → 30 products in 159s ✅
+- Regression: "a coffee shop" → 3 products, no cap hit, default behavior ✅
+- Chat API: "add an About Us page" → operations: ["add-page"], pageName: "About Us" ✅
+- Zustand: applyOperations with add-page → "About Us" tab appears in editor ✅
+- Store renderer: "About Us" link appears in header navigation ✅
+- remove-page: only removes custom pages, ignores fixed pages ✅
+- Lint: clean (0 errors, 0 warnings)
+
+Stage Summary:
+- Files modified: 7 (generate/route.ts, page.tsx, store-schema.ts, store.ts, chat/route.ts, visual-editor/index.tsx, store-renderer/index.tsx)
+- Soft cap at 30 with visible toast notification — LOCKED
+- Custom pages (add/rename/delete via visual editor + chat) — PENDING USER VERIFICATION
+- Regression confirmed: normal prompts produce default 3 products, unchanged behavior
+- Dev helpers were added and then cleaned up (no leftover test code)
+
+---
 Task ID: Real Images (Unsplash Integration)
 Agent: Main Agent
 Task: Integrate Unsplash API for real product images across all store pages

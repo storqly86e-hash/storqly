@@ -207,7 +207,8 @@ export interface FooterContent {
 // 'product' = template (single product detail)
 // 'cart' = template (shopping cart)
 // 'checkout' = template (checkout form + order summary)
-export type PageType = 'home' | 'collection' | 'product' | 'cart' | 'checkout';
+// 'custom' = section-based (like home, but user-created)
+export type PageType = 'home' | 'collection' | 'product' | 'cart' | 'checkout' | 'custom';
 
 export interface StorePage {
   id: string;
@@ -289,7 +290,10 @@ export type ChatEditOperation =
   | { type: 'add-product'; payload: StoreProduct }
   | { type: 'update-product'; payload: { productId: string; data: Partial<StoreProduct> } }
   | { type: 'remove-product'; payload: { productId: string } }
-  | { type: 'bulk-update'; payload: Partial<Store> };
+  | { type: 'bulk-update'; payload: Partial<Store> }
+  | { type: 'add-page'; payload: { name: string; slug: string; sections?: Section[] } }
+  | { type: 'remove-page'; payload: { pageId: string } }
+  | { type: 'rename-page'; payload: { pageId: string; name: string; slug?: string } };
 
 // Chat message types
 export interface ChatMessage {

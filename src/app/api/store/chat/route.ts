@@ -54,7 +54,10 @@ function buildChatSystemPrompt(store: Store): string {
     '5. reorder-sections: { "type": "reorder-sections", "payload": { "pageId": "<id>", "sectionIds": ["<id1>", "<id2>"] } }\n' +
     '6. update-product: { "type": "update-product", "payload": { "productId": "<id>", "data": { "name": "New" } } }\n' +
     '7. add-product: { "type": "add-product", "payload": { "id": "<uuid>", "name": "...", "price": 29.99, "images": ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600"], "description": "...", "category": "...", "inStock": true } }\n' +
-    '8. remove-product: { "type": "remove-product", "payload": { "productId": "<id>" } }\n\n' +
+    '8. remove-product: { "type": "remove-product", "payload": { "productId": "<id>" } }\n' +
+    '9. add-page: { "type": "add-page", "payload": { "name": "<Page Name>", "slug": "<url-safe-slug>", "sections": [<section objects>] } } — Creates a new custom page. sections is optional (empty if omitted).\n' +
+    '10. remove-page: { "type": "remove-page", "payload": { "pageId": "<id>" } } — Deletes a CUSTOM page only. Never delete Home, Shop, Cart, or Checkout.\n' +
+    '11. rename-page: { "type": "rename-page", "payload": { "pageId": "<id>", "name": "<New Name>" } }\n\n' +
     '## Style Fields Reference\n\n' +
     'Section-level style fields (affect the ENTIRE section):\n' +
     '- backgroundColor: hex color for section background\n' +
@@ -270,6 +273,9 @@ function buildSummary(operations: ChatEditOperation[], strippedFields: string[])
       case 'update-product': return 'Updated a product';
       case 'add-product': return 'Added a product';
       case 'remove-product': return 'Removed a product';
+      case 'add-page': return 'Added a new page';
+      case 'remove-page': return 'Removed a custom page';
+      case 'rename-page': return 'Renamed a page';
       default: return 'Made a change';
     }
   });

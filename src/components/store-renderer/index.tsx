@@ -97,6 +97,22 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
               </button>
             ))}
         </nav>
+        {/* Mobile nav: show all non-product pages */}
+        <nav className="flex items-center gap-4 md:hidden">
+          {store.pages
+            .filter((p) => p.isHomepage || (p.type && p.type !== 'product'))
+            .slice(0, 4)
+            .map((page) => (
+              <button
+                key={page.id}
+                onClick={() => onNavigate(page.id)}
+                className="text-xs font-medium transition-colors hover:opacity-70"
+                style={{ color: page.id === currentPageId ? theme.colors.text : theme.colors.textMuted }}
+              >
+                {page.name}
+              </button>
+            ))}
+        </nav>
         <div className="flex items-center gap-4">
           <button
             className="relative transition-opacity hover:opacity-70"
@@ -112,11 +128,6 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
                 {cartCount > 9 ? '9+' : cartCount}
               </span>
             )}
-          </button>
-          <button className="md:hidden" style={{ color: theme.colors.textMuted }} aria-label="Menu">
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
           </button>
         </div>
       </div>
@@ -244,8 +255,9 @@ export function StoreRenderer({
   );
 
   // Determine if current page is a template page
+  // Custom pages are section-based (like home), only collection/cart/checkout/product are templates
   const pageType = currentPage?.type;
-  const isTemplatePage = !!pageType && pageType !== 'home';
+  const isTemplatePage = !!pageType && pageType !== 'home' && pageType !== 'custom';
 
   // Only separate header/footer for non-template pages
   const { header, footer, body } = useMemo(

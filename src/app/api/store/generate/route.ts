@@ -22,6 +22,9 @@ import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 const PHASE1_BATCH_SIZE = 8;
 const PHASE2_BATCH_SIZE = 6;
 
+// ─── Soft cap: quality degrades past ~30 products (dupes, image failures) ─
+const MAX_PRACTICAL_PRODUCTS = 30;
+
 // ─── Time budgets ────────────────────────────────────────────
 const TOTAL_TIME_BUDGET_MS = 300_000; // 5 min total
 const MIN_REMAINING_MS = 20_000;      // Abort remaining batches if < 20s left
@@ -208,7 +211,14 @@ export async function POST(req: NextRequest) {
 
         const trimmedPrompt = prompt.trim();
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
-        const requestedCount = extractProductCount(trimmedPrompt);
+        let requestedCount = extractProductCount(trimmedPrompt);
+
+        // Soft cap: if user requested more than 30, cap at 30 and notify
+        const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
+        if (wasCapped) {
+          console.log(`[Store Generate] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
+          requestedCount = MAX_PRACTICAL_PRODUCTS;
+        }
 
         // Determine phase 1 product count (capped at PHASE1_BATCH_SIZE)
         const phase1Count = Math.min(requestedCount, PHASE1_BATCH_SIZE);
@@ -447,6 +457,9 @@ export async function POST(req: NextRequest) {
           store,
           _isFallback: false,
           _normalizations: normResult.normalizationCount,
+          _productCapHit: wasCapped,
+          _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
+          _generatedCount: store.products.length,
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);

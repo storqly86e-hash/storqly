@@ -36,6 +36,9 @@ import {
   X,
   Settings2,
   ChevronDown,
+  FilePlus2,
+  Pencil,
+  MoreHorizontal,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -916,6 +919,7 @@ const PAGE_TYPE_ICONS: Record<string, LucideIcon> = {
   product: Star,
   cart: PanelBottom,
   checkout: MousePointerClick,
+  custom: FileText,
 };
 
 const PAGE_TYPE_LABELS: Record<string, string> = {
@@ -924,6 +928,7 @@ const PAGE_TYPE_LABELS: Record<string, string> = {
   product: 'Product',
   cart: 'Cart',
   checkout: 'Checkout',
+  custom: 'Custom',
 };
 
 export function VisualEditor() {
@@ -937,13 +942,66 @@ export function VisualEditor() {
     removeSection,
     editorCurrentPageId,
     setEditorCurrentPageId,
+    addCustomPage,
+    removeCustomPage,
+    renameCustomPage,
   } = useStoreEditor();
 
   // Pages available for tab switching (real pages only, no dynamic product pages)
+  // Includes custom pages (section-editable like Home)
   const editorPages = useMemo(
-    () => (store?.pages.filter((p) => !p.type || p.type === 'home' || p.type === 'collection' || p.type === 'cart' || p.type === 'checkout') ?? []),
+    () => (store?.pages.filter((p) => !p.type || p.type === 'home' || p.type === 'custom' || p.type === 'collection' || p.type === 'cart' || p.type === 'checkout') ?? []),
     [store?.pages]
   );
+
+  // Custom pages only (for delete/rename)
+  const customPages = useMemo(
+    () => (store?.pages.filter((p) => p.type === 'custom') ?? []),
+    [store?.pages]
+  );
+
+  // State for inline rename input
+  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
+
+  // State for add-page dialog
+  const [showAddPageDialog, setShowAddPageDialog] = useState(false);
+  const [newPageName, setNewPageName] = useState('');
+
+  // Handle adding a new custom page
+  const handleAddPage = useCallback(() => {
+    const name = newPageName.trim();
+    if (!name) return;
+    const newId = addCustomPage(name);
+    if (newId) {
+      toast.success(`Added "${name}" page`);
+      setNewPageName('');
+      setShowAddPageDialog(false);
+    }
+  }, [newPageName, addCustomPage]);
+
+  // Handle deleting a custom page
+  const handleDeletePage = useCallback((pageId: string, pageName: string) => {
+    removeCustomPage(pageId);
+    toast.success(`Deleted "${pageName}" page`);
+  }, [removeCustomPage]);
+
+  // Handle starting rename
+  const handleStartRename = useCallback((pageId: string, currentName: string) => {
+    setRenamingPageId(pageId);
+    setRenameValue(currentName);
+  }, []);
+
+  // Handle committing rename
+  const handleCommitRename = useCallback(() => {
+    if (!renamingPageId || !renameValue.trim()) {
+      setRenamingPageId(null);
+      return;
+    }
+    renameCustomPage(renamingPageId, renameValue.trim());
+    toast.success(`Renamed to "${renameValue.trim()}"`);
+    setRenamingPageId(null);
+  }, [renamingPageId, renameValue, renameCustomPage]);
 
   // Current page for section editing (only home-type pages have editable sections)
   const currentPage = useMemo(
@@ -952,7 +1010,8 @@ export function VisualEditor() {
   );
 
   // Whether the currently selected page is a template (non-editable via visual editor)
-  const isTemplatePage = currentPage && currentPage.type && currentPage.type !== 'home';
+  // Custom pages are section-editable (like home), only collection/cart/checkout/product are templates
+  const isTemplatePage = currentPage && currentPage.type && currentPage.type !== 'home' && currentPage.type !== 'custom';
 
   const sections = currentPage?.sections ?? [];
   const pageId = currentPage?.id ?? '';
@@ -1027,9 +1086,12 @@ export function VisualEditor() {
   // Handle page tab click (before early return to satisfy rules-of-hooks)
   const handlePageTabClick = useCallback(
     (pageId: string) => {
+      if (renamingPageId && renamingPageId !== pageId) {
+        setRenamingPageId(null); // Cancel rename if clicking another tab
+      }
       setEditorCurrentPageId(pageId);
     },
-    [setEditorCurrentPageId]
+    [setEditorCurrentPageId, renamingPageId]
   );
 
   if (!store || !currentPage) {
@@ -1049,29 +1111,104 @@ export function VisualEditor() {
           selectedSection && !isTemplatePage ? 'w-64 lg:w-72' : 'w-full',
         ].join(' ')}
       >
-        {/* Page Tabs */}
-        {editorPages.length > 1 && (
-          <div className="flex items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-2" style={{scrollbarWidth: 'none'}}>
-            {editorPages.map((page) => {
-              const isActive = page.id === editorCurrentPageId;
-              const Icon = PAGE_TYPE_ICONS[page.type || 'home'] || Layout;
-              return (
+        {/* Page Tabs + Add Page button */}
+        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-2" style={{scrollbarWidth: 'none'}}>
+          {editorPages.map((page) => {
+            const isActive = page.id === editorCurrentPageId;
+            const isCustom = page.type === 'custom';
+            const Icon = PAGE_TYPE_ICONS[page.type || 'home'] || Layout;
+            const isRenaming = renamingPageId === page.id;
+
+            return (
+              <div key={page.id} className="flex shrink-0 items-center gap-0.5">
                 <button
-                  key={page.id}
                   onClick={() => handlePageTabClick(page.id)}
-                  className={`flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
                     isActive
                       ? 'bg-zinc-800 text-zinc-100'
                       : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
                   }`}
                 >
                   <Icon className="h-3 w-3" />
-                  <span className="whitespace-nowrap">{page.name}</span>
+                  {isRenaming ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCommitRename();
+                        if (e.key === 'Escape') setRenamingPageId(null);
+                      }}
+                      onBlur={handleCommitRename}
+                      className="w-16 bg-zinc-700 border border-zinc-600 rounded px-1 py-0 text-xs text-zinc-100 outline-none"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  ) : (
+                    <span className="whitespace-nowrap">{page.name}</span>
+                  )}
                 </button>
-              );
-            })}
-          </div>
-        )}
+                {/* Context menu for custom pages: rename + delete */}
+                {isCustom && !isRenaming && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreHorizontal className="h-3 w-3" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-36 p-1 bg-zinc-900 border-zinc-800" align="start">
+                      <button
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                        onClick={() => handleStartRename(page.id, page.name)}
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Rename
+                      </button>
+                      <button
+                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300"
+                        onClick={() => handleDeletePage(page.id, page.name)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Delete Page
+                      </button>
+                    </PopoverContent>
+                  </Popover>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Add Page button */}
+          <Popover open={showAddPageDialog} onOpenChange={setShowAddPageDialog}>
+            <PopoverTrigger asChild>
+              <button className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-800/50 hover:text-zinc-400 transition-colors">
+                <Plus className="h-3 w-3" />
+                <span className="whitespace-nowrap">Page</span>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-3 bg-zinc-900 border-zinc-800" align="start">
+              <h4 className="text-xs font-semibold text-zinc-300 mb-2">Add Custom Page</h4>
+              <div className="flex gap-2">
+                <Input
+                  autoFocus
+                  value={newPageName}
+                  onChange={(e) => setNewPageName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddPage();
+                    if (e.key === 'Escape') setShowAddPageDialog(false);
+                  }}
+                  placeholder="Page name"
+                  className="flex-1 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-sm"
+                />
+                <Button size="sm" onClick={handleAddPage} disabled={!newPageName.trim()} className="h-8 px-3">
+                  Add
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
 
         {/* Panel header — only for section-editable pages */}
         {!isTemplatePage && (
