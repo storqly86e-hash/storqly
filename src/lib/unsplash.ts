@@ -1,84 +1,89 @@
 // ========================================
-// Unsplash API Client — Server-Side Only
+// Image Enrichment — Server-Side Only
 // ========================================
-// Provides enrichProductImages() which replaces placeholder Unsplash URLs
-// with real, relevant images fetched from the Unsplash API.
-// Includes in-memory caching and parallel fetching.
+// Replaces placeholder image URLs with real, relevant photos using
+// the z-ai image-search CLI (in-house service, OSS-hosted URLs, no API key needed).
+// Includes in-memory caching, natural-language query building, and fallback retry.
 
-const ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
-const BASE_URL = 'https://api.unsplash.com';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 // ─── In-Memory Cache ────────────────────────────────────────────
 // Maps search query → image URL. Survives for the process lifetime.
 const imageCache = new Map<string, { url: string; fetchedAt: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-interface UnsplashResult {
-  urls: {
-    small: string;
-    thumb: string;
-    regular: string;
-  };
-  alt_description: string | null;
-  description: string | null;
-  user: { name: string };
+interface ImageSearchResult {
+  success: boolean;
+  query: string;
+  count: number;
+  results: Array<{
+    original_url: string;
+    caption: string;
+    source: string;
+  }>;
+  error?: string;
 }
 
 /**
- * Search Unsplash for a single image given a query string.
- * Returns the image URL or null on failure.
+ * Extract a concrete product-type noun from the store name or product context.
+ * e.g. "Lumière Candles" → "candle", "Sole Stack Sneakers" → "sneaker", "TechVault" → null
  */
-async function fetchUnsplashImage(query: string): Promise<string | null> {
-  // Check cache first
-  const cached = imageCache.get(query);
-  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
-    return cached.url;
-  }
+function extractNicheNoun(storeName: string, productCategory?: string): string | null {
+  // Map of common store-type words to their product noun
+  const nicheMap: Record<string, string> = {
+    'candle': 'candle', 'candles': 'candle',
+    'sneaker': 'sneaker', 'sneakers': 'sneaker', 'shoe': 'shoe', 'shoes': 'shoe', 'footwear': 'shoe',
+    'furniture': 'furniture', 'home': 'home decor', 'decor': 'home decor',
+    'skincare': 'skincare', 'skin care': 'skincare', 'beauty': 'beauty',
+    'cosmetic': 'cosmetic', 'cosmetics': 'cosmetic', 'makeup': 'makeup',
+    'tech': 'electronics', 'gadget': 'gadget', 'gadgets': 'gadget', 'electronics': 'electronics',
+    'jewelry': 'jewelry', 'jewellery': 'jewelry', 'watch': 'watch', 'watches': 'watch',
+    'clothing': 'clothing', 'apparel': 'apparel', 'fashion': 'fashion',
+    'coffee': 'coffee', 'tea': 'tea', 'food': 'food', 'bakery': 'bakery',
+    'plant': 'plant', 'plants': 'plant', 'garden': 'garden', 'flower': 'flower',
+    'pet': 'pet supply', 'pets': 'pet supply',
+    'book': 'book', 'books': 'book',
+    'art': 'art', 'artwork': 'artwork',
+    'wine': 'wine', 'beer': 'beer', 'drink': 'drink', 'beverage': 'beverage',
+    'fitness': 'fitness equipment', 'yoga': 'yoga', 'sport': 'sports equipment',
+    'music': 'music', 'instrument': 'musical instrument',
+    'toy': 'toy', 'toys': 'toy', 'game': 'game',
+    'bag': 'bag', 'bags': 'bag', 'handbag': 'handbag', 'backpack': 'backpack',
+    'perfume': 'perfume', 'fragrance': 'fragrance', 'scent': 'fragrance',
+    'essential oil': 'essential oil', 'oil': 'oil',
+    'ceramic': 'ceramic', 'pottery': 'pottery',
+    'leather': 'leather',
+  };
 
-  if (!ACCESS_KEY) {
-    console.warn('[Unsplash] No UNSPLASH_ACCESS_KEY configured. Skipping image enrichment.');
-    return null;
-  }
+  const storeLower = storeName.toLowerCase();
 
-  try {
-    const res = await fetch(
-      `${BASE_URL}/search/photos?query=${encodeURIComponent(query)}&per_page=1&orientation=squarish`,
-      {
-        headers: {
-          Authorization: `Client-ID ${ACCESS_KEY}`,
-          'Accept-Version': 'v1',
-        },
-        signal: AbortSignal.timeout(5000), // 5s per image
-      }
-    );
-
-    if (!res.ok) {
-      console.warn(`[Unsplash] API returned ${res.status} for query: ${query}`);
-      return null;
+  // Check product category first (most specific signal)
+  if (productCategory) {
+    const catLower = productCategory.toLowerCase();
+    for (const [key, noun] of Object.entries(nicheMap)) {
+      if (catLower.includes(key)) return noun;
     }
-
-    const data = await res.json() as { results: UnsplashResult[]; total: number };
-
-    if (data.results && data.results.length > 0) {
-      const imgUrl = data.results[0].urls.small;
-      // Cache the result
-      imageCache.set(query, { url: imgUrl, fetchedAt: Date.now() });
-      console.log(`[Unsplash] Fetched image for: "${query}"`);
-      return imgUrl;
-    }
-
-    console.log(`[Unsplash] No results for query: ${query}`);
-    return null;
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.warn(`[Unsplash] Fetch failed for "${query}": ${msg}`);
-    return null;
   }
+
+  // Then check store name
+  for (const [key, noun] of Object.entries(nicheMap)) {
+    if (storeLower.includes(key)) return noun;
+  }
+
+  return null;
 }
 
 /**
- * Build a search query from a product's name, description, category, and store context.
- * Produces queries like "leather wallet product photography" or "organic tea premium".
+ * Build a natural-language search query for a product.
+ * Uses descriptive sentences (not keyword soup) for better relevance.
+ *
+ * Examples:
+ *   "Winter Spice" candle in "Lumière Candles" → "winter spice scented candle product photo"
+ *   "Running Shoes" in sneaker store → "running shoes product photography"
+ *   "Oak Dining Table" in furniture store → "oak dining table furniture product photo"
  */
 function buildSearchQuery(
   productName: string,
@@ -86,40 +91,149 @@ function buildSearchQuery(
   storeName?: string,
   description?: string
 ): string {
-  const terms: string[] = [];
+  const niche = storeName ? extractNicheNoun(storeName, category) : null;
+  const parts: string[] = [];
 
-  // Product name is the primary signal
+  // 1. Product name (lowercased for natural phrasing)
   if (productName) {
-    // Take first 3 meaningful words from product name
-    const nameWords = productName
-      .split(/\s+/)
-      .filter(w => w.length > 2)
-      .slice(0, 3);
-    terms.push(...nameWords);
+    parts.push(productName.toLowerCase());
   }
 
-  // Category provides context (skip generic ones)
-  if (category) {
-    const cat = category.toLowerCase();
-    if (!['featured', 'general', 'products', 'items', 'other'].includes(cat)) {
-      terms.push(category);
+  // 2. Niche noun from store/category context (e.g., "candle", "sneaker", "furniture")
+  //    This is the KEY fix — without this, "Winter Spice" returns random seasonal photos
+   if (niche && !productName.toLowerCase().includes(niche)) {
+    parts.push(niche);
+  }
+
+  // 3. Description can add specificity (e.g., "leather", "handmade")
+  if (description && description.length > 3 && parts.length < 4) {
+    const descWords = description
+      .split(/[,;.]/)[0] // Take first clause only
+      .split(/\s+/)
+      .filter(w => w.length > 3 && !['that', 'this', 'with', 'from', 'your', 'their', 'made'].includes(w.toLowerCase()))
+      .slice(0, 2);
+    for (const w of descWords) {
+      if (!parts.join(' ').toLowerCase().includes(w.toLowerCase())) {
+        parts.push(w.toLowerCase());
+        if (parts.length >= 5) break;
+      }
     }
   }
 
-  // Add "product photography" to get clean, professional-looking shots
-  terms.push('product');
-
-  // Cap at 5 terms total to keep queries focused
-  const query = terms.slice(0, 5).join(' ');
-  return query || 'product photography';
+  // 4. Append "product photo" to bias toward clean product shots
+  const query = parts.join(' ') + ' product photo';
+  return query;
 }
 
 /**
- * Enrich all products in a store with real Unsplash images.
- * Runs all fetches in parallel with a per-image timeout.
+ * Search for a single image via z-ai image-search CLI.
+ * Returns the image URL or null on failure.
+ */
+async function fetchImage(query: string): Promise<string | null> {
+  // Check cache first
+  const cached = imageCache.get(query);
+  if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    console.log(`[ImageEnrich] Cache hit for: "${query}"`);
+    return cached.url;
+  }
+
+  try {
+    const { stdout } = await execFileAsync(
+      'z-ai',
+      ['image-search', '--query', query, '--count', '1', '--gl', 'us', '--no-rank'],
+      { timeout: 15_000, maxBuffer: 1024 * 1024 }
+    );
+
+    // CLI prints emoji status lines to stdout before the JSON payload.
+    // Extract the JSON by finding the first '{' and last '}'.
+    const jsonStart = stdout.indexOf('{');
+    const jsonEnd = stdout.lastIndexOf('}');
+    if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
+      console.warn(`[ImageEnrich] No JSON in output for: "${query}"`);
+      return null;
+    }
+    const jsonStr = stdout.substring(jsonStart, jsonEnd + 1);
+    const data = JSON.parse(jsonStr) as ImageSearchResult;
+
+    if (data.success && data.results && data.results.length > 0) {
+      const imgUrl = data.results[0].original_url;
+      imageCache.set(query, { url: imgUrl, fetchedAt: Date.now() });
+      console.log(`[ImageEnrich] Fetched image for: "${query}" (source: ${data.results[0].source})`);
+      return imgUrl;
+    }
+
+    console.log(`[ImageEnrich] No results for query: "${query}"${data.error ? ' — ' + data.error : ''}`);
+    return null;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Don't log the full error for timeouts — it's just noise
+    if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) {
+      console.warn(`[ImageEnrich] Timeout for: "${query}"`);
+    } else {
+      console.warn(`[ImageEnrich] Fetch failed for "${query}": ${msg}`);
+    }
+    return null;
+  }
+}
+
+/**
+ * Try fetching with fallback queries if the primary query fails.
+ * Strategy: progressively simplify the query to increase match probability.
+ */
+async function fetchWithFallback(
+  productName: string,
+  category: string | undefined,
+  storeName: string | undefined,
+  description: string | undefined
+): Promise<string | null> {
+  // Primary query: full natural language
+  const primary = buildSearchQuery(productName, category, storeName, description);
+  let url = await fetchImage(primary);
+  if (url) return url;
+
+  // Fallback 1: just product name + niche noun + "product photo"
+  const niche = storeName ? extractNicheNoun(storeName, category) : null;
+  if (niche) {
+    const fb1 = `${productName.toLowerCase()} ${niche} product photo`;
+    if (fb1 !== primary) {
+      url = await fetchImage(fb1);
+      if (url) {
+        console.log(`[ImageEnrich] Fallback 1 succeeded for "${productName}" → "${fb1}"`);
+        return url;
+      }
+    }
+  }
+
+  // Fallback 2: just the niche noun + "product photo" (e.g., "candle product photo")
+  if (niche) {
+    const fb2 = `${niche} product photo`;
+    url = await fetchImage(fb2);
+    if (url) {
+      console.log(`[ImageEnrich] Fallback 2 succeeded for "${productName}" → "${fb2}"`);
+      return url;
+    }
+  }
+
+  // Fallback 3: category + "product" (if category is useful)
+  if (category && !['featured', 'general', 'products', 'items', 'other'].includes(category.toLowerCase())) {
+    const fb3 = `${category.toLowerCase()} product photo`;
+    url = await fetchImage(fb3);
+    if (url) {
+      console.log(`[ImageEnrich] Fallback 3 succeeded for "${productName}" → "${fb3}"`);
+      return url;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Enrich all products in a store with real images from z-ai image-search.
+ * Runs all fetches in parallel with per-image timeouts.
  * Falls back gracefully — if a fetch fails, the existing image URL is kept.
  *
  * This is the main entry point, called after normalizeStore() in the generate route.
+ * Interface is identical to the old Unsplash version — drop-in replacement.
  */
 export async function enrichProductImages(
   store: { products: { id: string; name: string; images: string[]; category?: string; description?: string }[]; name: string },
@@ -133,18 +247,18 @@ export async function enrichProductImages(
     return { enriched: 0, failed: 0, latencyMs: 0 };
   }
 
-  // Build all queries upfront
-  const queries = store.products.map((p) => ({
-    product: p,
-    query: buildSearchQuery(p.name, p.category, store.name, p.description),
-  }));
+  console.log(`[ImageEnrich] Enriching ${store.products.length} product images for store: "${store.name}"...`);
 
-  console.log(`[Unsplash] Enriching ${queries.length} product images...`);
-
-  // Execute all fetches in parallel (Unsplash API allows 50 req/min on free tier)
-  const results = await Promise.allSettled(
-    queries.map(async ({ product, query }) => {
-      const url = await fetchUnsplashImage(query);
+  // Execute fetches sequentially to avoid z-ai CLI concurrency issues
+  // (parallel invocations can cause SDK init conflicts). 3 products × ~3s ≈ 9s total.
+  for (const product of store.products) {
+    try {
+      const url = await fetchWithFallback(
+        product.name,
+        product.category,
+        store.name,
+        product.description
+      );
       if (url) {
         // Replace the first image in the array (or add if empty)
         if (product.images.length > 0) {
@@ -152,22 +266,17 @@ export async function enrichProductImages(
         } else {
           product.images.push(url);
         }
-        return true; // enriched
+        enriched++;
+      } else {
+        failed++;
       }
-      return false; // failed
-    })
-  );
-
-  for (const result of results) {
-    if (result.status === 'fulfilled' && result.value) {
-      enriched++;
-    } else {
+    } catch {
       failed++;
     }
   }
 
   const latencyMs = Date.now() - startTime;
-  console.log(`[Unsplash] Done: ${enriched} enriched, ${failed} failed in ${latencyMs}ms`);
+  console.log(`[ImageEnrich] Done: ${enriched} enriched, ${failed} failed in ${latencyMs}ms`);
 
   return { enriched, failed, latencyMs };
 }

@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
 
         const store = normResult.store;
 
-        // ── Enrich product images via Unsplash API ──
+        // ── Enrich product images via image-search service ──
         send('progress', { stage: 'images', message: 'Finding product images...' });
         try {
           const imgResult = await enrichProductImages(store);
