@@ -373,3 +373,31 @@ Stage Summary:
 - Tech: smart home hub (YouTube), wireless charger (Amazon), headphones (Walmart)
 - File changed: src/lib/unsplash.ts (complete rewrite), src/app/api/store/generate/route.ts (comment update)
 - Drop-in replacement: same enrichProductImages() interface, zero caller changes needed
+---
+Task ID: 1
+Agent: Main Agent
+Task: Remove product count cap — chunked/batched generation
+
+Work Log:
+- Analyzed current pipeline (single AI call, 3-product cap, normalizeStore, enrichProductImages)
+- Identified 3 files needing changes + 1 new utility
+- Implemented extractProductCount() in sanitize-prompt.ts (word numbers, dozen, about/~, collection of N, etc.)
+- Removed product count stripping from sanitizePrompt()
+- Added normalizeProducts() export in normalize-store.ts (lightweight product-only normalization)
+- Updated enforceOutputCaps to accept optional maxProducts param (undefined = no cap)
+- Changed MIN_PRODUCTS from 3 to 1
+- Added product-batch task type in ai-orchestrator.ts
+- Rewrote generate/route.ts with 2-phase architecture
+- Phase 1: full store + up to 8 products (dynamic system prompt)
+- Phase 2: additional batches of 6 products each, with SSE progress
+- 300s total time budget with per-batch 20s safety check
+- Graceful degradation: failed batches keep all previous products
+
+Stage Summary:
+- Test 5 products: 5/5 in 33s (single phase), all images enriched
+- Test 10 products: 10/10 in ~60s (phase 1: 8@52s, phase 2: 2@8s), all images enriched
+- Test 20 products: 20/20 in ~92s (phase 1: 8@52s, phase 2: 12@39s), 181s remaining
+- Test 50 products: 50/50 in 216s (phase 1: 8@53s, phase 2: 42@163s), 84s remaining
+- 50-product caveat: ~6 duplicate names in later batches, ~4 images failed enrichment
+- Practical reliable ceiling: ~30 products (high quality, no dupes)
+- Absolute ceiling: 50 (works but quality degrades: dupes, some image failures)

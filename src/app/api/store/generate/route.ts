@@ -1,43 +1,34 @@
 // ========================================
-// Store Generation API — SSE Streaming + Schema Normalization
+// Store Generation API — SSE Streaming + 2-Phase Chunked Product Generation
 // ========================================
-// Pipeline: AI (json_object mode) → JSON.parse() → normalizeStore() → valid Store
-//
-// json_object mode guarantees valid JSON syntax (no more 502 from malformed JSON).
-// normalizeStore() guarantees valid Store schema (deterministic type coercion, no guessing).
-// createFallbackStore() is the absolute last resort (AI returned non-object or null).
+// Phase 1: AI generates store structure (theme, pages, sections) + first batch of products (up to 8)
+// Phase 2 (if requested > 8): Additional product-only batches of 6, with independent normalization & image enrichment
 //
 // Safety nets:
 // - SSE heartbeats every 4s to keep the proxy connection alive
-// - Hard time budget: if >50s elapsed, return fallback immediately
+// - Hard time budget: 300s total (5 min) for the entire generation
+// - Per-batch time budget check — abort remaining batches if < 20s remaining
 // - Auth guard: returns 401 JSON before creating the SSE stream (defense-in-depth)
-//   The frontend intercepts logged-out users client-side; this is the server backup.
 
 import { NextRequest } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
-import { normalizeStore } from '@/lib/normalize-store';
-import { sanitizePrompt } from '@/lib/sanitize-prompt';
+import { normalizeStore, normalizeProducts } from '@/lib/normalize-store';
+import { sanitizePrompt, extractProductCount } from '@/lib/sanitize-prompt';
 import { enrichProductImages } from '@/lib/unsplash';
-import type { Store } from '@/lib/store-schema';
+import type { Store, StoreProduct } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
-// ─── Output size caps (HARD LIMITS — never exceeded) ───────────
-// These are enforced at TWO layers:
-//   1. sanitizePrompt() strips count requests from user input (prevents AI from trying)
-//   2. normalizeStore() truncates excess sections/products (safety net)
-const MAX_PRODUCTS = 3;
-const MAX_SECTIONS_PER_PAGE = 4;
+// ─── Batch size constants ──────────────────────────────────────
+const PHASE1_BATCH_SIZE = 8;
+const PHASE2_BATCH_SIZE = 6;
 
 // ─── Time budgets ────────────────────────────────────────────
-// Infrastructure proxy has a ~60s hard timeout. We must finish well before that.
-// AI typically completes in 20-42s. 50s timeout gives margin for occasional slower calls.
-const TIME_BUDGET_MS = 55_000;
-const PER_CALL_TIMEOUT_MS = 50_000;
+const TOTAL_TIME_BUDGET_MS = 300_000; // 5 min total
+const MIN_REMAINING_MS = 20_000;      // Abort remaining batches if < 20s left
 
-// ─── System prompt ─────────────────────────────────────────────
-// Kept minimal — the normalization layer handles schema mismatches.
-// We only need to guide the AI to output reasonable content, not perfect JSON.
-const SYSTEM_PROMPT = `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
+// ─── Phase 1 System Prompt (full store + first batch of products) ─────
+function buildPhase1SystemPrompt(productCount: number): string {
+  return `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
 
 FORMAT RULES:
 1. Raw JSON ONLY. No markdown fences.
@@ -59,13 +50,38 @@ SECTION CONTENTS (use ONLY these 4):
 PRODUCT (NO variants field — omit it entirely):
 {id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
 
-ABSOLUTE CAPS (these are HARD LIMITS, not suggestions — never exceeded regardless of user request):
-- Generate EXACTLY 3 products total. Mark 1 as featured. Descriptions max 8 words. Do NOT generate fewer than 3.
+GENERATION RULES:
+- Generate EXACTLY ${productCount} products total. Mark 1 as featured. Descriptions max 8 words.
 - MAX 4 sections per page, ONLY these types in this order: hero, featured-products, testimonials (1 item only), newsletter.
-- If the user asks for more sections, products, or different section types: IGNORE the count, use ONLY the 4 types above, and creatively incorporate the user's themes/topics into those 4 sections.
 - NO header, footer, cta, faq, gallery, categories, or any other section types.
 - NO variants field on products.
 - Theme colors must match the brand.`;
+}
+
+// ─── Phase 2 System Prompt (products only) ────────────────────────
+function buildPhase2SystemPrompt(
+  count: number,
+  storeName: string,
+  storeDescription: string,
+  existingProductNames: string[],
+): string {
+  return `You are a product catalog generator. Return a JSON ARRAY of product objects — no markdown, no explanation, no wrapping object.
+
+FORMAT RULES:
+1. Raw JSON array ONLY. No markdown fences. No object wrapper.
+2. NEVER put newlines or double-quotes inside any string.
+3. Fresh UUIDs for all "id" fields.
+4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
+
+Each product must be:
+{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
+
+RULES:
+- Generate EXACTLY ${count} products for the ${storeName} store (${storeDescription}).
+- Each product must be UNIQUE — do NOT duplicate any of these existing products: ${existingProductNames.join(', ')}.
+- NO variants field.
+- Prices should vary realistically for the product category.`;
+}
 
 // ─── Fallback: generate a valid starter store without AI ───────
 function createFallbackStore(prompt: string): Store {
@@ -154,7 +170,6 @@ function extractStoreName(prompt: string): string {
 // ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
   // Auth guard — checked BEFORE creating the SSE stream.
-  // JWT session verification is in-memory crypto only (~10-25ms), no DB hit.
   try {
     await requireAuth();
   } catch (e) {
@@ -180,6 +195,7 @@ export async function POST(req: NextRequest) {
 
       const startTime = Date.now();
       const elapsed = () => Date.now() - startTime;
+      const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
 
       try {
         const body = await req.json();
@@ -192,69 +208,82 @@ export async function POST(req: NextRequest) {
 
         const trimmedPrompt = prompt.trim();
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
-        const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
+        const requestedCount = extractProductCount(trimmedPrompt);
+
+        // Determine phase 1 product count (capped at PHASE1_BATCH_SIZE)
+        const phase1Count = Math.min(requestedCount, PHASE1_BATCH_SIZE);
+        const needsPhase2 = requestedCount > PHASE1_BATCH_SIZE;
+        const phase2BatchCount = needsPhase2
+          ? Math.ceil((requestedCount - PHASE1_BATCH_SIZE) / PHASE2_BATCH_SIZE)
+          : 0;
+
+        console.log(`[Store Generate] Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
 
         if (sanitizedPrompt.length < trimmedPrompt.length) {
-          console.log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (count/type requests removed)`);
+          console.log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (long lists collapsed)`);
         }
 
         // ── Check time budget ──
-        if (elapsed() > TIME_BUDGET_MS) {
+        if (elapsed() > TOTAL_TIME_BUDGET_MS) {
           console.warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms). Returning fallback.`);
           send('result', { store: createFallbackStore(trimmedPrompt), _isFallback: true, _fallbackReason: 'Time budget exceeded.' });
           return;
         }
 
-        send('progress', { stage: 'generating', message: 'AI is generating your store...' });
-        console.log(`[Store Generate] Starting AI generation with JSON mode (timeout: ${PER_CALL_TIMEOUT_MS}ms/call)...`);
+        // ═══════════════════════════════════════════════════════════
+        // PHASE 1: Store Structure + First Batch of Products
+        // ═══════════════════════════════════════════════════════════
+        send('progress', { stage: 'generating', message: 'Generating your store...' });
+        console.log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
 
-        // ── AI call with JSON mode ──
-        const result = await executeAI('store-generation', [
+        const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
+
+        const phase1Result = await executeAI('store-generation', [
           { role: 'user', content: userMessage },
         ], {
-          systemPrompt: SYSTEM_PROMPT,
+          systemPrompt: buildPhase1SystemPrompt(phase1Count),
           temperature: 0.6,
-          timeout: PER_CALL_TIMEOUT_MS,
+          timeout: 50_000,
           maxRetries: 1,
           responseFormat: 'json_object',
         });
 
-        if (!result.success || !result.content) {
-          console.error(`[Store Generate] AI API failed: ${result.error}. Attempts: ${result.attempts}`);
+        if (!phase1Result.success || !phase1Result.content) {
+          console.error(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
           send('progress', { stage: 'fallback', message: 'AI service unavailable. Creating starter template...' });
           const fallback = createFallbackStore(trimmedPrompt);
-          send('result', { store: fallback, _isFallback: true, _fallbackReason: result.error });
+          send('result', { store: fallback, _isFallback: true, _fallbackReason: phase1Result.error });
           return;
         }
 
-        const totalMs = elapsed();
-        console.log(`[Store Generate] AI returned ${result.content.length} chars in ${totalMs}ms (${result.attempts} API attempts)`);
+        console.log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts)`);
 
         // ── Parse JSON (json_object mode guarantees valid syntax) ──
         send('progress', { stage: 'parsing', message: 'Processing store data...' });
         let parsed: unknown;
         try {
-          parsed = JSON.parse(result.content);
+          parsed = JSON.parse(phase1Result.content);
         } catch (e) {
-          console.error(`[Store Generate] JSON parse failed (should not happen with JSON mode):`, e);
+          console.error(`[Store Generate] Phase 1 JSON parse failed:`, e);
           const fallback = createFallbackStore(trimmedPrompt);
           send('result', { store: fallback, _isFallback: true, _fallbackReason: 'JSON parse failed.' });
           return;
         }
 
-        // ── Normalize to Store schema (deterministic, never throws) ──
-        const normResult = normalizeStore(parsed, trimmedPrompt);
+        // ── Normalize to Store schema ──
+        // For Phase 1, pass maxProducts = phase1Count so the normalizer caps at our intended count.
+        // (If AI returned more, the normalizer truncates. If fewer, padProducts fills to min 1.)
+        const normResult = normalizeStore(parsed, trimmedPrompt, phase1Count);
 
         if (!normResult) {
-          // normalizeStore returns null only if input is not an object at all
-          console.warn(`[Store Generate] normalizeStore returned null (input was not an object). Returning fallback.`);
+          console.warn(`[Store Generate] normalizeStore returned null. Returning fallback.`);
           send('progress', { stage: 'fallback', message: 'AI response was not valid. Creating starter template...' });
           const fallback = createFallbackStore(trimmedPrompt);
           send('result', { store: fallback, _isFallback: true, _fallbackReason: 'AI response was not a JSON object.' });
           return;
         }
 
-        // ── Log normalization details ──
+        // Log normalization
         if (normResult.normalizationCount > 0) {
           console.log(`[Store Generate] Normalization applied (${normResult.summary}):`);
           for (const line of normResult.log) {
@@ -266,20 +295,153 @@ export async function POST(req: NextRequest) {
 
         const store = normResult.store;
 
-        // ── Enrich product images via image-search service ──
+        // ── Enrich Phase 1 product images ──
         send('progress', { stage: 'images', message: 'Finding product images...' });
         try {
           const imgResult = await enrichProductImages(store);
           if (imgResult.enriched > 0) {
-            console.log(`[Store Generate] Images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
+            console.log(`[Store Generate] Phase 1 images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
           }
         } catch (imgErr) {
           const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
-          console.warn(`[Store Generate] Image enrichment failed (non-fatal): ${imgMsg}`);
+          console.warn(`[Store Generate] Phase 1 image enrichment failed (non-fatal): ${imgMsg}`);
         }
 
+        console.log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
+
+        // ═══════════════════════════════════════════════════════════
+        // PHASE 2: Additional Product Batches (if requested > PHASE1_BATCH_SIZE)
+        // ═══════════════════════════════════════════════════════════
+        if (needsPhase2) {
+          const productsStillNeeded = requestedCount - store.products.length;
+
+          if (productsStillNeeded > 0 && remaining() > MIN_REMAINING_MS) {
+            console.log(`[Store Generate] Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
+
+            const existingNames = store.products.map(p => p.name);
+            const storeDescription = store.description || 'e-commerce store';
+            let batchNum = 0;
+
+            for (let offset = store.products.length; offset < requestedCount; offset += PHASE2_BATCH_SIZE) {
+              batchNum++;
+              const thisBatchSize = Math.min(PHASE2_BATCH_SIZE, requestedCount - offset);
+              const batchRange = `${offset + 1}-${offset + thisBatchSize}`;
+
+              // Time budget check before each batch
+              if (remaining() < MIN_REMAINING_MS) {
+                console.warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
+                break;
+              }
+
+              send('progress', { stage: 'generating', message: `Generating products ${batchRange}...` });
+              console.log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
+
+              try {
+                const batchResult = await executeAI('product-batch', [
+                  { role: 'user', content: `Generate ${thisBatchSize} products.` },
+                ], {
+                  systemPrompt: buildPhase2SystemPrompt(
+                    thisBatchSize,
+                    store.name,
+                    storeDescription,
+                    existingNames,
+                  ),
+                  responseFormat: 'json_object',
+                });
+
+                if (!batchResult.success || !batchResult.content) {
+                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
+                  break; // Graceful degradation — keep all previous products
+                }
+
+                // Parse the batch response — should be a JSON array
+                let batchParsed: unknown;
+                try {
+                  batchParsed = JSON.parse(batchResult.content);
+                } catch (e) {
+                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} JSON parse failed. Keeping ${store.products.length} products.`);
+                  break;
+                }
+
+                // Handle case where AI wraps array in an object
+                let batchProducts: unknown[];
+                if (Array.isArray(batchParsed)) {
+                  batchProducts = batchParsed;
+                } else if (batchParsed && typeof batchParsed === 'object' && !Array.isArray(batchParsed)) {
+                  const obj = batchParsed as Record<string, unknown>;
+                  // Try common wrapper keys
+                  batchProducts = Array.isArray(obj.products) ? obj.products
+                    : Array.isArray(obj.items) ? obj.items
+                    : Array.isArray(obj.data) ? obj.data
+                    : [];
+                } else {
+                  batchProducts = [];
+                }
+
+                // Normalize batch products
+                const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
+
+                if (normalizedBatch.length === 0) {
+                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
+                  break;
+                }
+
+                // Enrich batch product images
+                send('progress', { stage: 'images', message: `Finding product images for ${batchRange}...` });
+                try {
+                  // Build a mini store-like object for the enrichment function
+                  const batchStoreLike = { products: normalizedBatch, name: store.name };
+                  const imgResult = await enrichProductImages(batchStoreLike);
+                  if (imgResult.enriched > 0) {
+                    console.log(`[Store Generate] Phase 2 batch ${batchNum} images: ${imgResult.enriched}/${normalizedBatch.length} enriched in ${imgResult.latencyMs}ms`);
+                  }
+                } catch (imgErr) {
+                  const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
+                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} image enrichment failed (non-fatal): ${imgMsg}`);
+                }
+
+                // Accumulate products into store
+                for (const p of normalizedBatch) {
+                  existingNames.push(p.name);
+                  store.products.push(p);
+                }
+
+                console.log(`[Store Generate] Phase 2 batch ${batchNum} complete: +${normalizedBatch.length} products. Total: ${store.products.length}. ${Math.round(remaining() / 1000)}s remaining.`);
+
+              } catch (batchErr) {
+                const batchMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+                console.warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
+                break; // Graceful degradation
+              }
+            }
+          } else {
+            console.log(`[Store Generate] Phase 2 skipped: ${productsStillNeeded > 0 ? 'not enough time remaining' : 'already have enough products'}.`);
+          }
+        }
+
+        // ── Fix product references in featured-products sections to include all products ──
+        // (Phase 2 products were added after normalization ran, so we need to update references)
+        const allProductIds = store.products.map(p => p.id);
+        for (const page of store.pages) {
+          for (const section of page.sections) {
+            if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
+              // Keep existing valid IDs, then fill with any missing product IDs
+              const validIds = (section.content.productIds as string[]).filter(id => allProductIds.includes(id));
+              const usedIds = new Set(validIds);
+              for (const pid of allProductIds) {
+                if (!usedIds.has(pid)) {
+                  validIds.push(pid);
+                  usedIds.add(pid);
+                }
+              }
+              section.content.productIds = validIds;
+            }
+          }
+        }
+
+        // ── Final result ──
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
-        console.log(`[Store Generate] ✅ Success in ${totalMs}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+        console.log(`[Store Generate] ✅ Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
 
         send('result', {
           store,

@@ -459,18 +459,18 @@ function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): Stor
 /** Hard-cap enforcement: truncate sections and products to safe output limits.
  *  This is the safety net if the AI ignores the system prompt caps.
  *  Layers of defense:
- *    1. sanitizePrompt() in route.ts strips count requests (prevents AI from trying)
- *    2. System prompt ABSOLUTE CAPS language (strong AI guidance)
- *    3. THIS function: hard truncation (final safety net)
+ *    1. System prompt language (strong AI guidance)
+ *    2. THIS function: hard truncation (final safety net)
+ *
+ *  @param maxProducts - If provided, cap products to this number. If undefined, don't cap products.
  */
-function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): void {
-  const MAX_PRODUCTS = 3;
+function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>, maxProducts?: number): void {
   const MAX_SECTIONS = 4;
 
-  // ── Cap products ──
-  if (store.products.length > MAX_PRODUCTS) {
+  // ── Cap products (only if maxProducts is specified) ──
+  if (maxProducts !== undefined && store.products.length > maxProducts) {
     const before = store.products.length;
-    store.products = store.products.slice(0, MAX_PRODUCTS);
+    store.products = store.products.slice(0, maxProducts);
     // Ensure at least 1 featured product after truncation
     if (!store.products.some((p) => p.featured) && store.products.length > 0) {
       store.products[0].featured = true;
@@ -479,7 +479,7 @@ function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>): 
       field: 'products',
       action: 'coerced',
       from: `${before} products`,
-      to: `${MAX_PRODUCTS} products (capped)`,
+      to: `${maxProducts} products (capped)`,
     });
   }
 
@@ -649,7 +649,7 @@ function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogge
 }
 
 /** Pad product array to MIN_PRODUCTS if AI generated too few */
-const MIN_PRODUCTS = 3;
+const MIN_PRODUCTS = 1;
 const PAD_PRODUCT_TEMPLATES = [
   { name: 'Essential Item', price: 39.99, description: 'A must-have for every collection.', category: 'Essentials', img: 'photo-1505740420928-5e560c06d30e' },
   { name: 'Popular Choice', price: 59.99, description: 'Customer favorite, highly rated.', category: 'Popular', img: 'photo-1526170375885-4d8ecf77b99f' },
@@ -672,7 +672,7 @@ function padProducts(store: Store, log: ReturnType<typeof createLogger>): void {
       inStock: true,
     });
   }
-  log.log({ field: 'products', action: 'defaulted', from: `${before} products`, to: `${MIN_PRODUCTS} products (padded)` });
+  log.log({ field: 'products', action: 'defaulted', from: `${before} products`, to: `${before + deficit} products (padded to min ${MIN_PRODUCTS})` });
 }
 
 // ─── Main entry point ─────────────────────────────────────────────
@@ -686,6 +686,17 @@ export interface NormalizeResult {
 }
 
 /**
+ * Normalize an array of raw product objects into valid StoreProduct[].
+ * Lightweight version — no store/page/section normalization.
+ * Used for Phase 2 batch products.
+ */
+export function normalizeProducts(rawProducts: unknown[]): StoreProduct[] {
+  const log = createLogger();
+  if (!Array.isArray(rawProducts)) return [];
+  return rawProducts.map((p) => normalizeProduct(p, log));
+}
+
+/**
  * Normalize any valid JSON object into a conformant Store.
  *
  * This function NEVER throws. If the input is too malformed to recover,
@@ -693,8 +704,9 @@ export interface NormalizeResult {
  *
  * @param raw - Parsed JSON object (JSON.parse already succeeded)
  * @param prompt - Original user prompt (for fallback name extraction)
+ * @param maxProducts - If provided, cap products to this number. If undefined, don't cap.
  */
-export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult | null {
+export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: number): NormalizeResult | null {
   const log = createLogger();
 
   // ── Guard: must be a non-null object ──
@@ -752,7 +764,7 @@ export function normalizeStore(raw: unknown, prompt?: string): NormalizeResult |
   // ── Cross-reference fixes ──
   // IMPORTANT: enforceOutputCaps MUST run before fixProductReferences
   // because product references depend on the final product list
-  enforceOutputCaps(store, log);
+  enforceOutputCaps(store, log, maxProducts);
   padProducts(store, log);
   fixProductReferences(store, log);
   stripJunkPages(store, log);

@@ -7,7 +7,7 @@
 import ZAI from 'z-ai-web-dev-sdk';
 
 // ─── Task Types ────────────────────────────────────────────────
-export type AITaskType = 'store-generation' | 'chat-edit' | 'coding-task';
+export type AITaskType = 'store-generation' | 'chat-edit' | 'coding-task' | 'product-batch';
 
 export interface AIMessage {
   role: 'assistant' | 'user';
@@ -39,6 +39,12 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     temperature: 0.3,
     timeout: 45_000,
     maxRetries: 2,
+  },
+  'product-batch': {
+    label: 'Product Batch Generation',
+    temperature: 0.7,
+    timeout: 30_000,
+    maxRetries: 1,
   },
 };
 
