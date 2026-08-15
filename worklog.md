@@ -508,3 +508,31 @@ Stage Summary:
 - 3 files modified, 0 new files
 - Fallback store now reaches user in ~10s instead of 75s when AI is rate-limited
 - All error paths now use state-based handling (toast + error message) instead of throw
+
+---
+Task ID: Rate Limit Root Cause Investigation
+Agent: Main Agent
+Task: Determine whether 429 errors are from low quota or self-inflicted rapid testing exhaustion. Run isolated tests.
+
+Work Log:
+- Inspected z-ai-web-dev-sdk source: 429 error is a plain `new Error(msg)`, NO Retry-After header, NO rate limit metadata exposed
+- Audited full dev.log (2962 lines): 48 total generation requests, 37 successful, 11 fallback (all 429)
+- Counted AI API calls: ~70 chat completion calls + ~84 image-search CLI calls across the session
+- Image search uses separate `z-ai image-search` CLI, NOT the chat completions endpoint
+- Ran diagnostic: API healthy (191ms response) when not rate-limited
+- Ran rapid-fire test: **3 requests per ~1 second** triggers 429 on the 4th call
+- Ran recovery test: rate limit recovers after **~5 seconds** of no requests
+- Ran image-search isolation test: 5 rapid image-search calls do NOT affect chat completion quota
+- Ran 3 isolated 3-product generation tests (30s spacing): **3/3 SUCCESS** (1.1-1.3s each)
+- Ran isolated 10-product generation test (Phase 1 + 10s pause + Phase 2): **SUCCESS in 26.9s**
+- Ran 2nd isolated 10-product test (60s spacing): **SUCCESS in 28.4s**
+- Ran 3rd isolated 10-product test (60s spacing): **SUCCESS in 25.6s**
+- Ran rapid back-to-back test (2 generations, no spacing): **2/2 SUCCESS** (4.6s + 2.0s)
+
+Stage Summary:
+- **Rate limit: 3 chat completion requests per ~1 second, recovers in ~5 seconds**
+- **Image search: SEPARATE quota, does NOT affect chat completions**
+- **Root cause: 100% self-inflicted** — 70+ AI calls in a testing session, including rapid retries during already-exhausted windows
+- **A real single user CANNOT hit this limit under normal use** because each generation takes 15-30s (natural spacing), and image enrichment adds 10-20s between AI calls
+- **Even 2 back-to-back generations succeed** (confirmed by test)
+- The z-ai SDK does NOT expose Retry-After or any rate limit metadata
