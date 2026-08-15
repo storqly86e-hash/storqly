@@ -445,3 +445,39 @@ Stage Summary:
 - 50-product caveat: ~6 duplicate names in later batches, ~4 images failed enrichment
 - Practical reliable ceiling: ~30 products (high quality, no dupes)
 - Absolute ceiling: 50 (works but quality degrades: dupes, some image failures)
+---
+Task ID: Generation Regression — 429 Rate Limit + Fallback Bugs
+Agent: Main Agent
+Task: Investigate and fix Bug 1 (identical output regardless of prompt) and Bug 2 (only 1 product generated)
+
+Work Log:
+- Read dev log: every single generation request was returning HTTP 429 (Too Many Requests) from z-ai AI API
+- Traced failure path: executeAI('store-generation', ..., {maxRetries:1}) → 1 attempt, 0 retries → immediate fallback to createFallbackStore()
+- Root cause: maxRetries=1 means NO retries. The 429 backoff logic existed but never fired.
+- Bug 1 (identical output): createFallbackStore() always returns same 3 hardcoded products (Classic Edition, Premium Selection, Starter Kit) → identical stores
+- Bug 2 (only 1 product): fallback's featured-products section only referenced 1 featured product ID → homepage showed 1 product
+- Additional issue: extractStoreName captured 'StrideFit selling running' instead of 'StrideFit' due to greedy regex
+
+Fixes applied (4 files, 5 changes):
+1. ai-orchestrator.ts: maxRetries 1→3 for store-generation and product-batch task types
+2. ai-orchestrator.ts: 429 backoff base delay 15s→30s (clears typical 60s rate limit windows: 30s, 45s, 67.5s)
+3. ai-orchestrator.ts: Reset ZAI instance on 429 (not just 401) — rate limits may be session-tied
+4. generate/route.ts: Phase 1 maxRetries override 1→3
+5. generate/route.ts: Fallback store featured-products section shows ALL products (products.map instead of products.filter(featured))
+6. page.tsx: Added toast.warning when fallback store is used ('AI service unavailable — showing starter template. Try again in a moment.')
+7. generate/route.ts: Rewrote extractStoreName — quoted names first, 'called X' captures just the name word (not 'selling Y'), fallback to title-case run
+
+Verification:
+- Lint: clean (0 errors, 0 warnings)
+- Retry mechanism confirmed firing: dev logs show 'Attempt 1 failed... Waiting 30.0s... Attempt 2 failed... Waiting 45.0s...'
+- ZAI instance reset on 429 confirmed: 'Rate limit error detected — recreating ZAI instance'
+- Toast visible: browser snapshot confirmed 'AI service unavailable — showing starter template' in Toaster region
+- Name extraction verified: StrideFit→StrideFit, GreenNest→GreenNest, TechVault→TechVault, 'Lune Aurélie'→Lune Aurélie
+- E2E AI generation: BLOCKED by persistent 429 (environmental — accumulated from testing retries)
+
+Stage Summary:
+- Root cause: HTTP 429 + maxRetries=1 = instant fallback with identical products
+- Files modified: 3 (ai-orchestrator.ts, generate/route.ts, page.tsx)
+- Retry resilience: 3 attempts with 30s/45s exponential backoff + fresh ZAI connection per retry
+- Fallback quality: all 3 products visible on homepage, correct store name extraction, visible toast
+- Cannot verify AI generation until rate limit clears (environmental issue, not code)

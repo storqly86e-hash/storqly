@@ -117,7 +117,7 @@ function createFallbackStore(prompt: string): Store {
       id: uid(), name: 'Home', slug: '', isHomepage: true,
       sections: [
         { id: uid(), type: 'hero', content: { headline: `Welcome to ${storeName}`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
-        { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.filter(p => p.featured).map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
+        { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'testimonials', content: { headline: 'What Customers Say', items: [{ id: uid(), quote: 'Excellent quality and fast shipping!', author: 'Alex M.', role: 'Verified Buyer', rating: 5 }] }, style: { backgroundColor: '#f9fafb', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'newsletter', content: { headline: 'Stay Updated', subtitle: 'Get exclusive offers and new arrivals.', placeholderText: 'Enter your email', buttonText: 'Subscribe' }, style: { backgroundColor: '#6d28d9', textColor: '#ffffff', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
       ],
@@ -131,26 +131,31 @@ function createFallbackStore(prompt: string): Store {
 
 /** Extract a short, clean store name from the user prompt. */
 function extractStoreName(prompt: string): string {
-  let text = prompt.trim();
-  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,2})/i);
-  if (calledMatch?.[1]) {
-    let name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring|and|include|products?)\s*$/i, '').trim();
-    if (name.length >= 2 && name.length <= 40) return name;
-  }
+  const text = prompt.trim();
+
+  // Pattern 1: Quoted name — highest priority, most reliable
   const quotedMatch = text.match(/["']([^"']{2,40})["']/);
   if (quotedMatch?.[1]) return quotedMatch[1].trim();
-  const afterType = text.match(/\b(store|shop|boutique|brand)\s+([A-Z][\w&'-]*(?:\s+[A-Z][\w&'-]*){0,2})/);
+
+  // Pattern 2: "called X" or "named X" — capture just the first word (the actual name)
+  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([A-Za-z][\w&'\-]*)/i);
+  if (calledMatch?.[1] && calledMatch[1].length >= 2) return calledMatch[1].trim();
+
+  // Pattern 3: "brand X" or "store X" — capture title-case words after type keyword
+  const afterType = text.match(/\b(store|shop|boutique|brand)\s+([A-Z][\w&'\-]*(?:\s+[A-Z][\w&'\-]*){0,2})/);
   if (afterType?.[2]) {
     const name = afterType[2].replace(/\s+(selling|with|that|for|using|featuring|and)\s*$/i, '').trim();
     if (name.length >= 2 && name.length <= 40) return name;
   }
-  text = text
+
+  // Pattern 4: Find longest title-case run (e.g., "StrideFit" in "a footwear brand StrideFit selling...")
+  const stripped = text
     .replace(/^(build|create|make|design|set\s+up)\s+(a|an|the|my)\s+/i, '')
     .replace(/\b(online|e-commerce|ecommerce)\s+(store|shop|boutique)\b/gi, '')
     .replace(/\b(store|shop|boutique|website|site|brand)\b/gi, '')
     .replace(/\b(selling|with|that|for|using|featuring|and)\b.*/i, '')
     .trim();
-  const words = text.split(/\s+/).filter(w => w.length >= 2);
+  const words = stripped.split(/\s+/).filter(w => w.length >= 2);
   const isTitle = (w: string) => w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase();
   let bestRun: string[] = [];
   let currentRun: string[] = [];
@@ -167,6 +172,7 @@ function extractStoreName(prompt: string): string {
     const candidate = bestRun.slice(0, 3).join(' ');
     if (candidate.length >= 2 && candidate.length <= 40) return candidate;
   }
+
   return 'My Store';
 }
 
@@ -254,7 +260,7 @@ export async function POST(req: NextRequest) {
           systemPrompt: buildPhase1SystemPrompt(phase1Count),
           temperature: 0.6,
           timeout: 50_000,
-          maxRetries: 1,
+          maxRetries: 3,
           responseFormat: 'json_object',
         });
 

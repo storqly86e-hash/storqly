@@ -328,6 +328,7 @@ function LandingPage() {
                 clearTimers()
 
                 if (data._isFallback) {
+                  toast.warning('AI service unavailable — showing starter template. Try again in a moment.', { duration: 6000 })
                   setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
                 } else {
                   setStore(data.store)

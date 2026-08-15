@@ -26,7 +26,7 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     label: 'Store Generation',
     temperature: 0.7,
     timeout: 35_000,
-    maxRetries: 1,
+    maxRetries: 3,
   },
   'chat-edit': {
     label: 'Chat Edit',
@@ -44,7 +44,7 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     label: 'Product Batch Generation',
     temperature: 0.7,
     timeout: 30_000,
-    maxRetries: 1,
+    maxRetries: 3,
   },
 };
 
@@ -408,9 +408,9 @@ export async function executeAI(
   let lastError = 'Unknown error';
 
   for (let i = 0; i < maxRetries; i++) {
-    // Exponential backoff: 0s, 3s, 8s (longer on rate limits)
+    // Exponential backoff: 0s, 3s, 8s (longer on rate limits — 30s base to clear typical 60s windows)
     if (i > 0) {
-      const baseDelay = isRateLimitError(lastError) ? 15000 : 3000;
+      const baseDelay = isRateLimitError(lastError) ? 30000 : 3000;
       const delay = baseDelay * Math.pow(1.5, i - 1);
       console.warn(`[AI Orchestrator] Waiting ${(delay / 1000).toFixed(1)}s before retry ${i + 1} for ${taskType}...`);
       await sleep(delay);
@@ -420,9 +420,10 @@ export async function executeAI(
     const extraSystem = RETRY_EXTRA_INSTRUCTIONS[i] || '';
 
     // On 401 auth errors, reset the ZAI instance to get a fresh token
-    const useFreshClient = i > 0 && isAuthError(lastError);
+    // On 429 rate limits, also reset to get a fresh connection (rate limits may be session-tied)
+    const useFreshClient = i > 0 && (isAuthError(lastError) || isRateLimitError(lastError));
     if (useFreshClient) {
-      console.warn(`[AI Orchestrator] Auth error detected — recreating ZAI instance for retry ${i + 1}...`);
+      console.warn(`[AI Orchestrator] ${isAuthError(lastError) ? 'Auth' : 'Rate limit'} error detected — recreating ZAI instance for retry ${i + 1}...`);
       resetZAI();
     }
 
