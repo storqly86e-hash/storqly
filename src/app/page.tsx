@@ -735,7 +735,11 @@ function EditorToolbar({
         body: JSON.stringify({ store }),
       })
       if (!res.ok) throw new Error('Save failed')
-      toast.success('Store saved')
+      const data = await res.json()
+      toast.success(`Draft saved — ID: ${data.id}`, {
+        description: `Slug: ${data.slug}`,
+        duration: 5000,
+      })
     } catch {
       toast.error('Failed to save store')
     } finally {
