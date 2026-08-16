@@ -50,7 +50,7 @@ SCHEMA (compact):
 SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}
 
 SECTION CONTENTS (use ONLY these 4):
-- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg"}
+- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>"}
 - featured-products: {headline, subtitle, productIds: ["<ids>"], columns: 3, showPrice: true, showAddToCart: true}
 - testimonials: {headline, items: [{id, quote, author, role, rating: 5}]}
 - newsletter: {headline, subtitle, placeholderText: "Enter your email", buttonText: "Subscribe"}

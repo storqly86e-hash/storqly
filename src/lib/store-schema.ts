@@ -94,6 +94,12 @@ export interface HeroContent {
   backgroundImage?: string;
   alignment: 'left' | 'center' | 'right';
   height: 'sm' | 'md' | 'lg' | 'xl';
+  // Phase 3A: Design richness
+  badge?: string;                       // Eyebrow text above headline (e.g. "NEW COLLECTION")
+  layout?: 'centered' | 'split-left' | 'split-right';  // Text+image split layout
+  heroImage?: string;                  // Foreground image for split layouts
+  secondaryCtaText?: string;           // Optional secondary button label (outline style)
+  secondaryCtaLink?: string;           // Optional secondary button link
 }
 
 export interface FeaturedProductsContent {
@@ -199,6 +205,13 @@ export interface FooterContent {
   }[];
   socialLinks?: { platform: string; url: string }[];
   copyrightText?: string;
+  // Phase 3A: Design richness
+  logo?: string;                       // Store logo URL
+  contactInfo?: {
+    email?: string;
+    phone?: string;
+    address?: string;
+  };
 }
 
 // Page types — determines how a page is rendered

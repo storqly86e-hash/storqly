@@ -31,6 +31,7 @@ const VALID_PADDING_X = new Set<string>(['sm', 'md', 'lg']);
 const VALID_MAX_WIDTH = new Set<string>(['sm', 'md', 'lg', 'xl', 'full']);
 const VALID_ALIGNMENT = new Set<string>(['left', 'center', 'right']);
 const VALID_HEIGHT = new Set<string>(['sm', 'md', 'lg', 'xl']);
+const VALID_HERO_LAYOUT = new Set<string>(['centered', 'split-left', 'split-right']);
 const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
 const VALID_COLUMNS = new Set<number>([2, 3, 4]);
 const VALID_PAGE_TYPES = new Set<string>(['home', 'collection', 'product', 'cart', 'checkout']);
@@ -187,6 +188,7 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
 
   switch (type) {
     case 'hero': {
+      // Phase 3A: added VALID_HERO_LAYOUT
       return {
         headline: str(c.headline, 'Welcome'),
         subheadline: c.subheadline !== undefined ? str(c.subheadline, '') : undefined,
@@ -195,6 +197,11 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
         backgroundImage: c.backgroundImage !== undefined ? str(c.backgroundImage, '') : undefined,
         alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
         height: enumVal(c.height, VALID_HEIGHT, 'lg'),
+        badge: c.badge !== undefined ? str(c.badge, '') : undefined,
+        layout: c.layout !== undefined ? enumVal(c.layout, VALID_HERO_LAYOUT, 'centered') : undefined,
+        heroImage: c.heroImage !== undefined ? str(c.heroImage, '') : undefined,
+        secondaryCtaText: c.secondaryCtaText !== undefined ? str(c.secondaryCtaText, '') : undefined,
+        secondaryCtaLink: c.secondaryCtaLink !== undefined ? str(c.secondaryCtaLink, '#') : undefined,
       };
     }
     case 'featured-products': {
@@ -308,9 +315,18 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
     case 'footer': {
       const columns = arr<Record<string, unknown>>(c.columns, []);
       const socialLinks = arr<Record<string, unknown>>(c.socialLinks, []);
+      const contactRaw = obj(c.contactInfo, {} as Record<string, unknown>);
+      const contactInfo = {
+        email: contactRaw.email !== undefined ? str(contactRaw.email, '') : undefined,
+        phone: contactRaw.phone !== undefined ? str(contactRaw.phone, '') : undefined,
+        address: contactRaw.address !== undefined ? str(contactRaw.address, '') : undefined,
+      };
+      // Strip empty contactInfo
+      const hasContact = contactInfo.email || contactInfo.phone || contactInfo.address;
       return {
         storeName: str(c.storeName, 'My Store'),
         tagline: c.tagline !== undefined ? str(c.tagline, '') : undefined,
+        logo: c.logo !== undefined ? str(c.logo, '') : undefined,
         columns: columns.slice(0, 4).map((col) => ({
           title: str(col.title, 'Links'),
           links: arr<Record<string, unknown>>(col.links, []).slice(0, 6).map((link) => ({
@@ -322,6 +338,7 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
           platform: str(sl.platform, 'twitter'),
           url: str(sl.url, '#'),
         })),
+        contactInfo: hasContact ? contactInfo : undefined,
         copyrightText: c.copyrightText !== undefined ? str(c.copyrightText, '') : undefined,
       };
     }

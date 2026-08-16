@@ -93,6 +93,7 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
         ctaText: 'Shop Now',
         alignment: 'center',
         height: 'md',
+        layout: 'centered',
       };
     case 'featured-products':
       return {
@@ -190,9 +191,27 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
             links: [
               { label: 'Home', link: '/' },
               { label: 'Shop', link: '/shop' },
+              { label: 'About', link: '/about' },
+              { label: 'Contact', link: '/contact' },
+            ],
+          },
+          {
+            title: 'Customer Service',
+            links: [
+              { label: 'FAQ', link: '/faq' },
+              { label: 'Shipping', link: '/shipping' },
+              { label: 'Returns', link: '/returns' },
             ],
           },
         ],
+        socialLinks: [
+          { platform: 'instagram', url: '#' },
+          { platform: 'twitter', url: '#' },
+          { platform: 'facebook', url: '#' },
+        ],
+        contactInfo: {
+          email: 'hello@mystore.com',
+        },
         copyrightText: `© ${new Date().getFullYear()} My Store. All rights reserved.`,
       };
     default:

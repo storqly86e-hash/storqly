@@ -861,3 +861,31 @@ Stage Summary:
 - FIX: Dynamic imports with skeleton fallbacks reduced compile to 34ms
 - The Z.ai preview iframe should now load within its timeout window
 - App remains fully functional with all features intact
+---
+Task ID: 3A
+Agent: Main Agent
+Task: Phase 3A Design Richness — Hero + Footer visual upgrade
+
+Work Log:
+- Updated store-schema.ts: Added HeroContent fields (badge, layout, heroImage, secondaryCtaText, secondaryCtaLink) and FooterContent fields (logo, contactInfo)
+- Updated normalize-store.ts: Added VALID_HERO_LAYOUT validation set, hero normalization for 5 new fields with enumVal() fallbacks, footer normalization for logo/contactInfo
+- Updated section-meta.ts: Hero default includes layout:'centered', footer default now has 2 link columns + 3 social links + contactInfo
+- Rewrote HeroSection (sections.tsx): Badge/eyebrow text with rounded-full pill, split layout (centered/split-left/split-right), hero image with decorative blur backdrop, secondary CTA with outline style, always-present decorative blur orbs, overflow-hidden
+- Rewrote FooterSection (sections.tsx): Platform-specific SocialIcon component (Instagram, Twitter/X, Facebook, YouTube, TikTok, Pinterest, LinkedIn + generic fallback), clickable <a> links, logo support via StoreImage, contact info column with email/phone/address icons, 4-column responsive grid, theme-aware colors
+- Upgraded AutoFooter (store-renderer/index.tsx): 3-column grid (Brand + description + product count, Pages list, Powered By), proper copyright bar
+- Updated generate/route.ts: AI prompt now includes badge and secondaryCtaText in hero schema
+- Updated chat/route.ts: Hero type description now lists all new content fields and layout modes
+- Fixed CTA handler: buttons stop propagation to prevent section selection (no broken navigation)
+
+Testing:
+- Lint passes clean (0 errors, 0 warnings)
+- Browser verification: Demo store loads with all 3 panels (Sections, Preview, Chat)
+- All 4 sections render: hero, featured-products, testimonials, newsletter
+- AutoFooter shows 3-column layout with brand, pages, and powered-by columns
+- Zero console errors
+
+Stage Summary:
+- Phase 3A COMPLETE — Hero and Footer now have premium visual design
+- New schema fields are backward-compatible (all optional with normalizer fallbacks)
+- No constraints violated: no auth/soft-cap/stripNoOps changes, no heavy animations
+- AI prompt updated to populate badge + secondaryCta on new store generations

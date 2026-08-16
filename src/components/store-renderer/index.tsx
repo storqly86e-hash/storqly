@@ -143,8 +143,15 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
 }
 
 // ─── Auto-generated footer when none exists ────────────────────────────
+// Phase 3A: Richer fallback footer with brand presence
 
 function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
+  const year = new Date().getFullYear();
+  const productCount = store.products.length;
+  const pageNames = store.pages
+    .filter(p => !p.isHomepage && p.type !== 'product' && p.type !== 'cart' && p.type !== 'checkout')
+    .map(p => p.name);
+
   return (
     <footer
       className="border-t mt-auto"
@@ -153,20 +160,61 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
         borderColor: theme.colors.border,
       }}
     >
-      <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-6 py-8 sm:flex-row">
-        <div>
-          <span className="text-sm font-bold" style={{ color: theme.colors.text }}>
-            {store.name}
-          </span>
-          {store.description && (
-            <p className="mt-1 text-xs" style={{ color: theme.colors.textMuted }}>
-              {store.description}
-            </p>
+      <div className="mx-auto max-w-6xl px-6 py-10">
+        <div className="grid gap-8 sm:grid-cols-3">
+          {/* Brand column */}
+          <div className="sm:col-span-1">
+            <span className="text-sm font-bold" style={{ color: theme.colors.text }}>
+              {store.name}
+            </span>
+            {store.description && (
+              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: theme.colors.textMuted }}>
+                {store.description}
+              </p>
+            )}
+            {productCount > 0 && (
+              <p className="mt-2 text-xs" style={{ color: theme.colors.textMuted }}>
+                {productCount} {productCount === 1 ? 'product' : 'products'} available
+              </p>
+            )}
+          </div>
+
+          {/* Navigation column */}
+          {pageNames.length > 0 && (
+            <div>
+              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+                Pages
+              </h4>
+              <ul className="space-y-1.5">
+                {pageNames.map(name => (
+                  <li key={name}>
+                    <span className="text-xs transition-colors hover:opacity-70" style={{ color: theme.colors.textMuted }}>
+                      {name}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
+
+          {/* Built with column */}
+          <div>
+            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+              Powered By
+            </h4>
+            <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+              Built with Storqly AI
+            </p>
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-1 sm:items-end">
+
+        {/* Bottom bar */}
+        <div
+          className="mt-8 flex flex-col items-center justify-between gap-2 border-t pt-6 sm:flex-row"
+          style={{ borderColor: theme.colors.border }}
+        >
           <p className="text-xs" style={{ color: theme.colors.textMuted }}>
-            &copy; {new Date().getFullYear()} {store.name}. All rights reserved.
+            &copy; {year} {store.name}. All rights reserved.
           </p>
           <p className="text-[10px] font-mono opacity-30">{BUILD_ID}</p>
         </div>
