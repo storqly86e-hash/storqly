@@ -105,6 +105,7 @@ class GroqProvider implements AIProvider {
 
     const completion = await Promise.race([
       client.chat.completions.create({
+        model: 'llama-3.3-70b-versatile',
         messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
         temperature,
         ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -163,18 +164,20 @@ class GeminiProvider implements AIProvider {
     }
 
     // Use gemini-2.0-flash for speed + JSON support
+    // Build a single generationConfig that merges json mode, temperature, and max tokens
+    const generationConfig: Record<string, unknown> = {};
+    if (jsonMode) generationConfig.responseMimeType = 'application/json';
+    if (temperature !== undefined) generationConfig.temperature = temperature;
+    if (maxTokens) generationConfig.maxOutputTokens = maxTokens;
+
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-1.5-flash',
       ...(systemInstruction ? { systemInstruction } : {}),
-      ...(jsonMode ? { generationConfig: { responseMimeType: 'application/json' } } : {}),
+      ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
     });
 
     const completion = await Promise.race([
-      model.generateContent({
-        contents: geminiContents,
-        ...(temperature !== undefined ? { generationConfig: { temperature } } : {}),
-        ...(maxTokens ? { generationConfig: { maxOutputTokens: maxTokens } } : {}),
-      }),
+      model.generateContent({ contents: geminiContents }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Request timed out')), timeout)
       ),
