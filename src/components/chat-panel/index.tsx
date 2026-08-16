@@ -172,17 +172,31 @@ export default function ChatPanel() {
           applyOperations(data.operations);
         }
       } catch (err) {
-        const errorMsg =
-          err instanceof Error ? err.message : 'Something went wrong';
-        toast.error('Chat error', { description: errorMsg });
+        const errorMsg = err instanceof Error ? err.message : 'Something went wrong'
+        // Distinguish network errors from server errors for better UX
+        const isNetworkError = errorMsg.includes('Failed to fetch') ||
+          errorMsg.includes('NetworkError') ||
+          errorMsg.includes('Load failed')
 
-        const errorAssistantMsg: ChatMessage = {
-          id: crypto.randomUUID(),
-          role: 'assistant',
-          content: `Sorry, I encountered an error: ${errorMsg}. Please try again.`,
-          timestamp: new Date().toISOString(),
-        };
-        addChatMessage(errorAssistantMsg);
+        if (isNetworkError) {
+          toast.error('Connection lost', {
+            description: 'The server may be restarting. Please wait a moment and try again.',
+          })
+          addChatMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: 'It looks like the connection was lost. The server may be restarting — please try again in a moment.',
+            timestamp: new Date().toISOString(),
+          })
+        } else {
+          toast.error('Chat error', { description: errorMsg })
+          addChatMessage({
+            id: crypto.randomUUID(),
+            role: 'assistant',
+            content: `Sorry, I encountered an error: ${errorMsg}. Please try again.`,
+            timestamp: new Date().toISOString(),
+          })
+        }
       } finally {
         setIsSending(false);
         inputRef.current?.focus();

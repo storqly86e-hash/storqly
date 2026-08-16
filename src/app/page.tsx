@@ -35,6 +35,7 @@ import {
   Store as StoreIcon,
 } from 'lucide-react'
 import AuthModal, { AuthButton } from '@/components/auth-modal'
+import { createDemoStore } from '@/lib/store-schema'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -791,15 +792,27 @@ function LandingPage() {
         </section>
       )}
 
-      {/* ── Business Tools Link ── */}
+      {/* ── Quick Actions ── */}
       <div className="px-5 pb-6">
-        <div className="mx-auto flex max-w-5xl justify-center">
+        <div className="mx-auto flex max-w-5xl justify-center gap-3">
           <button
             onClick={() => setMkOpen(true)}
             className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-xs font-medium text-zinc-400 transition-all duration-200 hover:border-[#a855f7]/30 hover:bg-[#a855f7]/5 hover:text-[#c084fc]"
           >
             <FileText className="h-3.5 w-3.5" />
             Business Tools
+            <ArrowRight className="h-3 w-3 opacity-50" />
+          </button>
+          <button
+            onClick={() => {
+              const demo = createDemoStore()
+              setStore(demo)
+              toast.success('Demo store loaded — explore the editor!')
+            }}
+            className="flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-500/5 px-4 py-2 text-xs font-medium text-emerald-400 transition-all duration-200 hover:border-emerald-500/40 hover:bg-emerald-500/10 hover:text-emerald-300"
+          >
+            <Eye className="h-3.5 w-3.5" />
+            Try Demo Store
             <ArrowRight className="h-3 w-3 opacity-50" />
           </button>
         </div>
@@ -963,27 +976,38 @@ function EditorView() {
 }
 
 // ─── Fallback Banner ──────────────────────────────────────────────
+// Shows when: (1) AI returned a fallback template, or
+// (2) the store ended up in a broken/incomplete state (e.g. server
+//     crashed mid-generation leaving only placeholder sections).
 
 function FallbackBanner() {
   const reset = useStoreEditor((s) => s.reset)
+  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
+  const fallbackReason = useStoreEditor((s) => s.fallbackReason)
   const [dismissed, setDismissed] = useState(false)
 
-  if (dismissed) return null
+  if (dismissed || !isFallbackStore) return null
+
+  const isIncomplete = fallbackReason.includes('interrupted') || fallbackReason.includes('incomplete')
 
   return (
-    <div className="flex items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
-      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-      <p className="flex-1 text-sm text-amber-200">
-        AI couldn't generate a custom store — you're viewing a starter template.
+    <div className={`flex items-center gap-3 border-b px-4 py-2.5 ${isIncomplete ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
+      {isIncomplete ? (
+        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
+      ) : (
+        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+      )}
+      <p className={`flex-1 text-sm ${isIncomplete ? 'text-red-200' : 'text-amber-200'}`}>
+        {isIncomplete
+          ? 'Generation was interrupted and your store is incomplete. Please try regenerating.'
+          : 'AI couldn\'t generate a custom store — you\'re viewing a starter template.'}
         <span className="hidden sm:inline"> Edit it manually or try regenerating.</span>
       </p>
       <div className="flex items-center gap-2">
         <Button
           size="sm"
-          className="h-7 gap-1.5 rounded-lg bg-amber-500/20 px-3 text-xs font-medium text-amber-200 hover:bg-amber-500/30"
-          onClick={() => {
-            reset()
-          }}
+          className={`h-7 gap-1.5 rounded-lg px-3 text-xs font-medium ${isIncomplete ? 'bg-red-500/20 text-red-200 hover:bg-red-500/30' : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'}`}
+          onClick={() => { reset() }}
         >
           <RotateCcw className="h-3 w-3" />
           Regenerate with AI
@@ -1037,14 +1061,25 @@ function EditorToolbar({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store }),
       })
-      if (!res.ok) throw new Error('Save failed')
+      if (!res.ok) throw new Error(`Save failed (${res.status})`)
       const data = await res.json()
       toast.success(`Draft saved — ID: ${data.id}`, {
         description: `Slug: ${data.slug}`,
         duration: 5000,
       })
-    } catch {
-      toast.error('Failed to save store')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+      if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')) {
+        toast.error('Connection lost while saving', {
+          description: 'Your work is still in the editor. Please check your connection and try again.',
+          duration: 6000,
+        })
+      } else {
+        toast.error('Failed to save store', {
+          description: msg || 'An unexpected error occurred. Please try again.',
+          duration: 5000,
+        })
+      }
     } finally {
       setIsSaving(false)
     }
@@ -1059,7 +1094,22 @@ function EditorToolbar({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ store }),
       })
-      if (!res.ok) throw new Error('Publish failed')
+      if (!res.ok) {
+        // Try to get server error details
+        let serverMsg = ''
+        try {
+          const errorData = await res.json()
+          serverMsg = errorData.error || ''
+        } catch { /* ignore */ }
+
+        if (res.status === 401) {
+          throw new Error('AUTH_REQUIRED')
+        } else if (res.status === 502 || res.status === 503 || res.status === 504) {
+          throw new Error('GATEWAY_ERROR')
+        } else {
+          throw new Error(serverMsg || `Server error (${res.status})`)
+        }
+      }
       const data = await res.json()
       const slug = data.slug
       setIsPublished(true)
@@ -1068,8 +1118,31 @@ function EditorToolbar({
       const viewUrl = `${baseUrl}/?store=${slug}`
       setPublishedUrl(viewUrl)
       toast.success('Store published successfully!')
-    } catch {
-      toast.error('Failed to publish store')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : ''
+
+      if (msg === 'AUTH_REQUIRED') {
+        toast.error('Please sign in to publish', {
+          description: 'You need to be signed in before publishing your store.',
+          duration: 6000,
+        })
+        setAuthOpen(true)
+      } else if (msg === 'GATEWAY_ERROR') {
+        toast.error('Server temporarily unavailable', {
+          description: 'The server seems to be restarting. Please wait a moment and try again.',
+          duration: 6000,
+        })
+      } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch') || msg.includes('Load failed')) {
+        toast.error('Connection lost while publishing', {
+          description: 'Your store data is safe. Please check your connection and try again.',
+          duration: 6000,
+        })
+      } else {
+        toast.error('Failed to publish store', {
+          description: msg || 'An unexpected error occurred. Please try again.',
+          duration: 5000,
+        })
+      }
     } finally {
       setIsPublishing(false)
     }

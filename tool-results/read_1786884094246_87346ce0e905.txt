@@ -1,0 +1,1383 @@
+     1→'use client'
+     2→
+     3→import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+     4→import { useSearchParams } from 'next/navigation'
+     5→import { useSession } from 'next-auth/react'
+     6→import { useStoreEditor } from '@/lib/store'
+     7→import { StoreRenderer } from '@/components/store-renderer'
+     8→import ChatPanel from '@/components/chat-panel'
+     9→import VisualEditor from '@/components/visual-editor'
+    10→import type { Store } from '@/lib/store-schema'
+    11→import MarketingKit from '@/components/marketing-kit'
+    12→import {
+    13→  Sparkles,
+    14→  Layers,
+    15→  Rocket,
+    16→  ArrowRight,
+    17→  Loader2,
+    18→  ArrowLeft,
+    19→  Globe,
+    20→  Save,
+    21→  PanelLeftClose,
+    22→  PanelLeftOpen,
+    23→  MessageSquare,
+    24→  Eye,
+    25→  AlertCircle,
+    26→  AlertTriangle,
+    27→  X,
+    28→  RotateCcw,
+    29→  Check,
+    30→  Copy,
+    31→  ExternalLink,
+    32→  FileText,
+    33→  Pencil,
+    34→  Clock,
+    35→  Store as StoreIcon,
+    36→} from 'lucide-react'
+    37→import AuthModal, { AuthButton } from '@/components/auth-modal'
+    38→import { Button } from '@/components/ui/button'
+    39→import { Textarea } from '@/components/ui/textarea'
+    40→import { motion, AnimatePresence } from 'framer-motion'
+    41→import { toast, Toaster } from '@/components/ui/sonner'
+    42→import {
+    43→  PanelGroup,
+    44→  Panel,
+    45→  PanelResizeHandle,
+    46→} from 'react-resizable-panels'
+    47→
+    48→// ─── Animation Variants ───────────────────────────────────────────────
+    49→
+    50→const fadeUp = {
+    51→  hidden: { opacity: 0, y: 24 },
+    52→  visible: (i: number) => ({
+    53→    opacity: 1,
+    54→    y: 0,
+    55→    transition: { duration: 0.6, delay: i * 0.12, ease: [0.25, 0.46, 0.45, 0.94] },
+    56→  }),
+    57→}
+    58→
+    59→const staggerContainer = {
+    60→  hidden: { opacity: 0 },
+    61→  visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.1 } },
+    62→}
+    63→
+    64→// ─── Background Image Enrichment (lazy, non-blocking) ─────
+    65→// Triggered after store generation completes. Fetches real product
+    66→// images sequentially without blocking the user or exhausting rate limits.
+    67→
+    68→function triggerBackgroundImageEnrichment(store: Store) {
+    69→  if (!store.products || store.products.length === 0) return
+    70→
+    71→  // Only enrich products that still have AI-hallucinated Unsplash URLs
+    72→  // (Real enriched URLs from the image search service will have different patterns)
+    73→  const needsEnrichment = store.products.filter(p =>
+    74→    p.images.length > 0 && p.images[0].includes('unsplash.com/photo-')
+    75→  )
+    76→
+    77→  if (needsEnrichment.length === 0) return
+    78→
+    79→  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products need enrichment`)
+    80→
+    81→  fetch('/api/store/enrich-images', {
+    82→    method: 'POST',
+    83→    headers: { 'Content-Type': 'application/json' },
+    84→    body: JSON.stringify({
+    85→      products: needsEnrichment.map(p => ({
+    86→        id: p.id,
+    87→        name: p.name,
+    88→        images: [...p.images],
+    89→        category: p.category,
+    90→        description: p.description,
+    91→      })),
+    92→      storeName: store.name,
+    93→    }),
+    94→  })
+    95→    .then(res => res.json())
+    96→    .then(data => {
+    97→      if (data.enriched > 0) {
+    98→        console.log(`[Storqly] Background enrichment complete: ${data.enriched} enriched, ${data.kept} kept, ${data.failed} failed in ${data.latencyMs}ms`)
+    99→        // Update product images in the store via the Zustand store
+   100→        // The enrich-images endpoint mutated the products array in-place,
+   101→        // but we need to update the Zustand store to trigger re-renders.
+   102→        // Dynamic import to avoid circular dependency
+   103→        import('@/lib/store').then(({ useStoreEditor }) => {
+   104→          const currentStore = useStoreEditor.getState().store
+   105→          if (currentStore) {
+   106→            const updatedProducts = currentStore.products.map(prod => {
+   107→              const enriched = data.products?.find((ep: { id: string; images: string[] }) => ep.id === prod.id)
+   108→              if (enriched && enriched.images[0] !== prod.images[0]) {
+   109→                return { ...prod, images: enriched.images }
+   110→              }
+   111→              return prod
+   112→            })
+   113→            useStoreEditor.getState().setStore({ ...currentStore, products: updatedProducts })
+   114→          }
+   115→        })
+   116→      }
+   117→    })
+   118→    .catch(err => {
+   119→      // Non-fatal — products still show AI placeholder images
+   120→      console.warn('[Storqly] Background enrichment failed (non-fatal):', err)
+   121→    })
+   122→}
+   123→
+   124→// ─── Features Data ────────────────────────────────────────────────────
+   125→
+   126→const features = [
+   127→  {
+   128→    icon: Sparkles,
+   129→    title: 'AI-Powered Generation',
+   130→    description: 'Describe your vision and watch it come to life',
+   131→  },
+   132→  {
+   133→    icon: Layers,
+   134→    title: 'Dual Editor Interface',
+   135→    description: 'Edit with chat or visual drag-and-drop — always in sync',
+   136→  },
+   137→  {
+   138→    icon: Rocket,
+   139→    title: 'Instant Publish',
+   140→    description: 'Go live on your own subdomain in one click',
+   141→  },
+   142→]
+   143→
+   144→// ─── Progress Messages (fallback when no SSE progress received) ──
+   145→
+   146→const progressMessages = [
+   147→  'Analyzing your store vision...',
+   148→  'Generating store layout...',
+   149→  'Creating product catalog...',
+   150→  'Applying design theme...',
+   151→  'Adding sections and content...',
+   152→  'Polishing the final details...',
+   153→  'Almost there...',
+   154→]
+   155→
+   156→// ─── Landing Page ─────────────────────────────────────────────────────
+   157→
+   158→type StoreListItem = {
+   159→  id: string
+   160→  name: string
+   161→  slug: string
+   162→  description: string
+   163→  published: boolean
+   164→  createdAt: string
+   165→  updatedAt: string
+   166→  thumbnail: string | null
+   167→}
+   168→
+   169→function LandingPage() {
+   170→  const { data: session } = useSession()
+   171→  const [promptText, setPromptText] = useState('')
+   172→  const [mkOpen, setMkOpen] = useState(false)
+   173→  const [authOpen, setAuthOpen] = useState(false)
+   174→  const [myStores, setMyStores] = useState<StoreListItem[]>([])
+   175→  const [storesLoading, setStoresLoading] = useState(false)
+   176→  const [editingSlug, setEditingSlug] = useState<string | null>(null)
+   177→  const textareaRef = useRef<HTMLTextAreaElement>(null)
+   178→  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+   179→  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+   180→  const abortRef = useRef<AbortController | null>(null)
+   181→
+   182→  const {
+   183→    isGenerating,
+   184→    setIsGenerating,
+   185→    setStore,
+   186→    setStoreWithFallback,
+   187→  } = useStoreEditor()
+   188→
+   189→  // Local UI state (not in Zustand — this is view-level)
+   190→  const [generationStatus, setGenerationStatus] = useState('')
+   191→  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+   192→  const [error, setError] = useState<string | null>(null)
+   193→
+   194→  const clearTimers = useCallback(() => {
+   195→    if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
+   196→    if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null }
+   197→  }, [])
+   198→
+   199→  // ── Fetch user's stores on login ──
+   200→  useEffect(() => {
+   201→    if (!session?.user?.id) {
+   202→      setMyStores([])
+   203→      return
+   204→    }
+   205→    let cancelled = false
+   206→    setStoresLoading(true)
+   207→    fetch('/api/store/list')
+   208→      .then((r) => { if (!r.ok) throw new Error(); return r.json() })
+   209→      .then((data) => { if (!cancelled) setMyStores(data.stores ?? []) })
+   210→      .catch(() => { if (!cancelled) setMyStores([]) })
+   211→      .finally(() => { if (!cancelled) setStoresLoading(false) })
+   212→    return () => { cancelled = true }
+   213→  }, [session?.user?.id])
+   214→
+   215→  // ── Edit store: fetch full data via lookup, then load into editor ──
+   216→  const handleEditStore = useCallback(async (slug: string) => {
+   217→    setEditingSlug(slug)
+   218→    try {
+   219→      const res = await fetch(`/api/store/lookup?slug=${encodeURIComponent(slug)}`)
+   220→      if (!res.ok) throw new Error()
+   221→      const data = await res.json()
+   222→      setStore(data.store)
+   223→    } catch {
+   224→      toast.error('Failed to load store. It may have been deleted.')
+   225→    } finally {
+   226→      setEditingSlug(null)
+   227→    }
+   228→  }, [setStore])
+   229→
+   230→  // Format relative time
+   231→  const formatTimeAgo = useCallback((iso: string) => {
+   232→    const diff = Date.now() - new Date(iso).getTime()
+   233→    const mins = Math.floor(diff / 60000)
+   234→    if (mins < 1) return 'just now'
+   235→    if (mins < 60) return `${mins}m ago`
+   236→    const hours = Math.floor(mins / 60)
+   237→    if (hours < 24) return `${hours}h ago`
+   238→    const days = Math.floor(hours / 24)
+   239→    if (days < 30) return `${days}d ago`
+   240→    return new Date(iso).toLocaleDateString()
+   241→  }, [])
+   242→
+   243→  const handleCancel = useCallback(() => {
+   244→    abortRef.current?.abort()
+   245→    clearTimers()
+   246→    setIsGenerating(false)
+   247→    setGenerationStatus('')
+   248→    setElapsedSeconds(0)
+   249→    setError(null)
+   250→  }, [clearTimers, setIsGenerating])
+   251→
+   252→  const handleGenerate = useCallback(async () => {
+   253→    const trimmed = promptText.trim()
+   254→    if (!trimmed) {
+   255→      setError('Please describe your store to get started.')
+   256→      textareaRef.current?.focus()
+   257→      return
+   258→    }
+   259→
+   260→    // Auth gate — block generation for logged-out users (show modal instead)
+   261→    if (!session?.user?.id) {
+   262→      setAuthOpen(true)
+   263→      return
+   264→    }
+   265→
+   266→    // Reset state
+   267→    setError(null)
+   268→    setIsGenerating(true)
+   269→    setGenerationStatus('Starting generation...')
+   270→    setElapsedSeconds(0)
+   271→
+   272→    // Create abort controller for this request
+   273→    const controller = new AbortController()
+   274→    abortRef.current = controller
+   275→
+   276→    // Hard timeout: 120 seconds — no request should ever take longer than this.
+   277→    // If the server is hung or the proxy drops the connection, the user gets a
+   278→    // clear message instead of waiting indefinitely.
+   279→    const HARD_TIMEOUT_MS = 120_000
+   280→    let timedOut = false
+   281→    const timeoutId = setTimeout(() => {
+   282→      timedOut = true
+   283→      controller.abort()
+   284→      console.warn(`[Storqly] Hard timeout (${HARD_TIMEOUT_MS / 1000}s) reached — aborting generation`)
+   285→    }, HARD_TIMEOUT_MS)
+   286→
+   287→    // Elapsed time counter
+   288→    elapsedTimerRef.current = setInterval(() => {
+   289→      setElapsedSeconds((prev) => prev + 1)
+   290→    }, 1000)
+   291→
+   292→    // Fallback progress cycling (used only if SSE progress events stop)
+   293→    let fallbackIdx = 0
+   294→    let receivedSSEProgress = false
+   295→    progressTimerRef.current = setInterval(() => {
+   296→      if (!receivedSSEProgress) {
+   297→        fallbackIdx = (fallbackIdx + 1) % progressMessages.length
+   298→        setGenerationStatus(progressMessages[fallbackIdx])
+   299→      }
+   300→    }, 3000)
+   301→
+   302→    // ── Helper: clean up on any error path (no throw, no crash overlay) ──
+   303→    const finishWithError = (message: string) => {
+   304→      clearTimeout(timeoutId)
+   305→      clearTimers()
+   306→      setError(message)
+   307→      setIsGenerating(false)
+   308→      setGenerationStatus('')
+   309→      setElapsedSeconds(0)
+   310→      toast.error('Store generation failed', { description: message })
+   311→    }
+   312→
+   313→    const finishOk = () => {
+   314→      clearTimeout(timeoutId)
+   315→      clearTimers()
+   316→      setIsGenerating(false)
+   317→      setGenerationStatus('')
+   318→      setElapsedSeconds(0)
+   319→    }
+   320→
+   321→    try {
+   322→      console.log('[Storqly] Starting SSE store generation for prompt:', trimmed)
+   323→
+   324→      // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
+   325→      const RETRYABLE_STATUSES = [502, 503, 504]
+   326→      let res: Response | undefined
+   327→      let retryCount = 0
+   328→      const maxRetries = 2
+   329→
+   330→      while (retryCount <= maxRetries) {
+   331→        try {
+   332→          res = await fetch('/api/store/generate', {
+   333→            method: 'POST',
+   334→            headers: { 'Content-Type': 'application/json' },
+   335→            body: JSON.stringify({ prompt: trimmed }),
+   336→            signal: controller.signal,
+   337→          })
+   338→
+   339→          // If the status is retryable, wait and loop again
+   340→          if (!res.ok && RETRYABLE_STATUSES.includes(res.status) && retryCount < maxRetries) {
+   341→            retryCount++
+   342→            console.warn(`[Storqly] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 3s...`)
+   343→            setGenerationStatus('Connection issue — retrying...')
+   344→            await new Promise(r => setTimeout(r, 3000))
+   345→            continue
+   346→          }
+   347→          break // Success or non-retryable error — exit loop
+   348→        } catch (fetchErr: unknown) {
+   349→          // Network-level error (DNS failure, connection refused, etc.)
+   350→          if (fetchErr instanceof TypeError && retryCount < maxRetries) {
+   351→            retryCount++
+   352→            console.warn(`[Storqly] Network error, retrying (${retryCount}/${maxRetries}) in 3s...`)
+   353→            setGenerationStatus('Connection issue — retrying...')
+   354→            await new Promise(r => setTimeout(r, 3000))
+   355→            continue
+   356→          }
+   357→          // Out of retries or not a network error — handle gracefully
+   358→          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+   359→          if (controller.signal.aborted) {
+   360→            finishWithError('Generation was cancelled.')
+   361→          } else {
+   362→            console.warn('[Storqly] Network error after retries:', msg)
+   363→            finishWithError('Could not connect to the server. Please check your connection and try again.')
+   364→          }
+   365→          return
+   366→        }
+   367→      }
+   368→
+   369→      if (!res!.ok) {
+   370→        let errorMsg = `Server error (${res!.status})`
+   371→        try {
+   372→          const errorData = await res!.json()
+   373→          errorMsg = errorData.error || errorMsg
+   374→        } catch { /* ignore parse error */ }
+   375→        console.warn('[Storqly] HTTP error:', errorMsg)
+   376→        finishWithError(errorMsg)
+   377→        return
+   378→      }
+   379→
+   380→      // ── Consume SSE stream ──
+   381→      const reader = res.body?.getReader()
+   382→      if (!reader) {
+   383→        finishWithError('No response stream received from server.')
+   384→        return
+   385→      }
+   386→
+   387→      const decoder = new TextDecoder()
+   388→      let buffer = ''
+   389→      let resolved = false
+   390→
+   391→      while (true) {
+   392→        const { done, value } = await reader.read()
+   393→        if (done) break
+   394→
+   395→        buffer += decoder.decode(value, { stream: true })
+   396→
+   397→        // Parse SSE events from buffer
+   398→        const lines = buffer.split('\n')
+   399→        buffer = lines.pop() || ''
+   400→
+   401→        let currentEvent = ''
+   402→        for (const line of lines) {
+   403→          if (line.startsWith(':')) continue
+   404→          if (line.startsWith('event: ')) {
+   405→            currentEvent = line.slice(7).trim()
+   406→          } else if (line.startsWith('data: ')) {
+   407→            const dataStr = line.slice(6)
+   408→
+   409→            if (currentEvent === 'progress') {
+   410→              receivedSSEProgress = true
+   411→              try {
+   412→                const data = JSON.parse(dataStr)
+   413→                setGenerationStatus(data.message || 'Processing...')
+   414→              } catch { /* ignore */ }
+   415→            } else if (currentEvent === 'result') {
+   416→              try {
+   417→                const data = JSON.parse(dataStr)
+   418→                if (!data.store) {
+   419→                  console.warn('[Storqly] Result event missing store data')
+   420→                  finishWithError('The AI response was missing store data.')
+   421→                  return
+   422→                }
+   423→                console.log('[Storqly] Store generated via SSE. isFallback:', data._isFallback, 'name:', data.store.name)
+   424→                resolved = true
+   425→
+   426→                if (data._isFallback) {
+   427→                  toast.warning('AI service unavailable — showing starter template. Try again in a moment.', { duration: 6000 })
+   428→                  setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
+   429→                } else {
+   430→                  setStore(data.store)
+   431→                  // Trigger lazy background image enrichment (non-blocking)
+   432→                  triggerBackgroundImageEnrichment(data.store)
+   433→                }
+   434→
+   435→                // Soft cap toast
+   436→                if (data._productCapHit) {
+   437→                  toast.info(
+   438→                    `Generated ${data._generatedCount} products — for larger catalogs, you can add more via the chat editor.`,
+   439→                    { duration: 8000 }
+   440→                  )
+   441→                }
+   442→
+   443→                finishOk()
+   444→                return
+   445→              } catch (parseErr) {
+   446→                const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+   447→                console.warn('[Storqly] Failed to parse result event:', msg)
+   448→                finishWithError(msg)
+   449→                return
+   450→              }
+   451→            } else if (currentEvent === 'error') {
+   452→              try {
+   453→                const data = JSON.parse(dataStr)
+   454→                const serverMsg = data.message || 'Generation failed'
+   455→                console.warn('[Storqly] Server error event:', serverMsg)
+   456→                finishWithError(serverMsg)
+   457→                return
+   458→              } catch {
+   459→                finishWithError('Generation failed')
+   460→                return
+   461→              }
+   462→            }
+   463→            currentEvent = ''
+   464→          }
+   465→        }
+   466→      }
+   467→
+   468→      if (!resolved) {
+   469→        console.warn('[Storqly] Stream ended without a result event')
+   470→        finishWithError('Stream ended without a result. The server may have disconnected.')
+   471→      }
+   472→    } catch (err: unknown) {
+   473→      // Last-resort safety net — should rarely be reached now
+   474→      clearTimeout(timeoutId)
+   475→      clearTimers()
+   476→      let message = 'Something went wrong. Please try again.'
+   477→      if (err instanceof Error) {
+   478→        if (err.name === 'AbortError') {
+   479→          message = timedOut
+   480→            ? 'Generation timed out after 2 minutes. The server may be overloaded — please try again.'
+   481→            : 'Generation was cancelled.'
+   482→          console.warn(`[Storqly] Request aborted: ${message}`)
+   483→        } else {
+   484→          console.warn('[Storqly] Unexpected error (caught by safety net):', err.message)
+   485→          message = err.message
+   486→        }
+   487→      }
+   488→      setError(message)
+   489→      setIsGenerating(false)
+   490→      setGenerationStatus('')
+   491→      setElapsedSeconds(0)
+   492→      toast.error('Store generation failed', { description: message })
+   493→    }
+   494→  }, [promptText, session, setIsGenerating, setStore, setStoreWithFallback, clearTimers, setAuthOpen])
+   495→
+   496→  // Cleanup on unmount
+   497→  useEffect(() => {
+   498→    return () => {
+   499→      clearTimers()
+   500→      abortRef.current?.abort()
+   501→    }
+   502→  }, [clearTimers])
+   503→
+   504→  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+   505→    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+   506→      e.preventDefault()
+   507→      handleGenerate()
+   508→    }
+   509→  }
+   510→
+   511→  const formatElapsed = (seconds: number) => {
+   512→    if (seconds < 60) return `${seconds}s`
+   513→    const m = Math.floor(seconds / 60)
+   514→    const s = seconds % 60
+   515→    return `${m}:${s.toString().padStart(2, '0')}`
+   516→  }
+   517→
+   518→  return (
+   519→    <>
+   520→      {/* ── Fixed Nav ── */}
+   521→      <header className="fixed top-0 left-0 right-0 z-50 border-b border-white/[0.06] bg-[#09090b]/80 backdrop-blur-xl">
+   522→        <nav className="mx-auto flex h-16 max-w-6xl items-center justify-between px-5 sm:px-8">
+   523→          <span className="text-2xl font-bold tracking-tight bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] bg-clip-text text-transparent">
+   524→            Storqly
+   525→          </span>
+   526→          <div className="hidden sm:flex items-center gap-4">
+   527→            <span className="text-sm text-zinc-500">
+   528→              AI-Powered Store Builder
+   529→            </span>
+   530→            <AuthButton onSignIn={() => setAuthOpen(true)} />
+   531→          </div>
+   532→          <div className="flex sm:hidden">
+   533→            <AuthButton onSignIn={() => setAuthOpen(true)} />
+   534→          </div>
+   535→        </nav>
+   536→      </header>
+   537→
+   538→      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
+   539→
+   540→      {/* ── Hero Section ── */}
+   541→      <section className="relative flex flex-1 flex-col items-center justify-center px-5 pt-32 pb-20 sm:pt-40 sm:pb-28">
+   542→        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+   543→          <div className="absolute left-1/2 top-0 h-[600px] w-[800px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-gradient-to-br from-[#a855f7]/15 via-[#ec4899]/10 to-transparent blur-3xl" />
+   544→        </div>
+   545→
+   546→        <div className="relative z-10 mx-auto w-full max-w-3xl text-center">
+   547→          <motion.h1
+   548→            custom={0}
+   549→            variants={fadeUp}
+   550→            initial="hidden"
+   551→            animate="visible"
+   552→            className="text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-5xl md:text-6xl lg:text-7xl"
+   553→          >
+   554→            Build Your Store{' '}
+   555→            <span className="bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] bg-clip-text text-transparent">
+   556→              in Seconds
+   557→            </span>
+   558→          </motion.h1>
+   559→
+   560→          <motion.p
+   561→            custom={1}
+   562→            variants={fadeUp}
+   563→            initial="hidden"
+   564→            animate="visible"
+   565→            className="mt-6 text-lg text-zinc-400 sm:text-xl"
+   566→          >
+   567→            Describe your store. AI builds it. You customize and publish.
+   568→          </motion.p>
+   569→
+   570→          <motion.div
+   571→            custom={2}
+   572→            variants={fadeUp}
+   573→            initial="hidden"
+   574→            animate="visible"
+   575→            className="mt-10"
+   576→          >
+   577→            <div className="group relative rounded-2xl border border-white/[0.08] bg-white/[0.03] shadow-2xl shadow-black/40 transition-all duration-300 focus-within:border-[#a855f7]/40 focus-within:shadow-[0_0_40px_-8px_rgba(168,85,247,0.25)]">
+   578→              <Textarea
+   579→                ref={textareaRef}
+   580→                value={promptText}
+   581→                onChange={(e) => { setPromptText(e.target.value); setError(null) }}
+   582→                onKeyDown={handleKeyDown}
+   583→                disabled={isGenerating}
+   584→                placeholder='Describe the store you want to build... (e.g. "A modern minimalist jewelry brand with gold accents, selling handcrafted rings, necklaces, and bracelets")'
+   585→                className="min-h-[120px] resize-none rounded-2xl border-0 bg-transparent px-5 py-5 text-base text-white placeholder:text-zinc-600 focus-visible:ring-0 focus-visible:border-0 sm:text-lg md:min-h-[140px]"
+   586→              />
+   587→
+   588→              <div className="flex items-center justify-between border-t border-white/[0.06] px-5 py-3">
+   589→                <span className="text-xs text-zinc-600">
+   590→                  Press{' '}
+   591→                  <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1.5 py-0.5 font-mono text-[10px] text-zinc-400">
+   592→                    ⌘↵
+   593→                  </kbd>{' '}
+   594→                  to generate
+   595→                </span>
+   596→
+   597→                <div className="flex items-center gap-2">
+   598→                  {isGenerating && (
+   599→                    <Button
+   600→                      variant="ghost"
+   601→                      size="sm"
+   602→                      onClick={handleCancel}
+   603→                      className="h-8 gap-1.5 rounded-lg px-3 text-xs text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+   604→                    >
+   605→                      <X className="h-3.5 w-3.5" />
+   606→                      Cancel
+   607→                    </Button>
+   608→                  )}
+   609→                  <Button
+   610→                    onClick={handleGenerate}
+   611→                    disabled={isGenerating || !promptText.trim()}
+   612→                    className="relative overflow-hidden rounded-xl bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] px-6 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[#a855f7]/20 transition-all duration-300 hover:scale-105 hover:shadow-[#a855f7]/30 disabled:opacity-50 disabled:hover:scale-100"
+   613→                  >
+   614→                    {isGenerating ? (
+   615→                      <span className="flex items-center gap-2">
+   616→                        <Loader2 className="h-4 w-4 animate-spin" />
+   617→                        Generating…
+   618→                      </span>
+   619→                    ) : (
+   620→                      <span className="flex items-center gap-2">
+   621→                        <Sparkles className="h-4 w-4" />
+   622→                        Generate Store
+   623→                      </span>
+   624→                    )}
+   625→                  </Button>
+   626→                </div>
+   627→              </div>
+   628→            </div>
+   629→
+   630→            {/* Status feedback area */}
+   631→            <div className="mt-4 min-h-[48px]">
+   632→              <AnimatePresence mode="wait">
+   633→                {isGenerating && !error && (
+   634→                  <motion.div
+   635→                    key="progress"
+   636→                    initial={{ opacity: 0, y: 8 }}
+   637→                    animate={{ opacity: 1, y: 0 }}
+   638→                    exit={{ opacity: 0, y: -8 }}
+   639→                    className="flex flex-col items-center gap-1"
+   640→                  >
+   641→                    <p className="flex items-center gap-2 text-sm text-zinc-400">
+   642→                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a855f7]" />
+   643→                      {generationStatus}
+   644→                    </p>
+   645→                    <p className="text-xs text-zinc-600">
+   646→                      Elapsed: {formatElapsed(elapsedSeconds)} · AI is building your store, this may take up to 2 minutes
+   647→                    </p>
+   648→                  </motion.div>
+   649→                )}
+   650→
+   651→                {error && (
+   652→                  <motion.div
+   653→                    key="error"
+   654→                    initial={{ opacity: 0, y: 8 }}
+   655→                    animate={{ opacity: 1, y: 0 }}
+   656→                    exit={{ opacity: 0, y: -8 }}
+   657→                    className="flex flex-col items-center gap-2"
+   658→                  >
+   659→                    <div className="flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-left max-w-lg">
+   660→                      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-400" />
+   661→                      <div className="flex-1 min-w-0">
+   662→                        <p className="text-sm font-medium text-red-300">Generation failed</p>
+   663→                        <p className="mt-1 text-xs text-red-400/80 leading-relaxed">{error}</p>
+   664→                      </div>
+   665→                      <button
+   666→                        onClick={() => setError(null)}
+   667→                        className="shrink-0 text-zinc-500 hover:text-zinc-300"
+   668→                        aria-label="Dismiss error"
+   669→                      >
+   670→                        <X className="h-3.5 w-3.5" />
+   671→                      </button>
+   672→                    </div>
+   673→                    <Button
+   674→                      variant="outline"
+   675→                      size="sm"
+   676→                      onClick={handleGenerate}
+   677→                      className="mt-1 gap-1.5 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+   678→                    >
+   679→                      <RotateCcw className="h-3 w-3" />
+   680→                      Try Again
+   681→                    </Button>
+   682→                  </motion.div>
+   683→                )}
+   684→              </AnimatePresence>
+   685→            </div>
+   686→          </motion.div>
+   687→        </div>
+   688→      </section>
+   689→
+   690→      {/* ── My Stores ── */}
+   691→      {session?.user?.id && (storesLoading || myStores.length > 0) && (
+   692→        <section className="px-5 pb-10">
+   693→          <div className="mx-auto max-w-5xl">
+   694→            <div className="mb-5 flex items-center gap-3">
+   695→              <StoreIcon className="h-5 w-5 text-zinc-400" />
+   696→              <h2 className="text-lg font-semibold text-white">My Stores</h2>
+   697→              {!storesLoading && (
+   698→                <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs font-medium text-zinc-400">
+   699→                  {myStores.length}
+   700→                </span>
+   701→              )}
+   702→            </div>
+   703→
+   704→            {storesLoading ? (
+   705→              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   706→                {[1, 2, 3].map((n) => (
+   707→                  <div key={n} className="animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.02] p-4">
+   708→                    <div className="mb-3 h-24 rounded-lg bg-zinc-800" />
+   709→                    <div className="mb-2 h-4 w-3/4 rounded bg-zinc-800" />
+   710→                    <div className="h-3 w-1/2 rounded bg-zinc-800/60" />
+   711→                  </div>
+   712→                ))}
+   713→              </div>
+   714→            ) : (
+   715→              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+   716→                {myStores.map((s) => (
+   717→                  <div
+   718→                    key={s.id}
+   719→                    className="group relative rounded-xl border border-white/[0.06] bg-white/[0.02] transition-all duration-200 hover:border-white/[0.12] hover:bg-white/[0.04]"
+   720→                  >
+   721→                    {/* Thumbnail area */}
+   722→                    <div className="flex h-28 items-center justify-center rounded-t-xl bg-gradient-to-br from-zinc-800 to-zinc-900">
+   723→                      {s.thumbnail ? (
+   724→                        <img
+   725→                          src={s.thumbnail}
+   726→                          alt={s.name}
+   727→                          className="h-full w-full rounded-t-xl object-cover"
+   728→                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+   729→                        />
+   730→                      ) : (
+   731→                        <span className="text-3xl font-bold text-zinc-700">
+   732→                          {s.name.charAt(0).toUpperCase()}
+   733→                        </span>
+   734→                      )}
+   735→                    </div>
+   736→
+   737→                    <div className="p-4">
+   738→                      {/* Name + status badge */}
+   739→                      <div className="mb-1 flex items-start justify-between gap-2">
+   740→                        <h3 className="truncate text-sm font-semibold text-white">
+   741→                          {s.name}
+   742→                        </h3>
+   743→                        <span
+   744→                          className={s.published
+   745→                            ? 'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/10 text-emerald-400'
+   746→                            : 'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium bg-amber-500/10 text-amber-400'}
+   747→                        >
+   748→                          {s.published ? 'Published' : 'Draft'}
+   749→                        </span>
+   750→                      </div>
+   751→
+   752→                      {/* Timestamp */}
+   753→                      <p className="mb-3 flex items-center gap-1 text-xs text-zinc-500">
+   754→                        <Clock className="h-3 w-3" />
+   755→                        {formatTimeAgo(s.updatedAt)}
+   756→                      </p>
+   757→
+   758→                      {/* Actions */}
+   759→                      <div className="flex items-center gap-2">
+   760→                        <Button
+   761→                          size="sm"
+   762→                          onClick={() => handleEditStore(s.slug)}
+   763→                          disabled={editingSlug === s.slug}
+   764→                          className="h-7 gap-1.5 rounded-lg bg-white/[0.06] px-3 text-xs font-medium text-zinc-300 hover:bg-white/[0.1] hover:text-white"
+   765→                        >
+   766→                          {editingSlug === s.slug ? (
+   767→                            <Loader2 className="h-3 w-3 animate-spin" />
+   768→                          ) : (
+   769→                            <Pencil className="h-3 w-3" />
+   770→                          )}
+   771→                          Edit
+   772→                        </Button>
+   773→                        {s.published && (
+   774→                          <Button
+   775→                            size="sm"
+   776→                            variant="ghost"
+   777→                            onClick={() => { window.location.href = `/?store=${s.slug}` }}
+   778→                            className="h-7 gap-1.5 rounded-lg px-3 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
+   779→                          >
+   780→                            <Eye className="h-3 w-3" />
+   781→                            View
+   782→                          </Button>
+   783→                        )}
+   784→                      </div>
+   785→                    </div>
+   786→                  </div>
+   787→                ))}
+   788→              </div>
+   789→            )}
+   790→          </div>
+   791→        </section>
+   792→      )}
+   793→
+   794→      {/* ── Business Tools Link ── */}
+   795→      <div className="px-5 pb-6">
+   796→        <div className="mx-auto flex max-w-5xl justify-center">
+   797→          <button
+   798→            onClick={() => setMkOpen(true)}
+   799→            className="flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.02] px-4 py-2 text-xs font-medium text-zinc-400 transition-all duration-200 hover:border-[#a855f7]/30 hover:bg-[#a855f7]/5 hover:text-[#c084fc]"
+   800→          >
+   801→            <FileText className="h-3.5 w-3.5" />
+   802→            Business Tools
+   803→            <ArrowRight className="h-3 w-3 opacity-50" />
+   804→          </button>
+   805→        </div>
+   806→      </div>
+   807→
+   808→      {/* ── Features Section ── */}
+   809→      <section className="px-5 pb-24 sm:pb-32">
+   810→        <motion.div
+   811→          variants={staggerContainer}
+   812→          initial="hidden"
+   813→          whileInView="visible"
+   814→          viewport={{ once: true, margin: '-80px' }}
+   815→          className="mx-auto grid max-w-5xl gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3"
+   816→        >
+   817→          {features.map((feature, i) => (
+   818→            <motion.div
+   819→              key={feature.title}
+   820→              custom={i}
+   821→              variants={fadeUp}
+   822→              className="group relative rounded-2xl border border-white/[0.06] bg-white/[0.02] p-6 transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] sm:p-8"
+   823→            >
+   824→              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#a855f7]/20 to-[#ec4899]/20">
+   825→                <feature.icon className="h-5 w-5 text-[#c084fc]" />
+   826→              </div>
+   827→              <h3 className="text-base font-semibold text-white sm:text-lg">
+   828→                {feature.title}
+   829→              </h3>
+   830→              <p className="mt-2 text-sm leading-relaxed text-zinc-500">
+   831→                {feature.description}
+   832→              </p>
+   833→              <div className="mt-4 flex items-center gap-1 text-sm font-medium text-zinc-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+   834→                Learn more <ArrowRight className="h-3.5 w-3.5" />
+   835→              </div>
+   836→            </motion.div>
+   837→          ))}
+   838→        </motion.div>
+   839→      </section>
+   840→
+   841→      {/* ── Marketing Kit Overlay ── */}
+   842→      <MarketingKit isOpen={mkOpen} onClose={() => setMkOpen(false)} />
+   843→    </>
+   844→  )
+   845→}
+   846→
+   847→// ─── Resize Handle ────────────────────────────────────────────────────
+   848→
+   849→function ResizeHandle({ direction }: { direction: 'left' | 'right' }) {
+   850→  return (
+   851→    <PanelResizeHandle
+   852→      className={`group relative flex w-1.5 items-center justify-center bg-zinc-900 transition-colors hover:bg-zinc-800 data-[resize-handle-active]:bg-[#a855f7]/30 ${
+   853→        direction === 'left' ? 'border-l border-zinc-800' : 'border-r border-zinc-800'
+   854→      }`}
+   855→    >
+   856→      <div className="absolute inset-y-0 -left-1 -right-1" />
+   857→    </PanelResizeHandle>
+   858→  )
+   859→}
+   860→
+   861→// ─── Preview Panel (direct Zustand subscription for reliable re-renders) ──
+   862→// This component subscribes to Zustand independently so the preview always
+   863→// re-renders when the store changes, regardless of PanelGroup/Panel
+   864→// internal render behavior.
+   865→
+   866→function PreviewPanel() {
+   867→  const store = useStoreEditor((s) => s.store)
+   868→  const selectedSectionId = useStoreEditor((s) => s.selectedSectionId)
+   869→  const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
+   870→  const editorCurrentPageId = useStoreEditor((s) => s.editorCurrentPageId)
+   871→  const setEditorCurrentPageId = useStoreEditor((s) => s.setEditorCurrentPageId)
+   872→  const addSection = useStoreEditor((s) => s.addSection)
+   873→
+   874→  // Handler for the center "+" button on empty custom pages
+   875→  const handleAddSectionClick = useCallback(() => {
+   876→    if (!editorCurrentPageId) return
+   877→    const newSection: import('@/lib/store-schema').Section = {
+   878→      id: crypto.randomUUID(),
+   879→      type: 'hero',
+   880→      content: {
+   881→        headline: 'New Section',
+   882→        subheadline: 'Click to edit this section',
+   883→        ctaText: 'Shop Now',
+   884→        alignment: 'center',
+   885→        height: 'md',
+   886→      },
+   887→      style: {},
+   888→      visible: true,
+   889→    }
+   890→    addSection(editorCurrentPageId, newSection)
+   891→  }, [editorCurrentPageId, addSection])
+   892→
+   893→  if (!store) return null
+   894→
+   895→  return (
+   896→    <div className="h-full overflow-auto bg-zinc-100">
+   897→      <StoreRenderer
+   898→        store={store}
+   899→        selectedSectionId={selectedSectionId}
+   900→        onSelectSection={setSelectedSectionId}
+   901→        externalCurrentPageId={editorCurrentPageId}
+   902→        onPageChange={setEditorCurrentPageId}
+   903→        onAddSectionClick={handleAddSectionClick}
+   904→      />
+   905→    </div>
+   906→  )
+   907→}
+   908→
+   909→// ─── Editor View ─────────────────────────────────────────────────────
+   910→
+   911→function EditorView() {
+   912→  const store = useStoreEditor((s) => s.store)
+   913→  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
+   914→  const [showLeft, setShowLeft] = useState(true)
+   915→  const [showRight, setShowRight] = useState(true)
+   916→
+   917→  if (!store) {
+   918→    return (
+   919→      <div className="flex flex-1 items-center justify-center bg-zinc-950">
+   920→        <div className="text-center">
+   921→          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#a855f7]" />
+   922→          <p className="mt-3 text-sm text-zinc-500">Loading editor…</p>
+   923→        </div>
+   924→      </div>
+   925→    )
+   926→  }
+   927→
+   928→  return (
+   929→    <div className="flex h-screen flex-col bg-zinc-950">
+   930→      <EditorToolbar onToggleLeft={setShowLeft} onToggleRight={setShowRight} showLeft={showLeft} showRight={showRight} />
+   931→
+   932→      {isFallbackStore && <FallbackBanner />}
+   933→
+   934→      <div className="flex-1 overflow-hidden">
+   935→        <PanelGroup direction="horizontal" autoSaveId="storqly-editor-layout">
+   936→          <AnimatePresence mode="wait">
+   937→            {showLeft && (
+   938→              <Panel id="left" order={1} defaultSize={18} minSize={12} maxSize={28}>
+   939→                <VisualEditor />
+   940→              </Panel>
+   941→            )}
+   942→          </AnimatePresence>
+   943→
+   944→          {showLeft && showRight && <ResizeHandle direction="left" />}
+   945→
+   946→          <Panel id="center" order={2} defaultSize={showLeft && showRight ? 48 : showLeft || showRight ? 72 : 100} minSize={30}>
+   947→            <PreviewPanel />
+   948→          </Panel>
+   949→
+   950→          {showLeft && showRight && <ResizeHandle direction="right" />}
+   951→
+   952→          <AnimatePresence mode="wait">
+   953→            {showRight && (
+   954→              <Panel id="right" order={3} defaultSize={22} minSize={16} maxSize={32}>
+   955→                <ChatPanel />
+   956→              </Panel>
+   957→            )}
+   958→          </AnimatePresence>
+   959→        </PanelGroup>
+   960→      </div>
+   961→    </div>
+   962→  )
+   963→}
+   964→
+   965→// ─── Fallback Banner ──────────────────────────────────────────────
+   966→
+   967→function FallbackBanner() {
+   968→  const reset = useStoreEditor((s) => s.reset)
+   969→  const [dismissed, setDismissed] = useState(false)
+   970→
+   971→  if (dismissed) return null
+   972→
+   973→  return (
+   974→    <div className="flex items-center gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2.5">
+   975→      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
+   976→      <p className="flex-1 text-sm text-amber-200">
+   977→        AI couldn't generate a custom store — you're viewing a starter template.
+   978→        <span className="hidden sm:inline"> Edit it manually or try regenerating.</span>
+   979→      </p>
+   980→      <div className="flex items-center gap-2">
+   981→        <Button
+   982→          size="sm"
+   983→          className="h-7 gap-1.5 rounded-lg bg-amber-500/20 px-3 text-xs font-medium text-amber-200 hover:bg-amber-500/30"
+   984→          onClick={() => {
+   985→            reset()
+   986→          }}
+   987→        >
+   988→          <RotateCcw className="h-3 w-3" />
+   989→          Regenerate with AI
+   990→        </Button>
+   991→        <button
+   992→          onClick={() => setDismissed(true)}
+   993→          className="text-zinc-500 hover:text-zinc-300"
+   994→          aria-label="Dismiss"
+   995→        >
+   996→          <X className="h-3.5 w-3.5" />
+   997→        </button>
+   998→      </div>
+   999→    </div>
+  1000→  )
+  1001→}
+  1002→
+  1003→// ─── Editor Toolbar ──────────────────────────────────────────────────
+  1004→
+  1005→function EditorToolbar({
+  1006→  onToggleLeft,
+  1007→  onToggleRight,
+  1008→  showLeft,
+  1009→  showRight,
+  1010→}: {
+  1011→  onToggleLeft: (v: boolean | ((prev: boolean) => boolean)) => void
+  1012→  onToggleRight: (v: boolean | ((prev: boolean) => boolean)) => void
+  1013→  showLeft: boolean
+  1014→  showRight: boolean
+  1015→}) {
+  1016→  const store = useStoreEditor((s) => s.store)
+  1017→  const reset = useStoreEditor((s) => s.reset)
+  1018→  const isPublishing = useStoreEditor((s) => s.isPublishing)
+  1019→  const setIsPublishing = useStoreEditor((s) => s.setIsPublishing)
+  1020→  const isPublished = useStoreEditor((s) => s.isPublished)
+  1021→  const setIsPublished = useStoreEditor((s) => s.setIsPublished)
+  1022→  const [isSaving, setIsSaving] = useState(false)
+  1023→  const [publishedUrl, setPublishedUrl] = useState<string | null>(null)
+  1024→  const [copied, setCopied] = useState(false)
+  1025→  const [authOpen, setAuthOpen] = useState(false)
+  1026→
+  1027→  const handleBack = () => {
+  1028→    reset()
+  1029→  }
+  1030→
+  1031→  const handleSave = async () => {
+  1032→    if (!store || isSaving) return
+  1033→    setIsSaving(true)
+  1034→    try {
+  1035→      const res = await fetch('/api/store/save', {
+  1036→        method: 'POST',
+  1037→        headers: { 'Content-Type': 'application/json' },
+  1038→        body: JSON.stringify({ store }),
+  1039→      })
+  1040→      if (!res.ok) throw new Error('Save failed')
+  1041→      const data = await res.json()
+  1042→      toast.success(`Draft saved — ID: ${data.id}`, {
+  1043→        description: `Slug: ${data.slug}`,
+  1044→        duration: 5000,
+  1045→      })
+  1046→    } catch {
+  1047→      toast.error('Failed to save store')
+  1048→    } finally {
+  1049→      setIsSaving(false)
+  1050→    }
+  1051→  }
+  1052→
+  1053→  const handlePublish = async () => {
+  1054→    if (!store || isPublishing) return
+  1055→    setIsPublishing(true)
+  1056→    try {
+  1057→      const res = await fetch('/api/store/publish', {
+  1058→        method: 'POST',
+  1059→        headers: { 'Content-Type': 'application/json' },
+  1060→        body: JSON.stringify({ store }),
+  1061→      })
+  1062→      if (!res.ok) throw new Error('Publish failed')
+  1063→      const data = await res.json()
+  1064→      const slug = data.slug
+  1065→      setIsPublished(true)
+  1066→      // Build a real viewable URL using the current origin
+  1067→      const baseUrl = window.location.origin
+  1068→      const viewUrl = `${baseUrl}/?store=${slug}`
+  1069→      setPublishedUrl(viewUrl)
+  1070→      toast.success('Store published successfully!')
+  1071→    } catch {
+  1072→      toast.error('Failed to publish store')
+  1073→    } finally {
+  1074→      setIsPublishing(false)
+  1075→    }
+  1076→  }
+  1077→
+  1078→  const handleCopyUrl = useCallback(async () => {
+  1079→    if (!publishedUrl) return
+  1080→    try {
+  1081→      await navigator.clipboard.writeText(publishedUrl)
+  1082→      setCopied(true)
+  1083→      toast.success('URL copied to clipboard!')
+  1084→      setTimeout(() => setCopied(false), 2000)
+  1085→    } catch {
+  1086→      // Fallback for older browsers
+  1087→      const textarea = document.createElement('textarea')
+  1088→      textarea.value = publishedUrl
+  1089→      document.body.appendChild(textarea)
+  1090→      textarea.select()
+  1091→      document.execCommand('copy')
+  1092→      document.body.removeChild(textarea)
+  1093→      setCopied(true)
+  1094→      toast.success('URL copied to clipboard!')
+  1095→      setTimeout(() => setCopied(false), 2000)
+  1096→    }
+  1097→  }, [publishedUrl])
+  1098→
+  1099→  return (
+  1100→    <>
+  1101→      <div className="flex h-12 items-center justify-between border-b border-zinc-800 bg-zinc-950 px-3">
+  1102→        <div className="flex items-center gap-1">
+  1103→          <Button
+  1104→            variant="ghost"
+  1105→            size="icon"
+  1106→            className="h-8 w-8 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+  1107→            onClick={handleBack}
+  1108→            aria-label="Back to home"
+  1109→          >
+  1110→            <ArrowLeft className="h-4 w-4" />
+  1111→          </Button>
+  1112→          <div className="h-5 w-px bg-zinc-800" />
+  1113→          <Button
+  1114→            variant={showLeft ? 'secondary' : 'ghost'}
+  1115→            size="sm"
+  1116→            className={`h-8 gap-1.5 ${showLeft ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+  1117→            onClick={() => onToggleLeft((v) => !v)}
+  1118→          >
+  1119→            <Layers className="h-3.5 w-3.5" />
+  1120→            <span className="hidden sm:inline">Sections</span>
+  1121→          </Button>
+  1122→          <Button
+  1123→            variant={showRight ? 'secondary' : 'ghost'}
+  1124→            size="sm"
+  1125→            className={`h-8 gap-1.5 ${showRight ? 'bg-zinc-800 text-zinc-200 hover:bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'}`}
+  1126→            onClick={() => onToggleRight((v) => !v)}
+  1127→          >
+  1128→            <MessageSquare className="h-3.5 w-3.5" />
+  1129→            <span className="hidden sm:inline">Chat</span>
+  1130→          </Button>
+  1131→        </div>
+  1132→
+  1133→        <div className="flex items-center gap-1.5">
+  1134→          {publishedUrl && (
+  1135→            <div className="mr-2 hidden sm:flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1">
+  1136→              <Check className="h-3 w-3 text-emerald-400" />
+  1137→              <span className="max-w-[180px] truncate text-xs font-medium text-emerald-300">
+  1138→                {publishedUrl}
+  1139→              </span>
+  1140→              <button
+  1141→                onClick={handleCopyUrl}
+  1142→                className="ml-1 rounded p-0.5 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors"
+  1143→                aria-label="Copy URL"
+  1144→              >
+  1145→                {copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+  1146→              </button>
+  1147→              <a
+  1148→                href={publishedUrl}
+  1149→                target="_blank"
+  1150→                rel="noopener noreferrer"
+  1151→                className="rounded p-0.5 text-emerald-400 hover:text-emerald-200 hover:bg-emerald-500/20 transition-colors"
+  1152→                aria-label="Open published store"
+  1153→              >
+  1154→                <ExternalLink className="h-3 w-3" />
+  1155→              </a>
+  1156→            </div>
+  1157→          )}
+  1158→          <AuthButton onSignIn={() => setAuthOpen(true)} />
+  1159→          <div className="h-5 w-px bg-zinc-800" />
+  1160→          <span className="mr-2 text-xs font-medium text-zinc-500 hidden md:inline truncate max-w-[200px]">
+  1161→            {store?.name || 'Untitled Store'}
+  1162→          </span>
+  1163→          <Button
+  1164→            variant="ghost"
+  1165→            size="sm"
+  1166→            className="h-8 gap-1.5 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+  1167→            onClick={handleSave}
+  1168→            disabled={isSaving}
+  1169→          >
+  1170→            <Save className={`h-3.5 w-3.5 ${isSaving ? 'animate-pulse' : ''}`} />
+  1171→            <span className="hidden sm:inline">{isSaving ? 'Saving...' : 'Save'}</span>
+  1172→          </Button>
+  1173→          <Button
+  1174→            size="sm"
+  1175→            className="h-8 gap-1.5 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
+  1176→            onClick={handlePublish}
+  1177→            disabled={isPublishing}
+  1178→          >
+  1179→            {isPublishing ? (
+  1180→              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+  1181→            ) : isPublished ? (
+  1182→              <Eye className="h-3.5 w-3.5" />
+  1183→            ) : (
+  1184→              <Globe className="h-3.5 w-3.5" />
+  1185→            )}
+  1186→            <span className="hidden sm:inline">{isPublishing ? 'Publishing...' : isPublished ? 'Published' : 'Publish'}</span>
+  1187→          </Button>
+  1188→        </div>
+  1189→      </div>
+  1190→
+  1191→      {/* Publish Success Dialog */}
+  1192→      <AnimatePresence>
+  1193→        {publishedUrl && !isPublishing && (
+  1194→          <motion.div
+  1195→            initial={{ opacity: 0 }}
+  1196→            animate={{ opacity: 1 }}
+  1197→            exit={{ opacity: 0 }}
+  1198→            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+  1199→            onClick={() => setPublishedUrl(null)}
+  1200→          >
+  1201→            <motion.div
+  1202→              initial={{ scale: 0.95, opacity: 0 }}
+  1203→              animate={{ scale: 1, opacity: 1 }}
+  1204→              exit={{ scale: 0.95, opacity: 0 }}
+  1205→              transition={{ duration: 0.2 }}
+  1206→              className="mx-4 w-full max-w-md rounded-2xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl"
+  1207→              onClick={(e) => e.stopPropagation()}
+  1208→            >
+  1209→              {/* Success icon */}
+  1210→              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15">
+  1211→                <Check className="h-7 w-7 text-emerald-400" />
+  1212→              </div>
+  1213→
+  1214→              <h3 className="mb-1 text-center text-lg font-semibold text-zinc-100">
+  1215→                Store Published!
+  1216→              </h3>
+  1217→              <p className="mb-5 text-center text-sm text-zinc-400">
+  1218→                Your store is now live and ready to share.
+  1219→              </p>
+  1220→
+  1221→              {/* URL Display */}
+  1222→              <div className="mb-5 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-3">
+  1223→                <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-zinc-500">Live URL</p>
+  1224→                <div className="flex items-center gap-2">
+  1225→                  <div className="min-w-0 flex-1 truncate rounded-lg bg-zinc-900 px-3 py-2 font-mono text-sm text-emerald-300">
+  1226→                    {publishedUrl}
+  1227→                  </div>
+  1228→                  <Button
+  1229→                    variant="ghost"
+  1230→                    size="icon"
+  1231→                    className="h-9 w-9 shrink-0 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-700"
+  1232→                    onClick={handleCopyUrl}
+  1233→                    aria-label="Copy URL"
+  1234→                  >
+  1235→                    {copied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+  1236→                  </Button>
+  1237→                </div>
+  1238→              </div>
+  1239→
+  1240→              {/* Actions */}
+  1241→              <div className="flex gap-3">
+  1242→                <Button
+  1243→                  variant="ghost"
+  1244→                  className="flex-1 border border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+  1245→                  onClick={() => setPublishedUrl(null)}
+  1246→                >
+  1247→                  Close
+  1248→                </Button>
+  1249→                <Button
+  1250→                  className="flex-1 bg-gradient-to-r from-[#a855f7] via-[#ec4899] to-[#f43f5e] text-white shadow-none hover:opacity-90"
+  1251→                  onClick={() => {
+  1252→                    window.open(publishedUrl, '_blank')
+  1253→                  }}
+  1254→                >
+  1255→                  <ExternalLink className="h-4 w-4" />
+  1256→                  View Live Store
+  1257→                </Button>
+  1258→              </div>
+  1259→            </motion.div>
+  1260→          </motion.div>
+  1261→        )}
+  1262→      </AnimatePresence>
+  1263→      <AuthModal open={authOpen} onOpenChange={setAuthOpen} />
+  1264→    </>
+  1265→  )
+  1266→}
+  1267→
+  1268→// ─── Published Store Viewer (read-only, shown via ?store=slug) ────────
+  1269→
+  1270→function PublishedStoreViewer({ slug }: { slug: string }) {
+  1271→  const [store, setStore] = useState<Store | null>(null)
+  1272→  const [loading, setLoading] = useState(true)
+  1273→  const [error, setError] = useState<string | null>(null)
+  1274→
+  1275→  useEffect(() => {
+  1276→    let cancelled = false
+  1277→    async function load() {
+  1278→      try {
+  1279→        const res = await fetch(`/api/store/lookup?slug=${encodeURIComponent(slug)}`)
+  1280→        if (!res.ok) {
+  1281→          const data = await res.json().catch(() => ({}))
+  1282→          throw new Error(data.error || `Store not found (${res.status})`)
+  1283→        }
+  1284→        const data = await res.json()
+  1285→        if (!cancelled) setStore(data.store)
+  1286→      } catch (err: unknown) {
+  1287→        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load store')
+  1288→      } finally {
+  1289→        if (!cancelled) setLoading(false)
+  1290→      }
+  1291→    }
+  1292→    load()
+  1293→    return () => { cancelled = true }
+  1294→  }, [slug])
+  1295→
+  1296→  if (loading) {
+  1297→    return (
+  1298→      <div className="flex min-h-screen items-center justify-center bg-white">
+  1299→        <div className="text-center">
+  1300→          <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#a855f7]" />
+  1301→          <p className="mt-3 text-sm text-gray-500">Loading store…</p>
+  1302→        </div>
+  1303→      </div>
+  1304→    )
+  1305→  }
+  1306→
+  1307→  if (error || !store) {
+  1308→    return (
+  1309→      <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6">
+  1310→        <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-50">
+  1311→          <AlertCircle className="h-8 w-8 text-red-400" />
+  1312→        </div>
+  1313→        <h2 className="mb-2 text-xl font-semibold text-gray-900">Store Not Found</h2>
+  1314→        <p className="mb-6 max-w-sm text-center text-sm text-gray-500">
+  1315→          {error || 'This store could not be found or has not been published.'}
+  1316→        </p>
+  1317→        <Button
+  1318→          variant="outline"
+  1319→          onClick={() => window.location.href = '/'}
+  1320→          className="gap-2"
+  1321→        >
+  1322→          <ArrowLeft className="h-4 w-4" />
+  1323→          Back to Storqly
+  1324→        </Button>
+  1325→      </div>
+  1326→    )
+  1327→  }
+  1328→
+  1329→  return (
+  1330→    <>
+  1331→      <StoreRenderer store={store} />
+  1332→      <Toaster />
+  1333→      {/* Minimal footer for published stores */}
+  1334→      <div className="fixed bottom-3 right-3 z-40">
+  1335→        <a
+  1336→          href="/"
+  1337→          className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white/90 px-3 py-1.5 text-xs font-medium text-gray-500 shadow-sm backdrop-blur transition-colors hover:border-gray-300 hover:text-gray-700"
+  1338→        >
+  1339→          <Sparkles className="h-3 w-3" />
+  1340→          Built with Storqly
+  1341→        </a>
+  1342→      </div>
+  1343→    </>
+  1344→  )
+  1345→}
+  1346→
+  1347→// ─── Page Root ────────────────────────────────────────────────────────
+  1348→
+  1349→export default function Home() {
+  1350→  const view = useStoreEditor((s) => s.view)
+  1351→  const searchParams = useSearchParams()
+  1352→  const storeSlug = searchParams.get('store')
+  1353→  // If ?store=slug is present, show the published store viewer (read-only)
+  1354→  if (storeSlug) {
+  1355→    return (
+  1356→      <main className="min-h-screen bg-white">
+  1357→        <PublishedStoreViewer slug={storeSlug} />
+  1358→      </main>
+  1359→    )
+  1360→  }
+  1361→
+  1362→  return (
+  1363→    <>
+  1364→      <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>
+  1365→        {view === 'landing' ? <LandingPage /> : <EditorView />}
+  1366→
+  1367→        {view === 'landing' && (
+  1368→          <footer className="mt-auto border-t border-white/[0.05] px-5 py-6">
+  1369→            <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-2 sm:flex-row">
+  1370→              <p className="text-sm text-zinc-600">© 2025 Storqly. AI-first commerce.</p>
+  1371→              <p className="text-xs text-zinc-700">
+  1372→                Build, customize, and launch — powered by AI.
+  1373→              </p>
+  1374→              <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-11-072515Z-279ad2e</p>
+  1375→            </div>
+  1376→          </footer>
+  1377→        )}
+  1378→      </main>
+  1379→      <Toaster />
+  1380→    </>
+  1381→  )
+  1382→}
+  1383→

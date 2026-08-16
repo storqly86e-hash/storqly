@@ -279,6 +279,83 @@ export function createBlankStore(name: string): Store {
   };
 }
 
+// ─── Demo Store ──────────────────────────────────────────────────
+// A fully-populated sample store for preview/testing without AI.
+// This lets users see the editor + preview panel even when AI is
+// unavailable (rate-limited, offline, etc.).
+
+export function createDemoStore(): Store {
+  const pid = (i: number) => `demo-prod-${i}`
+  const sid = (i: number) => `demo-sec-${i}`
+  const now = new Date().toISOString()
+
+  return {
+    id: 'demo-store',
+    name: 'Lumière Jewelry',
+    slug: 'lumiere-jewelry-demo',
+    description: 'Handcrafted luxury jewelry for the modern woman',
+    theme: {
+      colors: {
+        primary: '#b8860b',
+        secondary: '#c9a96e',
+        accent: '#e8d5b7',
+        background: '#fefcf8',
+        surface: '#faf6ef',
+        text: '#1a1a2e',
+        textMuted: '#6b7280',
+        border: '#e5e0d5',
+      },
+      fonts: { heading: 'Playfair Display', body: 'Inter' },
+      spacing: 'spacious',
+      borderRadius: 'lg',
+    },
+    pages: [
+      {
+        id: 'demo-home',
+        name: 'Home',
+        slug: '',
+        isHomepage: true,
+        sections: [
+          {
+            id: sid(1), type: 'hero', visible: true, style: { height: 'lg', overlay: true },
+            content: { headline: 'Timeless Elegance, Handcrafted With Love', subheadline: 'Discover our curated collection of artisan jewelry — each piece tells a story.', ctaText: 'Explore Collection', alignment: 'center' },
+          },
+          {
+            id: sid(2), type: 'featured-products', visible: true, style: { paddingY: 'xl' },
+            content: { headline: 'Best Sellers', subtitle: 'Our most loved pieces, chosen by you', productIds: [pid(1), pid(2), pid(3), pid(4), pid(5), pid(6)], columns: 3, showPrice: true, showAddToCart: true },
+          },
+          {
+            id: sid(3), type: 'testimonials', visible: true, style: { backgroundColor: '#faf6ef' },
+            content: { headline: 'What Our Customers Say', items: [
+              { id: 't1', quote: 'The quality is absolutely stunning. My ring gets compliments every day.', author: 'Sarah M.', role: 'Verified Buyer', rating: 5 },
+              { id: 't2', quote: 'Fast shipping and the packaging was beautiful. Perfect gift for my wife.', author: 'James K.', role: 'Verified Buyer', rating: 5 },
+              { id: 't3', quote: 'I love how each piece feels unique. You can tell it\'s made with care.', author: 'Priya R.', role: 'Verified Buyer', rating: 5 },
+            ] },
+          },
+          {
+            id: sid(4), type: 'newsletter', visible: true, style: { backgroundColor: '#1a1a2e', textColor: '#ffffff' },
+            content: { headline: 'Join the Lumière Circle', subtitle: 'Get early access to new collections and exclusive offers', placeholderText: 'Enter your email', buttonText: 'Subscribe' },
+          },
+        ],
+      },
+      { id: 'demo-shop', name: 'Shop', slug: 'shop', type: 'collection', isHomepage: false, sections: [] },
+      { id: 'demo-cart', name: 'Cart', slug: 'cart', type: 'cart', isHomepage: false, sections: [] },
+      { id: 'demo-checkout', name: 'Checkout', slug: 'checkout', type: 'checkout', isHomepage: false, sections: [] },
+    ],
+    products: [
+      { id: pid(1), name: 'Golden Sunburst Ring', price: 129, compareAtPrice: 159, images: ['https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=600&h=600&fit=crop'], description: 'A radiant sunburst design in 18k gold plating.', category: 'Rings', inStock: true, featured: true },
+      { id: pid(2), name: 'Moonstone Pendant Necklace', price: 89, images: ['https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600&h=600&fit=crop'], description: 'Ethereal moonstone on a delicate silver chain.', category: 'Necklaces', inStock: true, featured: true },
+      { id: pid(3), name: 'Pearl Drop Earrings', price: 75, compareAtPrice: 95, images: ['https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=600&h=600&fit=crop'], description: 'Classic freshwater pearl drops with sterling silver hooks.', category: 'Earrings', inStock: true, featured: true },
+      { id: pid(4), name: 'Rose Gold Bangle', price: 149, images: ['https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=600&h=600&fit=crop'], description: 'Minimalist rose gold bangle for everyday elegance.', category: 'Bracelets', inStock: true, featured: true },
+      { id: pid(5), name: 'Sapphire Halo Ring', price: 199, compareAtPrice: 249, images: ['https://images.unsplash.com/photo-1603561591411-07134e71a2a9?w=600&h=600&fit=crop'], description: 'Stunning sapphire surrounded by a diamond halo.', category: 'Rings', inStock: true, featured: false },
+      { id: pid(6), name: 'Vintage Pearl Choker', price: 115, images: ['https://images.unsplash.com/photo-1515562141589-67f0d569b6c3?w=600&h=600&fit=crop'], description: 'Art deco inspired pearl choker for special occasions.', category: 'Necklaces', inStock: true, featured: false },
+    ],
+    published: false,
+    createdAt: now,
+    updatedAt: now,
+  }
+}
+
 // Chat edit operation types
 export type ChatEditOperation =
   | { type: 'update-theme'; payload: Partial<StoreTheme> }

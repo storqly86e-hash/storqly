@@ -307,6 +307,8 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
 
 // ─── Auth Button (for nav bars) ────────────────────────────────────
 // Shows "Sign In" when logged out, or user name + sign out when logged in.
+// Includes resilience: when the server is unreachable, shows a skeleton
+// instead of flashing "Sign In" or throwing CLIENT_FETCH_ERROR.
 
 export function AuthButton({
   onSignIn,
@@ -317,9 +319,22 @@ export function AuthButton({
 }) {
   const { data: session, status } = useSession()
 
-  // Don't flash unauthenticated state while session loads
+  // During loading, show skeleton (covers initial SSR + session fetch)
   if (status === 'loading') {
     return <div className={`h-8 w-20 rounded-lg bg-zinc-800/50 ${className || ''}`} />
+  }
+
+  // If unauthenticated but a session cookie exists, the server may be
+  // unreachable. Show a pulsing skeleton instead of flashing "Sign In".
+  // The ConnectionBanner handles showing the reconnect UI separately.
+  if (status === 'unauthenticated' && typeof document !== 'undefined') {
+    const cookies = document.cookie
+    if (
+      cookies.includes('next-auth.session-token') ||
+      cookies.includes('__Secure-next-auth.session-token')
+    ) {
+      return <div className={`h-8 w-20 rounded-lg bg-zinc-800/50 animate-pulse ${className || ''}`} />
+    }
   }
 
   if (session?.user) {
@@ -338,9 +353,6 @@ export function AuthButton({
           size="icon"
           className="h-8 w-8 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
           onClick={async () => {
-            // Use redirect:false to prevent NextAuth from constructing an
-            // absolute URL using NEXTAUTH_URL (which breaks on proxy domains).
-            // We handle the redirect ourselves using a relative path.
             await signOut({ redirect: false })
             window.location.href = '/'
           }}

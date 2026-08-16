@@ -52,6 +52,41 @@ function ensureSectionContent(section: Section): Section {
   return { ...section, content: merged };
 }
 
+// ─── Broken Store Detection ──────────────────────────────────────
+// Detects stores that ended up in a broken/incomplete state after
+// a server crash mid-generation. This prevents silently showing a
+// broken "1-section New Section placeholder" store to the user.
+
+function isPlaceholderSection(section: Section): boolean {
+  const content = section.content as Record<string, unknown> | undefined
+  if (!content) return true
+  // Check for default placeholder content that indicates no real generation
+  const headline = String(content.headline || '')
+  const subheadline = String(content.subheadline || content.body || '')
+  return (
+    headline === 'New Section' &&
+    (subheadline === '' || subheadline === 'Click to edit this section' || subheadline === 'Click to edit')
+  )
+}
+
+/**
+ * Checks if a store appears to be in a broken/incomplete generation state.
+ * Returns true if the homepage has 0 sections, or only placeholder sections.
+ */
+export function isStoreBroken(store: Store): boolean {
+  const homePage = store.pages.find(p => p.isHomepage)
+  if (!homePage) return true
+
+  const visibleSections = homePage.sections.filter(s => s.visible !== false)
+  if (visibleSections.length === 0) return true
+
+  // If ALL visible sections are placeholders, it's broken
+  const allPlaceholder = visibleSections.every(isPlaceholderSection)
+  if (allPlaceholder && visibleSections.length <= 2) return true
+
+  return false
+}
+
 export type AppView = 'landing' | 'editor';
 
 interface StoreEditorState {
@@ -126,6 +161,9 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
     view: 'editor',
     editorCurrentPageId: store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || null,
     selectedSectionId: null,
+    // Auto-detect broken/incomplete stores
+    isFallbackStore: isStoreBroken(store),
+    fallbackReason: isStoreBroken(store) ? 'Generation was interrupted — store is incomplete' : '',
   }),
   setStoreWithFallback: (store, isFallback, reason) => set({
     store,
