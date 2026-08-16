@@ -940,6 +940,13 @@ function EditorView() {
   const [showLeft, setShowLeft] = useState(true)
   const [showRight, setShowRight] = useState(true)
 
+  // Clear stale panel layout data that may cause 0-width panels in iframes
+  useEffect(() => {
+    try {
+      localStorage.removeItem('react-resizable-panels:storqly-editor-layout')
+    } catch { /* localStorage may be blocked in some iframe contexts */ }
+  }, [])
+
   if (!store) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-950">
@@ -958,7 +965,7 @@ function EditorView() {
       {isFallbackStore && <FallbackBanner />}
 
       <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal" autoSaveId="storqly-editor-layout">
+        <PanelGroup direction="horizontal">
           <AnimatePresence mode="wait">
             {showLeft && (
               <Panel id="left" order={1} defaultSize={18} minSize={12} maxSize={28}>

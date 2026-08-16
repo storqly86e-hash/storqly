@@ -817,3 +817,23 @@ Stage Summary:
 - Code fixes made: Gemini model name, AI status endpoint, improved error messages, section picker for custom pages
 - CANNOT verify generation reliability until at least one AI provider is working
 - Nothing should be marked as "Locked" without user-confirmed testing
+
+---
+Task ID: Fix Right Side Preview Panel in Iframe
+Agent: Main Agent
+Task: Fix the Z.ai preview panel showing a sad face instead of the app, and make the preview permanently visible.
+
+Work Log:
+- Analyzed user's screenshot with VLM — identified that the Z.ai preview iframe was failing to render the app
+- Root cause: Next.js was likely setting default X-Frame-Options headers that blocked iframe embedding
+- Added `X-Frame-Options: ALLOWALL` and `Content-Security-Policy: frame-ancestors *` headers in next.config.ts
+- Removed `autoSaveId="storqly-editor-layout"` from PanelGroup to prevent localStorage corruption in cross-origin iframe contexts
+- Added cleanup effect in EditorView to remove stale localStorage panel layout data
+- Verified with curl that headers are now correctly sent
+- Verified with agent-browser that the app renders correctly with all 3 panels (Sections, Preview, Chat)
+- No console errors
+
+Stage Summary:
+- The Z.ai preview panel should now be able to load the app in its iframe
+- Headers explicitly allow embedding from any origin
+- Panel layout no longer depends on localStorage persistence, making it work reliably in iframes
