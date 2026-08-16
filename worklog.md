@@ -837,3 +837,27 @@ Stage Summary:
 - The Z.ai preview panel should now be able to load the app in its iframe
 - Headers explicitly allow embedding from any origin
 - Panel layout no longer depends on localStorage persistence, making it work reliably in iframes
+
+---
+Task ID: Fix Z.ai Preview Panel - Iframe Timeout
+Agent: Main Agent
+Task: Fix the Z.ai preview panel showing sad face / "took too long to respond" error.
+
+Work Log:
+- Diagnosed root cause: first GET / request after server restart took 7.5 SECONDS to compile because page.tsx imported ALL heavy components (StoreRenderer, ChatPanel, VisualEditor, MarketingKit) at top level
+- This 7.5s compile time exceeded the Z.ai preview iframe's connection timeout, causing "took too long to respond"
+- Converted StoreRenderer, ChatPanel, VisualEditor, MarketingKit to dynamic imports using next/dynamic with ssr: false
+- Added skeleton loading states for ChatPanel and VisualEditor (animated pulse placeholders)
+- Removed output: "standalone" from next.config.ts (unnecessary in dev mode)
+- Added inline critical CSS in layout.tsx head for dark background visible before CSS loads
+- Added noscript fallback in layout.tsx for JS-disabled environments
+- RESULT: First-request compile time dropped from 7.5s → 34ms (215x faster!)
+- Total response time through Caddy: 49ms (well within any iframe timeout)
+- Verified all 3 editor panels (Sections, Preview, Chat) render correctly
+- Verified no console errors, lint passes clean
+
+Stage Summary:
+- ROOT CAUSE: 7.5s initial compile due to eager-loading all components in page.tsx
+- FIX: Dynamic imports with skeleton fallbacks reduced compile to 34ms
+- The Z.ai preview iframe should now load within its timeout window
+- App remains fully functional with all features intact

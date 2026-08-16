@@ -2,14 +2,51 @@
 
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { useSearchParams } from 'next/navigation'
+import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
 import { useStoreEditor } from '@/lib/store'
-import { StoreRenderer } from '@/components/store-renderer'
-import ChatPanel from '@/components/chat-panel'
-import VisualEditor from '@/components/visual-editor'
 import type { Store } from '@/lib/store-schema'
 import { createDefaultSection } from '@/lib/section-meta'
-import MarketingKit from '@/components/marketing-kit'
+
+// Lazy-load heavy editor components to avoid 7.5s first-compile in iframes
+const StoreRenderer = dynamic(() => import('@/components/store-renderer').then(m => ({ default: m.StoreRenderer })), { ssr: false })
+const ChatPanel = dynamic(() => import('@/components/chat-panel'), { ssr: false, loading: () => <ChatPanelSkeleton /> })
+const VisualEditor = dynamic(() => import('@/components/visual-editor'), { ssr: false, loading: () => <PanelSkeleton label="Sections" /> })
+const MarketingKit = dynamic(() => import('@/components/marketing-kit'), { ssr: false })
+
+// Inline skeleton components for lazy-loaded panels
+function PanelSkeleton({ label }: { label: string }) {
+  return (
+    <div className="flex h-full flex-col bg-zinc-950">
+      <div className="flex items-center gap-2 border-b border-zinc-800 px-4 py-3">
+        <div className="h-4 w-20 animate-pulse rounded bg-zinc-800" />
+      </div>
+      <div className="flex-1 p-4 space-y-3">
+        {[1,2,3,4].map(i => (
+          <div key={i} className="h-12 animate-pulse rounded-lg bg-zinc-800/60" />
+        ))}
+      </div>
+    </div>
+  )
+}
+function ChatPanelSkeleton() {
+  return (
+    <div className="flex h-full flex-col bg-zinc-950">
+      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+        <div className="h-4 w-24 animate-pulse rounded bg-zinc-800" />
+        <div className="h-6 w-6 animate-pulse rounded bg-zinc-800" />
+      </div>
+      <div className="flex-1 p-4 space-y-3">
+        {[1,2,3].map(i => (
+          <div key={i} className={i === 3 ? 'h-8 w-3/4 animate-pulse rounded-lg bg-zinc-800/40 ml-8' : 'h-16 w-full animate-pulse rounded-xl bg-zinc-800/40'} />
+        ))}
+      </div>
+      <div className="border-t border-zinc-800 p-3">
+        <div className="h-10 animate-pulse rounded-lg bg-zinc-800/60" />
+      </div>
+    </div>
+  )
+}
 import {
   Sparkles,
   Layers,
