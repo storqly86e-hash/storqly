@@ -807,6 +807,26 @@ function PreviewPanel() {
   const setSelectedSectionId = useStoreEditor((s) => s.setSelectedSectionId)
   const editorCurrentPageId = useStoreEditor((s) => s.editorCurrentPageId)
   const setEditorCurrentPageId = useStoreEditor((s) => s.setEditorCurrentPageId)
+  const addSection = useStoreEditor((s) => s.addSection)
+
+  // Handler for the center "+" button on empty custom pages
+  const handleAddSectionClick = useCallback(() => {
+    if (!editorCurrentPageId) return
+    const newSection: import('@/lib/store-schema').Section = {
+      id: crypto.randomUUID(),
+      type: 'hero',
+      content: {
+        headline: 'New Section',
+        subheadline: 'Click to edit this section',
+        ctaText: 'Shop Now',
+        alignment: 'center',
+        height: 'md',
+      },
+      style: {},
+      visible: true,
+    }
+    addSection(editorCurrentPageId, newSection)
+  }, [editorCurrentPageId, addSection])
 
   if (!store) return null
 
@@ -818,6 +838,7 @@ function PreviewPanel() {
         onSelectSection={setSelectedSectionId}
         externalCurrentPageId={editorCurrentPageId}
         onPageChange={setEditorCurrentPageId}
+        onAddSectionClick={handleAddSectionClick}
       />
     </div>
   )

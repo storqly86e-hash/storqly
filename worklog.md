@@ -596,3 +596,31 @@ Stage Summary:
 - 1 file modified: visual-editor/index.tsx
 - Root cause was UX (invisible button), not missing implementation
 - All 7 Part 2 test steps now pass
+---
+Task ID: Fix Add Section Clipping + Make Center + Clickable
+Agent: Main Agent
+Task: Fix two remaining Part 2 issues — (1) Add Section button clipped in sidebar, (2) center "+" icon not clickable
+
+Work Log:
+- Investigated: both features WERE implemented in prior session but had UI issues
+- Root cause of clipping: sidebar container had `flex flex-col min-h-0` but lacked `h-full overflow-hidden`, allowing ScrollArea to push the bottom button out of viewport
+- Fix 1: Changed sidebar class from `flex flex-col border-r border-zinc-800 min-h-0` to `flex flex-col h-full overflow-hidden border-r border-zinc-800` (visual-editor/index.tsx line 1110)
+- Fix 2: Made center "+" icon in store-renderer a clickable `<button>` with `onAddSectionClick` callback
+- Added `onAddSectionClick?: () => void` prop to StoreRendererProps
+- Wired callback in PreviewPanel (page.tsx) — creates a default Hero section when clicked
+- Empty state now shows "Click the + button to add content" hint text when callback is provided
+
+Verification (Agent Browser):
+- Generated test store "Brew Haven" (coffee shop)
+- Created custom page "About Us" via Page button — tab appeared with ⋯ menu
+- Center "+" icon on empty page: clicked → Hero section added instantly ✅
+- Sidebar "Add Section" button: clicked → popover with all 12 section types → clicked "Text Banner" → section added ✅
+- VLM screenshot analysis confirmed Add Section button fully visible, not clipped ✅
+- ⋯ menu → Rename: typed "Our Story", pressed Enter → tab renamed ✅
+- ⋯ menu → Delete Page: page deleted, navigated back to Home ✅
+- Fixed pages (Home/Shop/Cart/Checkout): no ⋯ menu confirmed ✅
+
+Stage Summary:
+- Both Part 2 issues fixed with minimal CSS + wiring changes
+- No new dependencies or architectural changes
+- All 7-step Part 2 flow verified end-to-end via Agent Browser

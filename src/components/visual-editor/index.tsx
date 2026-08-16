@@ -1107,7 +1107,7 @@ export function VisualEditor() {
       {/* Section List Panel */}
       <div
         className={[
-          'flex flex-col border-r border-zinc-800 min-h-0',
+          'flex flex-col h-full overflow-hidden border-r border-zinc-800',
           selectedSection && !isTemplatePage ? 'w-64 lg:w-72' : 'w-full',
         ].join(' ')}
       >

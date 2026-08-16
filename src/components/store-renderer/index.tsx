@@ -24,6 +24,8 @@ export interface StoreRendererProps {
   externalCurrentPageId?: string | null;
   /** Callback when renderer navigates internally (editor mode) */
   onPageChange?: (pageId: string) => void;
+  /** Callback when user clicks the "+" on an empty page (editor mode) */
+  onAddSectionClick?: () => void;
 }
 
 // ─── Helper: extract header/footer from sections ────────────────────────
@@ -211,6 +213,7 @@ export function StoreRenderer({
   selectedSectionId,
   externalCurrentPageId,
   onPageChange,
+  onAddSectionClick,
 }: StoreRendererProps) {
   // Internal page state (used when no external control)
   const [internalPageId, setInternalPageId] = useState<string>(
@@ -361,14 +364,24 @@ export function StoreRenderer({
             {body.length === 0 && (
               <div className="flex items-center justify-center py-32">
                 <div className="text-center">
-                  <div className="mx-auto mb-4 h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center">
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onAddSectionClick?.(); }}
+                    className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-colors ${onAddSectionClick ? 'bg-gray-100 hover:bg-gray-200 cursor-pointer' : 'bg-gray-100'}`}
+                    aria-label="Add a section to this page"
+                  >
                     <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                     </svg>
-                  </div>
+                  </button>
                   <p className="text-sm" style={{ color: theme.colors.textMuted }}>
                     This page has no sections yet.
                   </p>
+                  {onAddSectionClick && (
+                    <p className="mt-1 text-xs" style={{ color: theme.colors.textMuted }}>
+                      Click the + button to add content
+                    </p>
+                  )}
                 </div>
               </div>
             )}
