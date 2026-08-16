@@ -8,6 +8,50 @@ function sanitizeSectionType(type: string): SectionType {
   return VALID_SECTION_TYPES.includes(type as SectionType) ? (type as SectionType) : 'rich-text';
 }
 
+// ─── Section content defaults ──────────────────────────────────
+// Ensures every section has the minimum required content fields.
+// If the AI generates a section with empty/missing content, these
+// defaults prevent invisible/blank sections in the preview.
+
+const SECTION_CONTENT_DEFAULTS: Record<string, Record<string, unknown>> = {
+  'hero': { headline: 'New Section', subheadline: '', ctaText: 'Shop Now', alignment: 'center', height: 'md' },
+  'text-banner': { headline: 'New Section', body: '', alignment: 'center', size: 'md' },
+  'rich-text': { html: '<p>Content coming soon.</p>' },
+  'featured-products': { headline: 'Featured Products', productIds: [], columns: 3, showPrice: true, showAddToCart: true },
+  'product-grid': { columns: 3, showPrice: true, showAddToCart: true },
+  'testimonials': { headline: 'Customer Reviews', items: [] },
+  'image-gallery': { images: [], columns: 3, gap: 'md' },
+  'faq': { headline: 'FAQ', items: [] },
+  'cta': { headline: 'Take Action', ctaText: 'Learn More', style: 'solid' },
+  'categories': { items: [], columns: 3 },
+  'newsletter': { headline: 'Stay in Touch', buttonText: 'Subscribe' },
+  'spacer': { height: 'md' },
+  'divider': {},
+  'header': { storeName: 'Store', showSearch: true, showCart: true, menuItems: [] },
+  'footer': { storeName: 'Store', columns: [] },
+};
+
+function ensureSectionContent(section: Section): Section {
+  const defaults = SECTION_CONTENT_DEFAULTS[section.type];
+  if (!defaults) return section; // Unknown type — content stays as-is
+  
+  const merged: Record<string, unknown> = { ...defaults };
+  if (section.content && typeof section.content === 'object') {
+    // Only copy over non-empty values from the AI-generated content.
+    // This prevents empty strings/arrays from overwriting defaults.
+    for (const [key, val] of Object.entries(section.content)) {
+      if (val !== undefined && val !== null && val !== '') {
+        if (Array.isArray(val)) {
+          if (val.length > 0) merged[key] = val;
+        } else {
+          merged[key] = val;
+        }
+      }
+    }
+  }
+  return { ...section, content: merged };
+}
+
 export type AppView = 'landing' | 'editor';
 
 interface StoreEditorState {
@@ -153,7 +197,8 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
         case 'add-section': {
           const { pageId, section, index } = op.payload;
           // Sanitize: coerce unknown section types to 'rich-text' to prevent crashes
-          const sanitized = { ...section, type: sanitizeSectionType(section.type) };
+          // Then ensure content has required defaults (prevents blank sections)
+          const sanitized = ensureSectionContent({ ...section, type: sanitizeSectionType(section.type) });
           updatedStore = {
             ...updatedStore,
             pages: updatedStore.pages.map((page) => {
@@ -247,9 +292,9 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
         case 'add-page': {
           const { name, slug, sections } = op.payload;
-          // Sanitize section types in page payload
+          // Sanitize section types AND ensure content defaults in page payload
           const sanitizedSections = (sections || []).map((s: any) =>
-            ({ ...s, type: sanitizeSectionType(s.type) })
+            ensureSectionContent({ ...s, type: sanitizeSectionType(s.type) })
           );
           const newPage: StorePage = {
             id: crypto.randomUUID(),

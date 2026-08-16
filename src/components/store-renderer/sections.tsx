@@ -1070,7 +1070,15 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
     case 'divider':
       element = <DividerSection {...props} />; break;
     default:
-      return null;
+      // Unknown section type — render a visible placeholder instead of invisible null
+      return (
+        <SectionErrorBoundary sectionType={section.type}>
+          <div className="py-8 text-center text-sm text-gray-400">
+            <p className="font-medium">Unsupported section type: {section.type}</p>
+            <p className="mt-1 text-xs text-gray-300">This section can be edited or removed.</p>
+          </div>
+        </SectionErrorBoundary>
+      );
   }
 
   // Wrap each section in its own error boundary so a malformed

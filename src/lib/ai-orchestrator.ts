@@ -19,6 +19,7 @@ interface TaskConfig {
   temperature?: number;
   timeout?: number;
   maxRetries?: number;
+  maxTokens?: number;
 }
 
 const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
@@ -33,6 +34,7 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     temperature: 0.5,
     timeout: 30_000,
     maxRetries: 2,
+    maxTokens: 8192,
   },
   'coding-task': {
     label: 'Coding Task',
@@ -389,6 +391,7 @@ export async function executeAI(
           messages: msgs,
           temperature: temp,
           thinking: { type: 'disabled' },
+          ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
           ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
         }),
         new Promise<never>((_, reject) => {

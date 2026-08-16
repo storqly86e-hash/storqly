@@ -63,7 +63,7 @@ function buildChatSystemPrompt(store: Store): string {
     'If the user asks for something conceptual (e.g. "our story", "core values", "team", "mission"), map it to the closest type below:\n' +
     '- "hero": Full-width hero banner with headline, subheadline, and CTA button. Use for: landing/mission/founding story intros.\n' +
     '- "text-banner": Single text block with headline and body text. Use for: announcements, stories, descriptions, "about us" text, mission statements, value propositions.\n' +
-    '- "rich-text": Rich text content block. Use for: detailed content, formatted text, longer descriptions, multiple paragraphs.\n' +
+    '- "rich-text": Rich text content block with an "html" field containing HTML markup. Use for: detailed content, formatted text, longer descriptions, multiple paragraphs. IMPORTANT: The "html" field MUST contain actual HTML content like "<p>Your text here.</p>" — NEVER leave it empty.\n' +
     '- "featured-products": Curated product showcase. Use for: product highlights, featured items, best sellers.\n' +
     '- "product-grid": Grid of all products. Use for: full product catalog browsing.\n' +
     '- "testimonials": Customer reviews/quotes. Use for: social proof, customer stories, reviews.\n' +
@@ -114,7 +114,15 @@ function buildChatSystemPrompt(store: Store): string {
     'CORRECT: {"type":"update-section","payload":{"sectionId":"<id>","style":{"headlineColor":"#ffd700"}}}\n\n' +
     '## Output Format\n\n' +
     'Return ONLY: {"operations": [...]}\n' +
-    'No markdown, no explanation, no commentary.';
+    'No markdown, no explanation, no commentary.\n\n' +
+    '## COMPLETENESS RULE (CRITICAL)\n\n' +
+    'When the user requests MULTIPLE things (e.g. "add a hero, a text section, and a newsletter"), ' +
+    'you MUST generate an operation for EACH item requested. Never skip or merge items. ' +
+    'Count the distinct things asked for before generating operations and verify your output includes all of them.\n\n' +
+    'When creating a new page with multiple sections, use the add-page operation with ALL sections in the sections array. ' +
+    'Each section MUST include complete content (headline, body, items, etc.) — never leave content as empty {}.\n\n' +
+    'For multi-section creation, keep each section\'s content CONCISE (1-2 sentences max per text field) to avoid response truncation. ' +
+    'Quality brevity is better than being cut off mid-response.';
 }
 
 // ─── No-op filter: strip fields that match existing values ──────
@@ -284,13 +292,21 @@ function buildSummary(operations: ChatEditOperation[], strippedFields: string[])
         }
         return 'Updated section: ' + (changes.length > 0 ? changes.join(', ') : 'unknown fields');
       }
-      case 'add-section': return 'Added a new section';
+      case 'add-section': {
+        let sp = op.payload as Record<string, unknown>;
+        let section = sp.section as Record<string, unknown> | undefined;
+        return 'Added ' + (section?.type || 'unknown') + ' section';
+      }
       case 'remove-section': return 'Removed a section';
       case 'reorder-sections': return 'Reordered sections';
       case 'update-product': return 'Updated a product';
       case 'add-product': return 'Added a product';
       case 'remove-product': return 'Removed a product';
-      case 'add-page': return 'Added a new page';
+      case 'add-page': {
+        let sp = op.payload as Record<string, unknown>;
+        let sections = sp.sections as unknown[] | undefined;
+        return 'Added page "' + (sp.name || 'New Page') + '"' + (sections && sections.length > 0 ? ' with ' + sections.length + ' sections' : '');
+      }
       case 'remove-page': return 'Removed a custom page';
       case 'rename-page': return 'Renamed a page';
       default: return 'Made a change';
@@ -418,7 +434,9 @@ export async function POST(req: NextRequest) {
 
     // ── SERVER-SIDE NO-OP FILTER ──
     // Strip any fields that match existing values (prevents silent corruption)
+    console.log('[Chat Edit] Raw operations received:', operations.length);
     const { operations: sanitized, strippedFields } = sanitizeOperations(operations, store);
+    console.log('[Chat Edit] Operations after no-op filter:', sanitized.length);
 
     if (strippedFields.length > 0) {
       console.log('[Chat Edit] No-op filter stripped ' + strippedFields.length + ' fields:');
