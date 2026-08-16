@@ -100,9 +100,9 @@ function createFallbackStore(prompt: string): Store {
   const uid = () => crypto.randomUUID();
 
   const products = [
-    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Our signature product.', category: 'Featured', featured: true, inStock: true },
+    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Our signature product.', category: 'Featured', featured: true, inStock: true },
     { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for you.', category: 'Premium', featured: false, inStock: true },
-    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Great value starter.', category: 'Starter', featured: false, inStock: true },
+    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Great value starter.', category: 'Starter', featured: false, inStock: true },
   ];
 
   return {
@@ -266,7 +266,7 @@ export async function POST(req: NextRequest) {
           systemPrompt: buildPhase1SystemPrompt(phase1Count),
           temperature: 0.6,
           timeout: 40_000,
-          maxRetries: 2,
+          maxRetries: 3,
           responseFormat: 'json_object',
         });
 

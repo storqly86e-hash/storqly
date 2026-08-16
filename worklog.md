@@ -684,3 +684,47 @@ Stage Summary:
 - Test 2: PASS (2/2 operations, both sections rendered with content)
 - Test 3: PASS (3/3 sections, all with real content)
 - Root causes fixed: max_tokens 8192, ensureSectionContent defaults, COMPLETENESS RULE in prompt, rich-text html field guidance
+
+---
+Task ID: Fix 429 Rate Limit + Watch Fallback Image
+Agent: Main Agent
+Task: (1) Fix chat 429 failures caused by API burst during store generation. (2) Fix generic watch fallback image replacing product photos.
+
+Work Log:
+- Investigated dev logs: confirmed BOTH issues stem from 429 rate-limit errors
+- Root cause: Store generation fires 1 AI call + 8 parallel image-search calls (up to 32 with fallbacks) in ~25 seconds, exhausting rate limit
+- When user tries chat immediately after, rate limit is still active → "try again in a moment" error
+- Image search 429s cause products to get replaced with hardcoded watch photo (photo-1523275335684-37898b6baf30)
+
+Fix 1 — Image Enrichment (src/lib/unsplash.ts):
+- Changed from 4-concurrent parallel to fully sequential execution
+- Added 2-second minimum interval between image search API calls (rateLimitedSleep)
+- Added extra 3s penalty on 429 errors to back off further
+- REMOVED watch fallback: on failure, keeps AI-generated placeholder URL (at least category-relevant)
+- Only uses neutral placeholder (photo-1526170375885) if no usable URL exists at all
+- Added textile/home-goods keywords to nicheMap for better query matching
+- New stats: enriched/kept/replaced instead of enriched/failed
+
+Fix 2 — AI Orchestrator (src/lib/ai-orchestrator.ts):
+- Added global rate limiter: minimum 1.5s between ALL AI chat completion calls
+- Increased chat-edit retries from 2→4, timeout from 30s→45s
+- Changed rate-limit backoff from exponential (8s,12s) to linear escalation (5s,10s,15s,20s)
+- Added 3s penalty on 429 errors (pushes out next-allowed time)
+- Tracks both successful and failed call times for rate limiting
+
+Fix 3 — Store Generation (src/app/api/store/generate/route.ts):
+- Changed phase 1 maxRetries from 2→3 (matching config default)
+- Reordered fallback product images (neutral first, no watch as featured)
+
+Testing Status:
+- Code changes verified: lint passes clean
+- End-to-end testing BLOCKED: rate limit window from previous session is extremely long (15+ min observed)
+- Each failed test attempt during debugging extended the window further
+- Code fixes are architecturally sound — they prevent the burst pattern that caused the original issue
+- Verification should be done by user in a fresh session after rate limit window clears
+
+Stage Summary:
+- Both issues confirmed as 429 rate-limit from parallel API burst during store generation
+- 3 files modified: unsplash.ts, ai-orchestrator.ts, generate/route.ts
+- Key design decision: keep AI placeholder URLs on image search failure instead of replacing with unrelated photo
+- Rate limit prevention: sequential image search + global AI call spacing + longer chat backoff

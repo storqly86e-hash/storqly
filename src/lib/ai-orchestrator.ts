@@ -3,6 +3,9 @@
 // ========================================
 // Routing layer that sends requests to the correct AI model.
 // Uses z-ai-web-dev-sdk. Supports retry with exponential backoff.
+//
+// v2: Global rate limiter prevents burst API calls from store generation
+//     from exhausting the rate limit and blocking subsequent chat requests.
 
 import ZAI from 'z-ai-web-dev-sdk';
 
@@ -32,8 +35,8 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'chat-edit': {
     label: 'Chat Edit',
     temperature: 0.5,
-    timeout: 30_000,
-    maxRetries: 2,
+    timeout: 45_000,
+    maxRetries: 4,
     maxTokens: 8192,
   },
   'coding-task': {
@@ -56,6 +59,23 @@ export interface AIOrchestratorResult {
   error?: string;
   attempts: number;
   taskType: AITaskType;
+}
+
+// ─── Global Rate Limiter ──────────────────────────────────────
+// Prevents burst AI calls (e.g., store generation firing phase 1 + phase 2 +
+// image enrichment back-to-back) from exhausting the rate limit.
+// Ensures minimum 1.5s between ANY AI chat completion calls.
+let lastAICallTime = 0;
+const MIN_AI_CALL_INTERVAL_MS = 1_500;
+
+async function waitForRateLimit(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastAICallTime;
+  if (elapsed < MIN_AI_CALL_INTERVAL_MS) {
+    const waitMs = MIN_AI_CALL_INTERVAL_MS - elapsed;
+    console.log(`[AI Orchestrator] Rate-limit guard: waiting ${waitMs}ms before AI call`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
 }
 
 // ─── Singleton ZAI instance with auth recovery ─────────────────
@@ -411,11 +431,14 @@ export async function executeAI(
   let lastError = 'Unknown error';
 
   for (let i = 0; i < maxRetries; i++) {
-    // Exponential backoff: 0s, 8s, 12s (short on rate limits — the caller's fallback is the real safety net;
-    // long backoffs just waste the user's time, especially for SSE streaming endpoints)
+    // Exponential backoff: 0s, then escalating for rate limits.
+    // Rate limit backoff is more aggressive (5s, 10s, 15s, 20s) because the
+    // limit window needs time to reset — short delays just waste a retry.
     if (i > 0) {
-      const baseDelay = isRateLimitError(lastError) ? 8000 : 3000;
-      const delay = baseDelay * Math.pow(1.5, i - 1);
+      const baseDelay = isRateLimitError(lastError) ? 5000 : 3000;
+      const delay = isRateLimitError(lastError)
+        ? baseDelay * i  // 5s, 10s, 15s, 20s — linear escalation for rate limits
+        : baseDelay * Math.pow(1.5, i - 1);
       console.warn(`[AI Orchestrator] Waiting ${(delay / 1000).toFixed(1)}s before retry ${i + 1} for ${taskType}...`);
       await sleep(delay);
     }
@@ -432,13 +455,22 @@ export async function executeAI(
     }
 
     try {
+      // Global rate limiter: ensure minimum spacing between ALL AI calls
+      await waitForRateLimit();
       const result = await attempt(temp, extraSystem, useFreshClient);
       if (result) {
+        lastAICallTime = Date.now();
         return { success: true, content: result.content, attempts: i + 1, taskType };
       }
     } catch (err: unknown) {
       lastError = err instanceof Error ? err.message : String(err);
       console.warn(`[AI Orchestrator] Attempt ${i + 1} failed for ${taskType}: ${lastError}`);
+      // Track time of failed call for rate limit tracking
+      lastAICallTime = Date.now();
+      // Extra penalty on 429: push out the next allowed time
+      if (isRateLimitError(lastError)) {
+        lastAICallTime += 3_000;
+      }
     }
   }
 

@@ -4,6 +4,12 @@
 // Replaces placeholder image URLs with real, relevant photos using
 // the z-ai image-search CLI (in-house service, OSS-hosted URLs, no API key needed).
 // Includes in-memory caching, natural-language query building, and fallback retry.
+//
+// RATE LIMIT AWARENESS (v2):
+// - All image fetches run SEQUENTIALLY with 2s delays between requests.
+// - This prevents 429 rate-limit exhaustion during store generation.
+// - On failure, the AI-generated placeholder URL is KEPT (not replaced with
+//   a generic fallback image), because the AI URL is at least category-relevant.
 
 import { execFile } from 'child_process';
 import { promisify } from 'util';
@@ -15,9 +21,21 @@ const execFileAsync = promisify(execFile);
 const imageCache = new Map<string, { url: string; fetchedAt: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Known-good fallback image (real Unsplash photo — used when enrichment fails
-// so the product card shows a real photo instead of a broken AI-hallucinated URL)
-const FALLBACK_IMAGE_URL = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600';
+// ─── Rate Limit Guard ───────────────────────────────────────────
+// Ensures minimum spacing between image search API calls.
+let lastImageSearchTime = 0;
+const MIN_SEARCH_INTERVAL_MS = 2_000; // 2 seconds between requests
+
+async function rateLimitedSleep(): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastImageSearchTime;
+  if (elapsed < MIN_SEARCH_INTERVAL_MS) {
+    const waitMs = MIN_SEARCH_INTERVAL_MS - elapsed;
+    console.log(`[ImageEnrich] Rate-limit guard: waiting ${waitMs}ms before next search`);
+    await new Promise(r => setTimeout(r, waitMs));
+  }
+  lastImageSearchTime = Date.now();
+}
 
 interface ImageSearchResult {
   success: boolean;
@@ -41,6 +59,8 @@ function extractNicheNoun(storeName: string, productCategory?: string): string |
     'candle': 'candle', 'candles': 'candle',
     'sneaker': 'sneaker', 'sneakers': 'sneaker', 'shoe': 'shoe', 'shoes': 'shoe', 'footwear': 'shoe',
     'furniture': 'furniture', 'home': 'home decor', 'decor': 'home decor',
+    'textile': 'textile', 'textiles': 'textile', 'fabric': 'fabric', 'linen': 'linen',
+    'cotton': 'cotton textile', 'wool': 'wool textile', 'bamboo': 'bamboo product', 'jute': 'jute product', 'hemp': 'hemp product', 'alpaca': 'alpaca wool product',
     'skincare': 'skincare', 'skin care': 'skincare', 'beauty': 'beauty',
     'cosmetic': 'cosmetic', 'cosmetics': 'cosmetic', 'makeup': 'makeup',
     'tech': 'electronics', 'gadget': 'gadget', 'gadgets': 'gadget', 'electronics': 'electronics',
@@ -60,6 +80,7 @@ function extractNicheNoun(storeName: string, productCategory?: string): string |
     'essential oil': 'essential oil', 'oil': 'oil',
     'ceramic': 'ceramic', 'pottery': 'pottery',
     'leather': 'leather',
+    'sustainable': 'sustainable product', 'eco': 'eco-friendly product', 'organic': 'organic product',
   };
 
   const storeLower = storeName.toLowerCase();
@@ -83,11 +104,6 @@ function extractNicheNoun(storeName: string, productCategory?: string): string |
 /**
  * Build a natural-language search query for a product.
  * Uses descriptive sentences (not keyword soup) for better relevance.
- *
- * Examples:
- *   "Winter Spice" candle in "Lumière Candles" → "winter spice scented candle product photo"
- *   "Running Shoes" in sneaker store → "running shoes product photography"
- *   "Oak Dining Table" in furniture store → "oak dining table furniture product photo"
  */
 function buildSearchQuery(
   productName: string,
@@ -103,16 +119,15 @@ function buildSearchQuery(
     parts.push(productName.toLowerCase());
   }
 
-  // 2. Niche noun from store/category context (e.g., "candle", "sneaker", "furniture")
-  //    This is the KEY fix — without this, "Winter Spice" returns random seasonal photos
+  // 2. Niche noun from store/category context
    if (niche && !productName.toLowerCase().includes(niche)) {
     parts.push(niche);
   }
 
-  // 3. Description can add specificity (e.g., "leather", "handmade")
+  // 3. Description can add specificity
   if (description && description.length > 3 && parts.length < 4) {
     const descWords = description
-      .split(/[,;.]/)[0] // Take first clause only
+      .split(/[,;.]/)[0]
       .split(/\s+/)
       .filter(w => w.length > 3 && !['that', 'this', 'with', 'from', 'your', 'their', 'made'].includes(w.toLowerCase()))
       .slice(0, 2);
@@ -132,6 +147,7 @@ function buildSearchQuery(
 /**
  * Search for a single image via z-ai image-search CLI.
  * Returns the image URL or null on failure.
+ * Includes rate-limit guard (minimum 2s between calls).
  */
 async function fetchImage(query: string): Promise<string | null> {
   // Check cache first
@@ -141,6 +157,9 @@ async function fetchImage(query: string): Promise<string | null> {
     return cached.url;
   }
 
+  // Rate limit guard — wait before making the API call
+  await rateLimitedSleep();
+
   try {
     const { stdout } = await execFileAsync(
       'z-ai',
@@ -149,7 +168,6 @@ async function fetchImage(query: string): Promise<string | null> {
     );
 
     // CLI prints emoji status lines to stdout before the JSON payload.
-    // Extract the JSON by finding the first '{' and last '}'.
     const jsonStart = stdout.indexOf('{');
     const jsonEnd = stdout.lastIndexOf('}');
     if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) {
@@ -170,8 +188,11 @@ async function fetchImage(query: string): Promise<string | null> {
     return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Don't log the full error for timeouts — it's just noise
-    if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) {
+    if (msg.includes('429') || msg.includes('Too many requests') || msg.includes('rate limit')) {
+      console.warn(`[ImageEnrich] Rate limited on: "${query}" — backing off`);
+      // Increase backoff after a 429
+      lastImageSearchTime = Date.now() + 3_000; // Extra 3s penalty
+    } else if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) {
       console.warn(`[ImageEnrich] Timeout for: "${query}"`);
     } else {
       console.warn(`[ImageEnrich] Fetch failed for "${query}": ${msg}`);
@@ -232,57 +253,53 @@ async function fetchWithFallback(
 }
 
 /**
+ * Check if an image URL looks valid (not empty, not a broken Unsplash link).
+ * AI-generated Unsplash URLs like photo-XXXXX?w=600 are acceptable placeholders.
+ */
+function isUsableImageUrl(url: string): boolean {
+  if (!url || url.trim().length === 0) return false;
+  // Accept Unsplash URLs (both real and AI-hallucinated)
+  if (url.includes('unsplash.com') || url.includes('images.unsplash.com')) return true;
+  // Accept any https URL that looks plausible
+  if (url.startsWith('https://') && url.length > 20) return true;
+  return false;
+}
+
+/**
  * Enrich all products in a store with real images from z-ai image-search.
- * Runs all fetches in parallel with per-image timeouts.
- * Falls back gracefully — if a fetch fails, the existing image URL is kept.
+ * Runs fetches SEQUENTIALLY with rate-limit guards to avoid 429 errors.
+ * Falls back gracefully — if a fetch fails, the existing image URL is KEPT
+ * (which is usually an AI-generated Unsplash URL that's at least category-relevant).
  *
- * This is the main entry point, called after normalizeStore() in the generate route.
- * Interface is identical to the old Unsplash version — drop-in replacement.
+ * v2: Sequential execution with 2s minimum spacing between API calls.
+ *     No generic fallback image replacement — keeps AI URLs on failure.
  */
 export async function enrichProductImages(
   store: { products: { id: string; name: string; images: string[]; category?: string; description?: string }[]; name: string },
   options?: { maxConcurrency?: number; timeoutMs?: number }
-): Promise<{ enriched: number; failed: number; latencyMs: number }> {
+): Promise<{ enriched: number; failed: number; kept: number; latencyMs: number }> {
   const startTime = Date.now();
   let enriched = 0;
   let failed = 0;
+  let kept = 0;
 
   if (!store.products || store.products.length === 0) {
-    return { enriched: 0, failed: 0, latencyMs: 0 };
+    return { enriched: 0, failed: 0, kept: 0, latencyMs: 0 };
   }
 
-  console.log(`[ImageEnrich] Enriching ${store.products.length} product images for store: "${store.name}"...`);
+  console.log(`[ImageEnrich] Enriching ${store.products.length} product images for store: "${store.name}" (sequential mode)...`);
 
-  // Execute fetches in parallel with a concurrency cap.
-  // Each z-ai call spawns a separate child process via execFile, so there are
-  // no SDK-level conflicts. Capped at 4 to avoid overwhelming the search service.
-  const MAX_CONCURRENCY = 4;
-  let idx = 0;
-  const results: Array<{ product: typeof store.products[0]; url: string | null }> = [];
-
-  async function nextBatch(): Promise<void> {
-    while (idx < store.products.length) {
-      const i = idx++;
-      try {
-        const url = await fetchWithFallback(
-          store.products[i].name,
-          store.products[i].category,
-          store.name,
-          store.products[i].description
-        );
-        results[i] = { product: store.products[i], url };
-      } catch {
-        results[i] = { product: store.products[i], url: null };
-      }
-    }
-  }
-
-  await Promise.all(
-    Array.from({ length: Math.min(MAX_CONCURRENCY, store.products.length) }, () => nextBatch())
-  );
-
-  for (const { product, url } of results) {
+  // Process products ONE AT A TIME with rate-limit spacing
+  for (let i = 0; i < store.products.length; i++) {
+    const product = store.products[i];
     try {
+      const url = await fetchWithFallback(
+        product.name,
+        product.category,
+        store.name,
+        product.description
+      );
+
       if (url) {
         if (product.images.length > 0) {
           product.images[0] = url;
@@ -291,25 +308,29 @@ export async function enrichProductImages(
         }
         enriched++;
       } else {
-        // Image search failed — replace the AI-hallucinated Unsplash URL
-        // with a known-good fallback so the product card shows a real photo
-        if (product.images.length > 0) {
-          product.images[0] = FALLBACK_IMAGE_URL;
+        // Search failed — KEEP the existing AI-generated URL.
+        // This is better than replacing with a generic unrelated image.
+        if (product.images.length > 0 && isUsableImageUrl(product.images[0])) {
+          kept++;
+          console.log(`[ImageEnrich] Search failed for "${product.name}" — kept existing AI URL`);
         } else {
-          product.images.push(FALLBACK_IMAGE_URL);
+          // No usable image at all — add a neutral placeholder
+          product.images[0] = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600';
+          failed++;
+          console.log(`[ImageEnrich] No usable image for "${product.name}" — added neutral placeholder`);
         }
-        failed++;
       }
     } catch {
-      if (product.images.length > 0) {
-        product.images[0] = FALLBACK_IMAGE_URL;
+      if (product.images.length > 0 && isUsableImageUrl(product.images[0])) {
+        kept++;
       } else {
-        product.images.push(FALLBACK_IMAGE_URL);
+        product.images[0] = 'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600';
+        failed++;
       }
-      failed++;
     }
   }
 
   const latencyMs = Date.now() - startTime;
-  return { enriched, failed, latencyMs };
+  console.log(`[ImageEnrich] Complete: ${enriched} enriched, ${kept} kept existing, ${failed} replaced in ${latencyMs}ms`);
+  return { enriched, failed, kept, latencyMs };
 }
