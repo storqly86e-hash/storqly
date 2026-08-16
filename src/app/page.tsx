@@ -213,6 +213,17 @@ function LandingPage() {
     const controller = new AbortController()
     abortRef.current = controller
 
+    // Hard timeout: 120 seconds — no request should ever take longer than this.
+    // If the server is hung or the proxy drops the connection, the user gets a
+    // clear message instead of waiting indefinitely.
+    const HARD_TIMEOUT_MS = 120_000
+    let timedOut = false
+    const timeoutId = setTimeout(() => {
+      timedOut = true
+      controller.abort()
+      console.warn(`[Storqly] Hard timeout (${HARD_TIMEOUT_MS / 1000}s) reached — aborting generation`)
+    }, HARD_TIMEOUT_MS)
+
     // Elapsed time counter
     elapsedTimerRef.current = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1)
@@ -230,6 +241,7 @@ function LandingPage() {
 
     // ── Helper: clean up on any error path (no throw, no crash overlay) ──
     const finishWithError = (message: string) => {
+      clearTimeout(timeoutId)
       clearTimers()
       setError(message)
       setIsGenerating(false)
@@ -239,6 +251,7 @@ function LandingPage() {
     }
 
     const finishOk = () => {
+      clearTimeout(timeoutId)
       clearTimers()
       setIsGenerating(false)
       setGenerationStatus('')
@@ -396,11 +409,15 @@ function LandingPage() {
       }
     } catch (err: unknown) {
       // Last-resort safety net — should rarely be reached now
+      clearTimeout(timeoutId)
       clearTimers()
       let message = 'Something went wrong. Please try again.'
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          message = 'Generation was cancelled.'
+          message = timedOut
+            ? 'Generation timed out after 2 minutes. The server may be overloaded — please try again.'
+            : 'Generation was cancelled.'
+          console.warn(`[Storqly] Request aborted: ${message}`)
         } else {
           console.warn('[Storqly] Unexpected error (caught by safety net):', err.message)
           message = err.message

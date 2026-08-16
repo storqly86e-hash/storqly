@@ -18,6 +18,12 @@ import { enrichProductImages } from '@/lib/unsplash';
 import type { Store, StoreProduct } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
+// ─── Timestamped logging helper (for debugging timing issues) ─
+const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
+const log = (msg: string) => console.log(`[${ts()}] ${msg}`);
+const warn = (msg: string) => console.warn(`[${ts()}] ${msg}`);
+const logErr = (msg: string, ...args: unknown[]) => console.error(`[${ts()}] ${msg}`, ...args);
+
 // ─── Batch size constants ──────────────────────────────────────
 const PHASE1_BATCH_SIZE = 8;
 const PHASE2_BATCH_SIZE = 6;
@@ -233,15 +239,15 @@ export async function POST(req: NextRequest) {
           ? Math.ceil((requestedCount - PHASE1_BATCH_SIZE) / PHASE2_BATCH_SIZE)
           : 0;
 
-        console.log(`[Store Generate] Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
+        log(`[Store Generate] Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
 
         if (sanitizedPrompt.length < trimmedPrompt.length) {
-          console.log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (long lists collapsed)`);
+          log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (long lists collapsed)`);
         }
 
         // ── Check time budget ──
         if (elapsed() > TOTAL_TIME_BUDGET_MS) {
-          console.warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms). Returning fallback.`);
+          warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms). Returning fallback.`);
           send('result', { store: createFallbackStore(trimmedPrompt), _isFallback: true, _fallbackReason: 'Time budget exceeded.' });
           return;
         }
@@ -250,7 +256,7 @@ export async function POST(req: NextRequest) {
         // PHASE 1: Store Structure + First Batch of Products
         // ═══════════════════════════════════════════════════════════
         send('progress', { stage: 'generating', message: 'Generating your store...' });
-        console.log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
+        log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
 
         const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
 
@@ -265,14 +271,14 @@ export async function POST(req: NextRequest) {
         });
 
         if (!phase1Result.success || !phase1Result.content) {
-          console.error(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
+          logErr(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
           send('progress', { stage: 'fallback', message: 'AI service unavailable. Creating starter template...' });
           const fallback = createFallbackStore(trimmedPrompt);
           send('result', { store: fallback, _isFallback: true, _fallbackReason: phase1Result.error });
           return;
         }
 
-        console.log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts)`);
+        log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts)`);
 
         // ── Parse JSON (json_object mode guarantees valid syntax) ──
         send('progress', { stage: 'parsing', message: 'Processing store data...' });
@@ -280,7 +286,7 @@ export async function POST(req: NextRequest) {
         try {
           parsed = JSON.parse(phase1Result.content);
         } catch (e) {
-          console.error(`[Store Generate] Phase 1 JSON parse failed:`, e);
+          logErr(`[Store Generate] Phase 1 JSON parse failed:`, e);
           const fallback = createFallbackStore(trimmedPrompt);
           send('result', { store: fallback, _isFallback: true, _fallbackReason: 'JSON parse failed.' });
           return;
@@ -292,7 +298,7 @@ export async function POST(req: NextRequest) {
         const normResult = normalizeStore(parsed, trimmedPrompt, phase1Count);
 
         if (!normResult) {
-          console.warn(`[Store Generate] normalizeStore returned null. Returning fallback.`);
+          warn(`[Store Generate] normalizeStore returned null. Returning fallback.`);
           send('progress', { stage: 'fallback', message: 'AI response was not valid. Creating starter template...' });
           const fallback = createFallbackStore(trimmedPrompt);
           send('result', { store: fallback, _isFallback: true, _fallbackReason: 'AI response was not a JSON object.' });
@@ -301,12 +307,12 @@ export async function POST(req: NextRequest) {
 
         // Log normalization
         if (normResult.normalizationCount > 0) {
-          console.log(`[Store Generate] Normalization applied (${normResult.summary}):`);
+          log(`[Store Generate] Normalization applied (${normResult.summary}):`);
           for (const line of normResult.log) {
-            console.log(`  ${line}`);
+            log(`  ${line}`);
           }
         } else {
-          console.log(`[Store Generate] Normalization: 0 fixes needed — clean output.`);
+          log(`[Store Generate] Normalization: 0 fixes needed — clean output.`);
         }
 
         const store = normResult.store;
@@ -316,14 +322,14 @@ export async function POST(req: NextRequest) {
         try {
           const imgResult = await enrichProductImages(store);
           if (imgResult.enriched > 0) {
-            console.log(`[Store Generate] Phase 1 images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
+            log(`[Store Generate] Phase 1 images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
           }
         } catch (imgErr) {
           const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
-          console.warn(`[Store Generate] Phase 1 image enrichment failed (non-fatal): ${imgMsg}`);
+          warn(`[Store Generate] Phase 1 image enrichment failed (non-fatal): ${imgMsg}`);
         }
 
-        console.log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
+        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
 
         // ═══════════════════════════════════════════════════════════
         // PHASE 2: Additional Product Batches (if requested > PHASE1_BATCH_SIZE)
@@ -332,7 +338,7 @@ export async function POST(req: NextRequest) {
           const productsStillNeeded = requestedCount - store.products.length;
 
           if (productsStillNeeded > 0 && remaining() > MIN_REMAINING_MS) {
-            console.log(`[Store Generate] Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
+            log(`[Store Generate] Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
 
             const existingNames = store.products.map(p => p.name);
             const storeDescription = store.description || 'e-commerce store';
@@ -345,12 +351,12 @@ export async function POST(req: NextRequest) {
 
               // Time budget check before each batch
               if (remaining() < MIN_REMAINING_MS) {
-                console.warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
+                warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
                 break;
               }
 
               send('progress', { stage: 'generating', message: `Generating products ${batchRange}...` });
-              console.log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
+              log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
 
               try {
                 const batchResult = await executeAI('product-batch', [
@@ -368,7 +374,7 @@ export async function POST(req: NextRequest) {
                 });
 
                 if (!batchResult.success || !batchResult.content) {
-                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
+                  warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
                   break; // Graceful degradation — keep all previous products
                 }
 
@@ -377,7 +383,7 @@ export async function POST(req: NextRequest) {
                 try {
                   batchParsed = JSON.parse(batchResult.content);
                 } catch (e) {
-                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} JSON parse failed. Keeping ${store.products.length} products.`);
+                  warn(`[Store Generate] Phase 2 batch ${batchNum} JSON parse failed. Keeping ${store.products.length} products.`);
                   break;
                 }
 
@@ -400,7 +406,7 @@ export async function POST(req: NextRequest) {
                 const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
 
                 if (normalizedBatch.length === 0) {
-                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
+                  warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
                   break;
                 }
 
@@ -411,11 +417,11 @@ export async function POST(req: NextRequest) {
                   const batchStoreLike = { products: normalizedBatch, name: store.name };
                   const imgResult = await enrichProductImages(batchStoreLike);
                   if (imgResult.enriched > 0) {
-                    console.log(`[Store Generate] Phase 2 batch ${batchNum} images: ${imgResult.enriched}/${normalizedBatch.length} enriched in ${imgResult.latencyMs}ms`);
+                    log(`[Store Generate] Phase 2 batch ${batchNum} images: ${imgResult.enriched}/${normalizedBatch.length} enriched in ${imgResult.latencyMs}ms`);
                   }
                 } catch (imgErr) {
                   const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
-                  console.warn(`[Store Generate] Phase 2 batch ${batchNum} image enrichment failed (non-fatal): ${imgMsg}`);
+                  warn(`[Store Generate] Phase 2 batch ${batchNum} image enrichment failed (non-fatal): ${imgMsg}`);
                 }
 
                 // Accumulate products into store
@@ -424,16 +430,16 @@ export async function POST(req: NextRequest) {
                   store.products.push(p);
                 }
 
-                console.log(`[Store Generate] Phase 2 batch ${batchNum} complete: +${normalizedBatch.length} products. Total: ${store.products.length}. ${Math.round(remaining() / 1000)}s remaining.`);
+                log(`[Store Generate] Phase 2 batch ${batchNum} complete: +${normalizedBatch.length} products. Total: ${store.products.length}. ${Math.round(remaining() / 1000)}s remaining.`);
 
               } catch (batchErr) {
                 const batchMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
-                console.warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
+                warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
                 break; // Graceful degradation
               }
             }
           } else {
-            console.log(`[Store Generate] Phase 2 skipped: ${productsStillNeeded > 0 ? 'not enough time remaining' : 'already have enough products'}.`);
+            log(`[Store Generate] Phase 2 skipped: ${productsStillNeeded > 0 ? 'not enough time remaining' : 'already have enough products'}.`);
           }
         }
 
@@ -459,7 +465,7 @@ export async function POST(req: NextRequest) {
 
         // ── Final result ──
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
-        console.log(`[Store Generate] ✅ Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+        log(`[Store Generate] ✅ Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
 
         send('result', {
           store,
@@ -471,7 +477,7 @@ export async function POST(req: NextRequest) {
         });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error(`[Store Generate] Unexpected error after ${elapsed()}ms:`, msg);
+        logErr(`[Store Generate] Unexpected error after ${elapsed()}ms:`, msg);
         const fallback = createFallbackStore('My Store');
         send('result', { store: fallback, _isFallback: true, _fallbackReason: `Unexpected error: ${msg}` });
       } finally {

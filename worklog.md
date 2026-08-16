@@ -536,3 +536,25 @@ Stage Summary:
 - **A real single user CANNOT hit this limit under normal use** because each generation takes 15-30s (natural spacing), and image enrichment adds 10-20s between AI calls
 - **Even 2 back-to-back generations succeed** (confirmed by test)
 - The z-ai SDK does NOT expose Retry-After or any rate limit metadata
+---
+Task ID: 1
+Agent: main
+Task: Investigate 5-minute 502 failure for Lumen & Co generation, fix root causes
+
+Work Log:
+- Read full dev.log — found 4 consecutive SUCCESSFUL Lumen & Co generations (43-49s each), ZERO failures in current session
+- User's 5-minute 502 failure was NOT in the log — happened in previous server session (log was rotated on restart)
+- Identified real bottleneck: image enrichment was sequential, consuming 51% of total generation time (17-26s out of 43-49s)
+- The sequential constraint ("avoid z-ai CLI concurrency issues") was false — each call uses execFile (separate child process)
+- Parallelized image enrichment with concurrency cap of 4 in unsplash.ts
+- Added 120-second frontend hard timeout in page.tsx (user never waits 5 minutes again)
+- Added millisecond-precision timestamps to all server-side logs in generate/route.ts
+- Tested with identical Lumen & Co prompt — generation succeeded in 33.1s (down from 43-49s)
+- Image enrichment dropped from 17-26s → 6.3s (4x speedup)
+- Note: 1 of 8 parallel image fetches hit 429 on the image search service, but fallback handled it gracefully
+
+Stage Summary:
+- 5-minute failure was from previous server session (likely server was unresponsive/restarting)
+- Generation pipeline is healthy: 33s for 10-product store with parallel images
+- 3 files modified: unsplash.ts (parallel images), page.tsx (120s timeout), route.ts (timestamps)
+- Performance improvement: 43-49s → 33s total, 17-26s → 6.3s for images

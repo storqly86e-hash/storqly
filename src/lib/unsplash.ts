@@ -249,18 +249,37 @@ export async function enrichProductImages(
 
   console.log(`[ImageEnrich] Enriching ${store.products.length} product images for store: "${store.name}"...`);
 
-  // Execute fetches sequentially to avoid z-ai CLI concurrency issues
-  // (parallel invocations can cause SDK init conflicts). 3 products × ~3s ≈ 9s total.
-  for (const product of store.products) {
+  // Execute fetches in parallel with a concurrency cap.
+  // Each z-ai call spawns a separate child process via execFile, so there are
+  // no SDK-level conflicts. Capped at 4 to avoid overwhelming the search service.
+  const MAX_CONCURRENCY = 4;
+  let idx = 0;
+  const results: Array<{ product: typeof store.products[0]; url: string | null }> = [];
+
+  async function nextBatch(): Promise<void> {
+    while (idx < store.products.length) {
+      const i = idx++;
+      try {
+        const url = await fetchWithFallback(
+          store.products[i].name,
+          store.products[i].category,
+          store.name,
+          store.products[i].description
+        );
+        results[i] = { product: store.products[i], url };
+      } catch {
+        results[i] = { product: store.products[i], url: null };
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(MAX_CONCURRENCY, store.products.length) }, () => nextBatch())
+  );
+
+  for (const { product, url } of results) {
     try {
-      const url = await fetchWithFallback(
-        product.name,
-        product.category,
-        store.name,
-        product.description
-      );
       if (url) {
-        // Replace the first image in the array (or add if empty)
         if (product.images.length > 0) {
           product.images[0] = url;
         } else {
