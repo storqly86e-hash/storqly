@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, Fragment, useCallback } from 'react';
-import type { Store, Section, PageType, StorePage } from '@/lib/store-schema';
+import type { Store, Section, PageType, StorePage, SectionType } from '@/lib/store-schema';
 import { renderSection } from './sections';
 import {
   CollectionPage,
@@ -10,6 +10,11 @@ import {
   CheckoutPage,
 } from './template-pages';
 import { useCartStore } from '@/lib/cart-store';
+import {
+  SECTION_TYPE_ICONS,
+  SECTION_TYPE_LABELS,
+  ADDABLE_SECTION_TYPES,
+} from '@/lib/section-meta';
 
 // Visible build ID for sync debugging — matches the one in page.tsx footer
 const BUILD_ID = 'build:2026-08-11-072515Z-279ad2e';
@@ -24,8 +29,8 @@ export interface StoreRendererProps {
   externalCurrentPageId?: string | null;
   /** Callback when renderer navigates internally (editor mode) */
   onPageChange?: (pageId: string) => void;
-  /** Callback when user clicks the "+" on an empty page (editor mode) */
-  onAddSectionClick?: () => void;
+  /** Callback when user adds a section from the empty-page picker (editor mode) */
+  onAddSectionClick?: (type: SectionType) => void;
 }
 
 // ─── Helper: extract header/footer from sections ────────────────────────
@@ -215,6 +220,8 @@ export function StoreRenderer({
   onPageChange,
   onAddSectionClick,
 }: StoreRendererProps) {
+  // State for section picker visibility on empty pages
+  const [showSectionPicker, setShowSectionPicker] = useState(false);
   // Internal page state (used when no external control)
   const [internalPageId, setInternalPageId] = useState<string>(
     () => store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || ''
@@ -366,8 +373,8 @@ export function StoreRenderer({
                 <div className="text-center">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); onAddSectionClick?.(); }}
-                    className={`mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-colors ${onAddSectionClick ? 'bg-gray-100 hover:bg-gray-200 cursor-pointer' : 'bg-gray-100'}`}
+                    onClick={(e) => { e.stopPropagation(); setShowSectionPicker(v => !v); }}
+                    className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full transition-colors bg-gray-100 hover:bg-gray-200 cursor-pointer"
                     aria-label="Add a section to this page"
                   >
                     <svg className="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -377,10 +384,36 @@ export function StoreRenderer({
                   <p className="text-sm" style={{ color: theme.colors.textMuted }}>
                     This page has no sections yet.
                   </p>
-                  {onAddSectionClick && (
-                    <p className="mt-1 text-xs" style={{ color: theme.colors.textMuted }}>
-                      Click the + button to add content
-                    </p>
+                  <p className="mt-1 text-xs" style={{ color: theme.colors.textMuted }}>
+                    Click + to choose a section type
+                  </p>
+                  {showSectionPicker && onAddSectionClick && (
+                    <div
+                      className="mt-6 mx-auto max-w-xs rounded-xl border bg-white p-2 shadow-lg"
+                      style={{ borderColor: theme.colors.border }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="grid grid-cols-3 gap-1">
+                        {ADDABLE_SECTION_TYPES.map((type) => {
+                          const Icon = SECTION_TYPE_ICONS[type];
+                          const label = SECTION_TYPE_LABELS[type];
+                          return (
+                            <button
+                              key={type}
+                              type="button"
+                              onClick={() => {
+                                onAddSectionClick(type);
+                                setShowSectionPicker(false);
+                              }}
+                              className="flex flex-col items-center gap-1.5 rounded-lg px-2 py-3 text-xs text-gray-600 hover:bg-gray-100 hover:text-gray-900 transition-colors"
+                            >
+                              <Icon className="h-5 w-5" />
+                              <span className="leading-tight text-center">{label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               </div>

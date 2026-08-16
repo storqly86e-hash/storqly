@@ -1,0 +1,384 @@
+     1→▲ Next.js 16.1.3 (Turbopack)
+     2→- Local:         http://localhost:3000
+     3→- Network:       http://21.0.7.25:3000
+     4→- Environments: .env.local, .env
+     5→
+     6→✓ Starting...
+     7→✓ Ready in 692ms
+     8→○ Compiling / ...
+     9→ GET / 200 in 10.5s (compile: 10.3s, render: 276ms)
+    10→ GET /api/health 200 in 521ms (compile: 506ms, render: 15ms)
+    11→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+    12→ GET / 200 in 134ms (compile: 14ms, render: 120ms)
+    13→ GET /api/health 200 in 72ms (compile: 34ms, render: 38ms)
+    14→ GET /api/auth/session 200 in 1990ms (compile: 1951ms, render: 38ms)
+    15→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+    16→ GET /api/store/list 200 in 330ms (compile: 313ms, render: 17ms)
+    17→ GET /api/health 200 in 25ms (compile: 13ms, render: 12ms)
+    18→ GET /api/health 200 in 10ms (compile: 4ms, render: 6ms)
+    19→prisma:query SELECT 1
+    20→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+    21→ GET /api/store/list 200 in 20ms (compile: 4ms, render: 16ms)
+    22→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+    23→ GET / 200 in 56ms (compile: 6ms, render: 51ms)
+    24→ GET / 200 in 42ms (compile: 3ms, render: 39ms)
+    25→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+    26→ GET /api/auth/session 200 in 44ms (compile: 32ms, render: 13ms)
+    27→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+    28→ GET /api/health 200 in 12ms (compile: 7ms, render: 5ms)
+    29→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+    30→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    31→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    32→ GET /api/health 200 in 9ms (compile: 4ms, render: 5ms)
+    33→ GET / 200 in 50ms (compile: 6ms, render: 44ms)
+    34→ GET /api/health 200 in 34ms (compile: 30ms, render: 4ms)
+    35→ GET /api/auth/session 200 in 81ms (compile: 26ms, render: 55ms)
+    36→prisma:query SELECT 1
+    37→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+    38→ GET /api/store/list 200 in 18ms (compile: 6ms, render: 11ms)
+    39→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+    40→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    41→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    42→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+    43→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+    44→ GET /api/auth/session 200 in 38ms (compile: 30ms, render: 9ms)
+    45→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+    46→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+    47→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+    48→ GET /api/auth/session 200 in 39ms (compile: 28ms, render: 11ms)
+    49→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+    50→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    51→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+    52→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+    53→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+    54→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    55→ GET /api/auth/session 200 in 41ms (compile: 30ms, render: 11ms)
+    56→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+    57→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+    58→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    59→ GET /api/auth/session 200 in 64ms (compile: 36ms, render: 28ms)
+    60→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+    61→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+    62→ GET / 200 in 59ms (compile: 6ms, render: 53ms)
+    63→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+    64→ GET /api/auth/session 200 in 36ms (compile: 27ms, render: 10ms)
+    65→prisma:query SELECT 1
+    66→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+    67→ GET /api/store/list 200 in 13ms (compile: 2ms, render: 10ms)
+    68→[13:05:13.668] [Store Generate] Requested: 10 products. Phase 1: 8. Phase 2 batches: 1.
+    69→[13:05:13.668] [Store Generate] Prompt sanitized: 363 → 265 chars (long lists collapsed)
+    70→[13:05:13.669] [Store Generate] Phase 1: Generating store with 8 products...
+    71→[AI Providers] Initialized 3 providers: z-ai → groq → gemini
+    72→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+    73→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+    74→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+    75→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+    76→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+    77→  63 |
+    78→> 64 |     const completion = await Promise.race([
+    79→     |                        ^
+    80→  65 |       zai.chat.completions.create({
+    81→  66 |         messages,
+    82→  67 |         temperature,
+    83→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+    84→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+    85→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+    86→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+    87→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+    88→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+    89→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+    90→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+    91→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+    92→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+    93→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+    94→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+    95→[13:05:20.059] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+    96→ POST /api/store/generate 200 in 6.9s (compile: 481ms, render: 6.4s)
+    97→ GET /api/health 200 in 8ms (compile: 3ms, render: 4ms)
+    98→ GET /api/auth/session 200 in 62ms (compile: 48ms, render: 14ms)
+    99→ GET /api/health 200 in 8ms (compile: 4ms, render: 4ms)
+   100→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   101→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   102→ GET /api/health 200 in 7ms (compile: 2ms, render: 4ms)
+   103→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   104→ GET /api/auth/session 200 in 47ms (compile: 34ms, render: 13ms)
+   105→ GET /api/auth/session 200 in 50ms (compile: 39ms, render: 11ms)
+   106→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   107→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   108→ GET /api/auth/session 200 in 43ms (compile: 31ms, render: 12ms)
+   109→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   110→ GET /api/auth/session 200 in 43ms (compile: 33ms, render: 10ms)
+   111→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   112→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   113→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+   114→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   115→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+   116→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   117→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   118→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   119→ GET /api/health 200 in 7ms (compile: 3ms, render: 5ms)
+   120→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   121→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   122→ GET / 200 in 47ms (compile: 4ms, render: 43ms)
+   123→ GET /api/health 200 in 7ms (compile: 2ms, render: 4ms)
+   124→ GET /api/auth/session 200 in 51ms (compile: 35ms, render: 16ms)
+   125→prisma:query SELECT 1
+   126→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   127→ GET /api/store/list 200 in 15ms (compile: 3ms, render: 12ms)
+   128→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   129→ GET /api/auth/csrf 200 in 43ms (compile: 34ms, render: 8ms)
+   130→ POST /api/auth/signout 200 in 11ms (compile: 2ms, render: 9ms)
+   131→ GET /api/auth/session 200 in 14ms (compile: 2ms, render: 11ms)
+   132→ GET / 200 in 60ms (compile: 4ms, render: 56ms)
+   133→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   134→ GET /api/auth/session 200 in 37ms (compile: 29ms, render: 8ms)
+   135→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   136→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   137→prisma:query SELECT 1
+   138→prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`emailVerified`, `main`.`User`.`password`, `main`.`User`.`image`, `main`.`User`.`createdAt`, `main`.`User`.`updatedAt` FROM `main`.`User` WHERE (`main`.`User`.`email` = ? AND 1=1) LIMIT ? OFFSET ?
+   139→prisma:query INSERT INTO `main`.`User` (`id`, `name`, `email`, `password`, `createdAt`, `updatedAt`) VALUES (?,?,?,?,?,?) RETURNING `id` AS `id`, `name` AS `name`, `email` AS `email`, `emailVerified` AS `emailVerified`, `password` AS `password`, `image` AS `image`, `createdAt` AS `createdAt`, `updatedAt` AS `updatedAt`
+   140→ POST /api/auth/register 200 in 480ms (compile: 157ms, render: 323ms)
+   141→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   142→ GET /api/auth/providers 200 in 53ms (compile: 42ms, render: 12ms)
+   143→ GET /api/auth/csrf 200 in 10ms (compile: 3ms, render: 7ms)
+   144→prisma:query SELECT `main`.`User`.`id`, `main`.`User`.`name`, `main`.`User`.`email`, `main`.`User`.`emailVerified`, `main`.`User`.`password`, `main`.`User`.`image`, `main`.`User`.`createdAt`, `main`.`User`.`updatedAt` FROM `main`.`User` WHERE (`main`.`User`.`email` = ? AND 1=1) LIMIT ? OFFSET ?
+   145→ POST /api/auth/callback/credentials 200 in 357ms (compile: 6ms, render: 352ms)
+   146→ GET /api/auth/session 200 in 48ms (compile: 35ms, render: 13ms)
+   147→ GET /api/health 200 in 8ms (compile: 5ms, render: 3ms)
+   148→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   149→ GET /api/store/list 200 in 15ms (compile: 3ms, render: 12ms)
+   150→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   151→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   152→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   153→ GET /api/auth/session 200 in 42ms (compile: 31ms, render: 11ms)
+   154→[13:09:33.816] [Store Generate] Requested: 3 products. Phase 1: 3. Phase 2 batches: 0.
+   155→[13:09:33.816] [Store Generate] Phase 1: Generating store with 3 products...
+   156→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   157→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   158→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   159→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+   160→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   161→  63 |
+   162→> 64 |     const completion = await Promise.race([
+   163→     |                        ^
+   164→  65 |       zai.chat.completions.create({
+   165→  66 |         messages,
+   166→  67 |         temperature,
+   167→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   168→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   169→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+   170→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   171→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+   172→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   173→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   174→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+   175→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   176→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+   177→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   178→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+   179→[13:09:40.132] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+   180→ POST /api/store/generate 200 in 6.3s (compile: 2ms, render: 6.3s)
+   181→prisma:query SELECT 1
+   182→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   183→ GET /api/store/list 200 in 14ms (compile: 3ms, render: 11ms)
+   184→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+   185→ GET /api/auth/session 200 in 68ms (compile: 58ms, render: 10ms)
+   186→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   187→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+   188→ GET /api/auth/session 200 in 46ms (compile: 35ms, render: 11ms)
+   189→[13:10:18.422] [Store Generate] Requested: 3 products. Phase 1: 3. Phase 2 batches: 0.
+   190→[13:10:18.422] [Store Generate] Phase 1: Generating store with 3 products...
+   191→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   192→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   193→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   194→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+   195→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   196→  63 |
+   197→> 64 |     const completion = await Promise.race([
+   198→     |                        ^
+   199→  65 |       zai.chat.completions.create({
+   200→  66 |         messages,
+   201→  67 |         temperature,
+   202→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   203→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   204→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+   205→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   206→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+   207→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   208→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   209→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+   210→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   211→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+   212→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   213→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+   214→[13:10:24.736] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+   215→ POST /api/store/generate 200 in 6.3s (compile: 2ms, render: 6.3s)
+   216→ GET /api/auth/session 200 in 36ms (compile: 29ms, render: 8ms)
+   217→ GET /api/health 200 in 8ms (compile: 3ms, render: 6ms)
+   218→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+   219→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   220→ GET /api/auth/session 200 in 48ms (compile: 37ms, render: 12ms)
+   221→prisma:query SELECT 1
+   222→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   223→ GET /api/store/list 200 in 12ms (compile: 2ms, render: 10ms)
+   224→[13:11:04.211] [Store Generate] Requested: 3 products. Phase 1: 3. Phase 2 batches: 0.
+   225→[13:11:04.211] [Store Generate] Phase 1: Generating store with 3 products...
+   226→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   227→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   228→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   229→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+   230→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   231→  63 |
+   232→> 64 |     const completion = await Promise.race([
+   233→     |                        ^
+   234→  65 |       zai.chat.completions.create({
+   235→  66 |         messages,
+   236→  67 |         temperature,
+   237→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   238→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   239→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+   240→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   241→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+   242→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   243→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   244→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+   245→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   246→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+   247→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   248→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+   249→[13:11:10.538] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+   250→ POST /api/store/generate 200 in 6.3s (compile: 3ms, render: 6.3s)
+   251→ GET /api/auth/session 200 in 49ms (compile: 36ms, render: 13ms)
+   252→ GET /api/auth/session 200 in 46ms (compile: 36ms, render: 10ms)
+   253→ GET /api/auth/session 200 in 53ms (compile: 38ms, render: 15ms)
+   254→ GET /api/health 200 in 8ms (compile: 4ms, render: 4ms)
+   255→ GET /api/auth/session 200 in 62ms (compile: 49ms, render: 13ms)
+   256→ GET /api/health 200 in 9ms (compile: 4ms, render: 5ms)
+   257→ GET /api/health 200 in 12ms (compile: 4ms, render: 8ms)
+   258→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   259→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+   260→ GET /api/auth/session 200 in 46ms (compile: 34ms, render: 11ms)
+   261→ GET /api/health 200 in 7ms (compile: 4ms, render: 3ms)
+   262→prisma:query SELECT 1
+   263→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   264→ GET /api/store/list 200 in 14ms (compile: 2ms, render: 12ms)
+   265→[13:12:30.569] [Store Generate] Requested: 3 products. Phase 1: 3. Phase 2 batches: 0.
+   266→[13:12:30.570] [Store Generate] Phase 1: Generating store with 3 products...
+   267→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   268→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   269→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   270→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+   271→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   272→  63 |
+   273→> 64 |     const completion = await Promise.race([
+   274→     |                        ^
+   275→  65 |       zai.chat.completions.create({
+   276→  66 |         messages,
+   277→  67 |         temperature,
+   278→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   279→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   280→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+   281→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   282→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+   283→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   284→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+   285→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   286→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+   287→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   288→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+   289→[13:12:36.881] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+   290→ POST /api/store/generate 200 in 6.3s (compile: 4ms, render: 6.3s)
+   291→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   292→ GET /api/auth/session 200 in 41ms (compile: 32ms, render: 9ms)
+   293→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   294→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+   295→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   296→ GET /api/auth/session 200 in 43ms (compile: 32ms, render: 11ms)
+   297→ GET /api/health 200 in 9ms (compile: 3ms, render: 6ms)
+   298→prisma:query SELECT 1
+   299→prisma:query SELECT `main`.`Store`.`id`, `main`.`Store`.`name`, `main`.`Store`.`slug`, `main`.`Store`.`description`, `main`.`Store`.`published`, `main`.`Store`.`createdAt`, `main`.`Store`.`updatedAt`, `main`.`Store`.`schema` FROM `main`.`Store` WHERE `main`.`Store`.`userId` = ? ORDER BY `main`.`Store`.`updatedAt` DESC LIMIT ? OFFSET ?
+   300→ GET /api/store/list 200 in 13ms (compile: 2ms, render: 11ms)
+   301→[13:13:13.290] [Store Generate] Requested: 30 products. Phase 1: 8. Phase 2 batches: 4.
+   302→[13:13:13.290] [Store Generate] Phase 1: Generating store with 8 products...
+   303→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   304→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   305→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   306→    at async Object.start (src/app/api/store/generate/route.ts:262:30)
+   307→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   308→  63 |
+   309→> 64 |     const completion = await Promise.race([
+   310→     |                        ^
+   311→  65 |       zai.chat.completions.create({
+   312→  66 |         messages,
+   313→  67 |         temperature,
+   314→[AI Orchestrator] [z-ai] Attempt 1/2 failed for store-generation: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   315→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   316→[AI Orchestrator] Switching to groq (backup 1) for store-generation
+   317→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   318→[AI Orchestrator] [groq] Attempt 1/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   319→[AI Orchestrator] [groq] Waiting 1.0s before retry 2...
+   320→[AI Orchestrator] [groq] Attempt 2/2 failed for store-generation: 403 {"error":{"message":"Forbidden"}}
+   321→[AI Orchestrator] Switching to gemini (backup 2) for store-generation
+   322→[AI Orchestrator] [gemini] Attempt 1/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   323→[AI Orchestrator] [gemini] Waiting 1.0s before retry 2...
+   324→[AI Orchestrator] [gemini] Attempt 2/2 failed for store-generation: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   325→[AI Orchestrator] ❌ All 3 providers failed for store-generation. Providers tried: z-ai, groq, gemini
+   326→[13:13:19.590] [Store Generate] Phase 1 AI failed: All 3 providers failed for store-generation. Last: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent: [404 Not Found] models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ModelService.ListModels to see the list of available models and their supported methods.. Attempts: 5
+   327→ POST /api/store/generate 200 in 6.3s (compile: 4ms, render: 6.3s)
+   328→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   329→ GET /api/auth/session 200 in 67ms (compile: 48ms, render: 19ms)
+   330→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   331→ GET /api/health 200 in 11ms (compile: 5ms, render: 6ms)
+   332→ GET /api/health 200 in 7ms (compile: 1843µs, render: 5ms)
+   333→ GET /api/auth/session 200 in 45ms (compile: 34ms, render: 11ms)
+   334→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   335→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   336→ GET /api/auth/session 200 in 47ms (compile: 37ms, render: 11ms)
+   337→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   338→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   339→ GET /api/health 200 in 12ms (compile: 8ms, render: 4ms)
+   340→ GET /api/health 200 in 5ms (compile: 2ms, render: 3ms)
+   341→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   342→ GET /api/health 200 in 7ms (compile: 3ms, render: 3ms)
+   343→ GET /api/auth/session 200 in 45ms (compile: 33ms, render: 12ms)
+   344→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   345→Failed to make API request: Error: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   346→    at async ZAIProvider.call (src/lib/ai-providers.ts:64:24)
+   347→    at async executeAI (src/lib/ai-orchestrator.ts:435:25)
+   348→    at async POST (src/app/api/store/chat/route.ts:367:20)
+   349→  62 |     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+   350→  63 |
+   351→> 64 |     const completion = await Promise.race([
+   352→     |                        ^
+   353→  65 |       zai.chat.completions.create({
+   354→  66 |         messages,
+   355→  67 |         temperature,
+   356→[AI Orchestrator] [z-ai] Attempt 1/1 failed for chat-edit: API request failed with status 429: {"error":"Too many requests, please try again later"}
+   357→[AI Orchestrator] [z-ai] Rate limited — skipping to next provider
+   358→[AI Orchestrator] Switching to groq (backup 1) for chat-edit
+   359→ GET /api/health 200 in 7ms (compile: 3ms, render: 4ms)
+   360→[AI Orchestrator] [groq] Attempt 1/1 failed for chat-edit: 403 {"error":{"message":"Forbidden"}}
+   361→[AI Orchestrator] Switching to gemini (backup 2) for chat-edit
+   362→[AI Orchestrator] [gemini] Attempt 1/1 failed for chat-edit: [GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash
+   363→[AI Orchestrator] ❌ All 3 providers failed for chat-edit. Providers tried: z-ai, groq, gemini
+   364→ POST /api/store/chat 200 in 4.7s (compile: 269ms, render: 4.4s)
+   365→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+   366→ GET /api/auth/session 200 in 87ms (compile: 74ms, render: 13ms)
+   367→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   368→ GET /api/auth/session 200 in 43ms (compile: 32ms, render: 11ms)
+   369→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   370→ GET /api/auth/session 200 in 46ms (compile: 34ms, render: 12ms)
+   371→ GET /api/health 200 in 6ms (compile: 3ms, render: 4ms)
+   372→ GET /api/health 200 in 6ms (compile: 3ms, render: 3ms)
+   373→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+   374→ GET /api/health 200 in 8ms (compile: 3ms, render: 5ms)
+   375→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   376→ GET /api/health 200 in 9ms (compile: 3ms, render: 5ms)
+   377→ GET /api/health 200 in 8ms (compile: 3ms, render: 6ms)
+   378→ GET /api/auth/session 200 in 48ms (compile: 37ms, render: 11ms)
+   379→ GET /api/health 200 in 7ms (compile: 2ms, render: 5ms)
+   380→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   381→ GET /api/health 200 in 6ms (compile: 2ms, render: 4ms)
+   382→ GET /api/health 200 in 9ms (compile: 3ms, render: 6ms)
+   383→ GET /api/health 200 in 6ms (compile: 2ms, render: 3ms)
+   384→00 in 6ms (compile: 2ms, render: 3ms)

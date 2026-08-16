@@ -8,6 +8,7 @@ import { StoreRenderer } from '@/components/store-renderer'
 import ChatPanel from '@/components/chat-panel'
 import VisualEditor from '@/components/visual-editor'
 import type { Store } from '@/lib/store-schema'
+import { createDefaultSection } from '@/lib/section-meta'
 import MarketingKit from '@/components/marketing-kit'
 import {
   Sparkles,
@@ -191,6 +192,15 @@ function LandingPage() {
   const [generationStatus, setGenerationStatus] = useState('')
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
+  const [aiStatus, setAiStatus] = useState<{ anyWorking: boolean; providers: Array<{ name: string; ok: boolean; error?: string }> } | null>(null)
+
+  // Check AI provider status once on mount
+  useEffect(() => {
+    fetch('/api/ai-status')
+      .then(r => r.json())
+      .then(data => setAiStatus(data))
+      .catch(() => { /* silently fail — status is informational */ })
+  }, [])
 
   const clearTimers = useCallback(() => {
     if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
@@ -425,8 +435,16 @@ function LandingPage() {
                 resolved = true
 
                 if (data._isFallback) {
-                  toast.warning('AI service unavailable — showing starter template. Try again in a moment.', { duration: 6000 })
-                  setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
+                  // Differentiate "all providers down" from other fallback reasons
+                  const reason = data._fallbackReason || 'AI generation failed'
+                  const isProviderFailure = reason.includes('All') || reason.includes('429') || reason.includes('403') || reason.includes('404') || reason.includes('providers failed')
+                  toast.warning(
+                    isProviderFailure
+                      ? 'All AI providers are currently unavailable. You are viewing a starter template. Try again later.'
+                      : 'AI service returned invalid data — showing starter template. Try again.',
+                    { duration: 8000 }
+                  )
+                  setStoreWithFallback(data.store, true, reason)
                 } else {
                   setStore(data.store)
                   // Trigger lazy background image enrichment (non-blocking)
@@ -594,6 +612,13 @@ function LandingPage() {
                   </kbd>{' '}
                   to generate
                 </span>
+
+                {aiStatus && !aiStatus.anyWorking && !isGenerating && (
+                  <span className="flex items-center gap-1.5 text-xs text-amber-400">
+                    <AlertTriangle className="h-3 w-3" />
+                    AI unavailable
+                  </span>
+                )}
 
                 <div className="flex items-center gap-2">
                   {isGenerating && (
@@ -884,22 +909,10 @@ function PreviewPanel() {
   const setEditorCurrentPageId = useStoreEditor((s) => s.setEditorCurrentPageId)
   const addSection = useStoreEditor((s) => s.addSection)
 
-  // Handler for the center "+" button on empty custom pages
-  const handleAddSectionClick = useCallback(() => {
+  // Handler for the center "+" button on empty custom pages — now accepts a section type
+  const handleAddSectionClick = useCallback((type: import('@/lib/store-schema').SectionType) => {
     if (!editorCurrentPageId) return
-    const newSection: import('@/lib/store-schema').Section = {
-      id: crypto.randomUUID(),
-      type: 'hero',
-      content: {
-        headline: 'New Section',
-        subheadline: 'Click to edit this section',
-        ctaText: 'Shop Now',
-        alignment: 'center',
-        height: 'md',
-      },
-      style: {},
-      visible: true,
-    }
+    const newSection = createDefaultSection(type)
     addSection(editorCurrentPageId, newSection)
   }, [editorCurrentPageId, addSection])
 
@@ -989,6 +1002,17 @@ function FallbackBanner() {
   if (dismissed || !isFallbackStore) return null
 
   const isIncomplete = fallbackReason.includes('interrupted') || fallbackReason.includes('incomplete')
+  const isProviderDown = fallbackReason.includes('All') || fallbackReason.includes('429') || fallbackReason.includes('403') || fallbackReason.includes('404') || fallbackReason.includes('providers failed')
+
+  // Determine message based on failure type
+  let bannerMessage: string
+  if (isIncomplete) {
+    bannerMessage = 'Generation was interrupted — your store is incomplete. Please try regenerating.'
+  } else if (isProviderDown) {
+    bannerMessage = 'All AI providers are currently unavailable — you are viewing a starter template.'
+  } else {
+    bannerMessage = 'AI couldn\'t generate a custom store — you\'re viewing a starter template.'
+  }
 
   return (
     <div className={`flex items-center gap-3 border-b px-4 py-2.5 ${isIncomplete ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
@@ -998,10 +1022,8 @@ function FallbackBanner() {
         <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
       )}
       <p className={`flex-1 text-sm ${isIncomplete ? 'text-red-200' : 'text-amber-200'}`}>
-        {isIncomplete
-          ? 'Generation was interrupted and your store is incomplete. Please try regenerating.'
-          : 'AI couldn\'t generate a custom store — you\'re viewing a starter template.'}
-        <span className="hidden sm:inline"> Edit it manually or try regenerating.</span>
+        {bannerMessage}
+        <span className="hidden sm:inline"> Edit it manually or try regenerating later.</span>
       </p>
       <div className="flex items-center gap-2">
         <Button

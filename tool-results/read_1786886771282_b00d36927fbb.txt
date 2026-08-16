@@ -1,0 +1,1116 @@
+     1→'use client';
+     2→
+     3→import { useStoreEditor } from '@/lib/store';
+     4→import type {
+     5→  SectionType,
+     6→  Section,
+     7→  SectionStyle,
+     8→} from '@/lib/store-schema';
+     9→import { DndContext, closestCenter, type DragEndEvent } from '@dnd-kit/core';
+    10→import {
+    11→  SortableContext,
+    12→  useSortable,
+    13→  verticalListSortingStrategy,
+    14→} from '@dnd-kit/sortable';
+    15→import { CSS } from '@dnd-kit/utilities';
+    16→import {
+    17→  Plus,
+    18→  Trash2,
+    19→  Eye,
+    20→  EyeOff,
+    21→  GripVertical,
+    22→  X,
+    23→  Settings2,
+    24→  ChevronDown,
+    25→  FilePlus2,
+    26→  Pencil,
+    27→  MoreHorizontal,
+    28→} from 'lucide-react';
+    29→import { Button } from '@/components/ui/button';
+    30→import { Input } from '@/components/ui/input';
+    31→import { Switch } from '@/components/ui/switch';
+    32→import { Label } from '@/components/ui/label';
+    33→import {
+    34→  Select,
+    35→  SelectTrigger,
+    36→  SelectValue,
+    37→  SelectContent,
+    38→  SelectItem,
+    39→} from '@/components/ui/select';
+    40→import { ScrollArea } from '@/components/ui/scroll-area';
+    41→import { Separator } from '@/components/ui/separator';
+    42→import { Badge } from '@/components/ui/badge';
+    43→import {
+    44→  Popover,
+    45→  PopoverTrigger,
+    46→  PopoverContent,
+    47→} from '@/components/ui/popover';
+    48→import { Textarea } from '@/components/ui/textarea';
+    49→import { toast } from '@/components/ui/sonner';
+    50→import { type LucideIcon, useState, useCallback, useMemo } from 'react';
+    51→
+    52→// ── Section type metadata (shared with StoreRenderer) ──────────────
+    53→import {
+    54→  SECTION_TYPE_ICONS,
+    55→  SECTION_TYPE_LABELS,
+    56→  ADDABLE_SECTION_TYPES,
+    57→  getDefaultContent,
+    58→  createDefaultSection,
+    59→} from '@/lib/section-meta';
+    60→
+    61→// ── createDefaultSection is imported from section-meta ────────
+    62→
+    63→// ── Sortable section item ───────────────────────────────────────────
+    64→
+    65→interface SortableSectionItemProps {
+    66→  section: Section;
+    67→  isSelected: boolean;
+    68→  onSelect: () => void;
+    69→  onToggleVisibility: () => void;
+    70→  onDelete: () => void;
+    71→}
+    72→
+    73→function SortableSectionItem({
+    74→  section,
+    75→  isSelected,
+    76→  onSelect,
+    77→  onToggleVisibility,
+    78→  onDelete,
+    79→}: SortableSectionItemProps) {
+    80→  const {
+    81→    attributes,
+    82→    listeners,
+    83→    setNodeRef,
+    84→    transform,
+    85→    transition,
+    86→    isDragging,
+    87→  } = useSortable({ id: section.id });
+    88→
+    89→  const style = {
+    90→    transform: CSS.Transform.toString(transform),
+    91→    transition,
+    92→  };
+    93→
+    94→  const Icon = SECTION_TYPE_ICONS[section.type] || FileText;
+    95→  const label = SECTION_TYPE_LABELS[section.type] || section.type.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+    96→
+    97→  return (
+    98→    <div
+    99→      ref={setNodeRef}
+   100→      style={style}
+   101→      className={[
+   102→        'group flex items-center gap-2 rounded-lg px-3 py-2 text-sm cursor-pointer transition-colors',
+   103→        isDragging
+   104→          ? 'z-50 bg-zinc-700/80 shadow-xl ring-1 ring-white/10'
+   105→          : isSelected
+   106→            ? 'bg-amber-500/15 text-amber-200 ring-1 ring-amber-500/40'
+   107→            : 'text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200',
+   108→      ].join(' ')}
+   109→      onClick={onSelect}
+   110→    >
+   111→      {/* Drag handle */}
+   112→      <button
+   113→        className="flex-shrink-0 cursor-grab text-zinc-600 hover:text-zinc-400 active:cursor-grabbing focus:outline-none"
+   114→        {...attributes}
+   115→        {...listeners}
+   116→        onClick={(e) => e.stopPropagation()}
+   117→        aria-label="Drag to reorder"
+   118→      >
+   119→        <GripVertical className="h-4 w-4" />
+   120→      </button>
+   121→
+   122→      {/* Icon */}
+   123→      <Icon className="h-4 w-4 flex-shrink-0 opacity-60" />
+   124→
+   125→      {/* Label */}
+   126→      <span className="flex-1 truncate font-medium">{label}</span>
+   127→
+   128→      {/* Visibility toggle */}
+   129→      <button
+   130→        className="flex-shrink-0 rounded p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-700/50 focus:outline-none"
+   131→        onClick={(e) => {
+   132→          e.stopPropagation();
+   133→          onToggleVisibility();
+   134→        }}
+   135→        aria-label={section.visible ? 'Hide section' : 'Show section'}
+   136→      >
+   137→        {section.visible ? (
+   138→          <Eye className="h-3.5 w-3.5" />
+   139→        ) : (
+   140→          <EyeOff className="h-3.5 w-3.5" />
+   141→        )}
+   142→      </button>
+   143→
+   144→      {/* Delete */}
+   145→      <button
+   146→        className="flex-shrink-0 rounded p-1 text-zinc-600 opacity-0 group-hover:opacity-100 hover:text-red-400 hover:bg-red-400/10 transition-opacity focus:outline-none"
+   147→        onClick={(e) => {
+   148→          e.stopPropagation();
+   149→          onDelete();
+   150→        }}
+   151→        aria-label="Delete section"
+   152→      >
+   153→        <Trash2 className="h-3.5 w-3.5" />
+   154→      </button>
+   155→    </div>
+   156→  );
+   157→}
+   158→
+   159→// ── Add Section Popover ─────────────────────────────────────────────
+   160→
+   161→function AddSectionPopover({
+   162→  onAdd,
+   163→}: {
+   164→  onAdd: (type: SectionType) => void;
+   165→}) {
+   166→  const [open, setOpen] = useState(false);
+   167→
+   168→  return (
+   169→    <Popover open={open} onOpenChange={setOpen}>
+   170→      <PopoverTrigger asChild>
+   171→        <Button
+   172→          variant="ghost"
+   173→          size="sm"
+   174→          className="w-full justify-start gap-2 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800"
+   175→        >
+   176→          <Plus className="h-4 w-4" />
+   177→          Add Section
+   178→          <ChevronDown className="ml-auto h-3.5 w-3.5 opacity-50" />
+   179→        </Button>
+   180→      </PopoverTrigger>
+   181→      <PopoverContent
+   182→        className="w-56 rounded-xl border-zinc-800 bg-zinc-900 p-1.5"
+   183→        side="top"
+   184→        align="start"
+   185→        sideOffset={4}
+   186→      >
+   187→        <div className="grid gap-0.5">
+   188→          {ADDABLE_SECTION_TYPES.map((type) => {
+   189→            const Icon = SECTION_TYPE_ICONS[type];
+   190→            const label = SECTION_TYPE_LABELS[type];
+   191→            return (
+   192→              <button
+   193→                key={type}
+   194→                className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 transition-colors text-left w-full focus:outline-none"
+   195→                onClick={() => {
+   196→                  onAdd(type);
+   197→                  setOpen(false);
+   198→                }}
+   199→              >
+   200→                <Icon className="h-4 w-4 text-zinc-500" />
+   201→                {label}
+   202→              </button>
+   203→            );
+   204→          })}
+   205→        </div>
+   206→      </PopoverContent>
+   207→    </Popover>
+   208→  );
+   209→}
+   210→
+   211→// ── Content Field Renderer ───────────────────────────────────────────
+   212→
+   213→function ContentFieldRenderer({
+   214→  keyName,
+   215→  value,
+   216→  onChange,
+   217→  depth = 0,
+   218→}: {
+   219→  keyName: string;
+   220→  value: unknown;
+   221→  onChange: (key: string, value: unknown) => void;
+   222→  depth?: number;
+   223→}) {
+   224→  const label = keyName
+   225→    .replace(/([A-Z])/g, ' $1')
+   226→    .replace(/^./, (s) => s.toUpperCase())
+   227→    .trim();
+   228→
+   229→  if (value === null || value === undefined) {
+   230→    return null;
+   231→  }
+   232→
+   233→  if (typeof value === 'string') {
+   234→    if (keyName === 'html' && value.includes('<')) {
+   235→      return (
+   236→        <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   237→          <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   238→          <Textarea
+   239→            value={value}
+   240→            onChange={(e) => onChange(keyName, e.target.value)}
+   241→            rows={4}
+   242→            className="bg-zinc-800 border-zinc-700 text-zinc-100 text-xs font-mono resize-none"
+   243→          />
+   244→        </div>
+   245→      );
+   246→    }
+   247→    return (
+   248→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   249→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   250→        <Input
+   251→          value={value}
+   252→          onChange={(e) => onChange(keyName, e.target.value)}
+   253→          className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+   254→        />
+   255→      </div>
+   256→    );
+   257→  }
+   258→
+   259→  if (typeof value === 'number') {
+   260→    return (
+   261→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   262→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   263→        <Input
+   264→          type="number"
+   265→          value={value}
+   266→          onChange={(e) => onChange(keyName, Number(e.target.value))}
+   267→          className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+   268→        />
+   269→      </div>
+   270→    );
+   271→  }
+   272→
+   273→  if (typeof value === 'boolean') {
+   274→    return (
+   275→      <div
+   276→        key={keyName}
+   277→        className={`flex items-center justify-between ${depth > 0 ? 'ml-4' : ''}`}
+   278→      >
+   279→        <Label className="text-xs text-zinc-400">{label}</Label>
+   280→        <Switch
+   281→          checked={value}
+   282→          onCheckedChange={(checked) => onChange(keyName, checked)}
+   283→        />
+   284→      </div>
+   285→    );
+   286→  }
+   287→
+   288→  if (Array.isArray(value)) {
+   289→    return (
+   290→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   291→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   292→        <div className="rounded-lg bg-zinc-800/60 border border-zinc-700/50 px-3 py-2 text-xs text-zinc-500">
+   293→          {value.length} item{value.length !== 1 ? 's' : ''}
+   294→        </div>
+   295→      </div>
+   296→    );
+   297→  }
+   298→
+   299→  if (typeof value === 'object') {
+   300→    const obj = value as Record<string, unknown>;
+   301→    const keys = Object.keys(obj);
+   302→
+   303→    const allPrimitive = keys.every(
+   304→      (k) =>
+   305→        typeof obj[k] === 'string' ||
+   306→        typeof obj[k] === 'number' ||
+   307→        typeof obj[k] === 'boolean' ||
+   308→        obj[k] === null ||
+   309→        obj[k] === undefined
+   310→    );
+   311→
+   312→    if (allPrimitive && keys.length > 0) {
+   313→      return (
+   314→        <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   315→          <p className="text-xs font-medium text-zinc-300 mb-2 mt-1">{label}</p>
+   316→          <div className="space-y-3 border-l border-zinc-700/50 pl-3 ml-1">
+   317→            {keys.map((k) => (
+   318→              <ContentFieldRenderer
+   319→                key={k}
+   320→                keyName={k}
+   321→                value={obj[k]}
+   322→                onChange={(subKey, subVal) => {
+   323→                  onChange(keyName, { ...obj, [subKey]: subVal });
+   324→                }}
+   325→                depth={depth + 1}
+   326→              />
+   327→            ))}
+   328→          </div>
+   329→        </div>
+   330→      );
+   331→    }
+   332→
+   333→    return (
+   334→      <div key={keyName} className={depth > 0 ? 'ml-4' : ''}>
+   335→        <Label className="text-xs text-zinc-400 mb-1.5 block">{label}</Label>
+   336→        <Textarea
+   337→          value={JSON.stringify(value, null, 2)}
+   338→          readOnly
+   339→          rows={3}
+   340→          className="bg-zinc-800/60 border-zinc-700/50 text-zinc-500 text-xs font-mono resize-none"
+   341→        />
+   342→      </div>
+   343→    );
+   344→  }
+   345→
+   346→  return null;
+   347→}
+   348→
+   349→// ── Properties Panel ────────────────────────────────────────────────
+   350→
+   351→interface PropertiesPanelProps {
+   352→  section: Section;
+   353→  pageId: string;
+   354→}
+   355→
+   356→function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
+   357→  const {
+   358→    updateSectionContent,
+   359→    updateSectionStyle,
+   360→    removeSection,
+   361→    setSelectedSectionId,
+   362→    store,
+   363→    setStore,
+   364→  } = useStoreEditor();
+   365→
+   366→  const [localStyle, setLocalStyle] = useState<SectionStyle>(section.style);
+   367→
+   368→  // Sync style from store when section changes
+   369→  if (section.style !== localStyle) {
+   370→    setLocalStyle(section.style);
+   371→  }
+   372→
+   373→  const handleContentChange = useCallback(
+   374→    (key: string, value: unknown) => {
+   375→      updateSectionContent(pageId, section.id, { [key]: value });
+   376→    },
+   377→    [pageId, section.id, updateSectionContent]
+   378→  );
+   379→
+   380→  const handleStyleChange = useCallback(
+   381→    (patch: Partial<SectionStyle>) => {
+   382→      const updated = { ...localStyle, ...patch };
+   383→      setLocalStyle(updated);
+   384→      updateSectionStyle(pageId, section.id, patch);
+   385→    },
+   386→    [pageId, section.id, localStyle, updateSectionStyle]
+   387→  );
+   388→
+   389→  const handleDelete = useCallback(() => {
+   390→    removeSection(pageId, section.id);
+   391→    setSelectedSectionId(null);
+   392→    toast.success('Section deleted');
+   393→  }, [pageId, section.id, removeSection, setSelectedSectionId]);
+   394→
+   395→  const handleVisibilityToggle = useCallback(() => {
+   396→    if (!store) return;
+   397→    const updatedStore = {
+   398→      ...store,
+   399→      updatedAt: new Date().toISOString(),
+   400→      pages: store.pages.map((page) => ({
+   401→        ...page,
+   402→        sections: page.sections.map((s) =>
+   403→          s.id === section.id ? { ...s, visible: !s.visible } : s
+   404→        ),
+   405→      })),
+   406→    };
+   407→    setStore(updatedStore);
+   408→  }, [store, section.id, setStore]);
+   409→
+   410→  const Icon = SECTION_TYPE_ICONS[section.type] || FileText;
+   411→  const typeLabel = SECTION_TYPE_LABELS[section.type] || section.type.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
+   412→
+   413→  const renderSelect = (
+   414→    lbl: string,
+   415→    value: string | undefined,
+   416→    options: { label: string; value: string }[],
+   417→    onChange: (val: string) => void
+   418→  ) => (
+   419→    <div>
+   420→      <Label className="text-xs text-zinc-400 mb-1.5 block">{lbl}</Label>
+   421→      <Select value={value ?? ''} onValueChange={onChange}>
+   422→        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm">
+   423→          <SelectValue />
+   424→        </SelectTrigger>
+   425→        <SelectContent className="bg-zinc-900 border-zinc-700">
+   426→          {options.map((opt) => (
+   427→            <SelectItem
+   428→              key={opt.value}
+   429→              value={opt.value}
+   430→              className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
+   431→            >
+   432→              {opt.label}
+   433→            </SelectItem>
+   434→          ))}
+   435→        </SelectContent>
+   436→      </Select>
+   437→    </div>
+   438→  );
+   439→
+   440→  return (
+   441→    <div className="flex h-full flex-col min-h-0">
+   442→      {/* Header */}
+   443→      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+   444→        <div className="flex items-center gap-2">
+   445→          <Settings2 className="h-4 w-4 text-zinc-500" />
+   446→          <span className="text-sm font-semibold text-zinc-200">Properties</span>
+   447→        </div>
+   448→        <button
+   449→          className="rounded-md p-1 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 focus:outline-none"
+   450→          onClick={() => setSelectedSectionId(null)}
+   451→          aria-label="Close properties"
+   452→        >
+   453→          <X className="h-4 w-4" />
+   454→        </button>
+   455→      </div>
+   456→
+   457→      <ScrollArea className="flex-1 min-h-0">
+   458→        <div className="space-y-5 p-4">
+   459→          {/* Section type badge */}
+   460→          <div className="flex items-center gap-2">
+   461→            <Badge
+   462→              variant="outline"
+   463→              className="gap-1.5 border-zinc-700 bg-zinc-800/60 text-zinc-300"
+   464→            >
+   465→              <Icon className="h-3.5 w-3.5" />
+   466→              {typeLabel}
+   467→            </Badge>
+   468→            <span className="text-xs text-zinc-600 font-mono">{section.id.slice(0, 8)}</span>
+   469→          </div>
+   470→
+   471→          <Separator className="bg-zinc-800" />
+   472→
+   473→          {/* Content fields */}
+   474→          <div>
+   475→            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+   476→              Content
+   477→            </h4>
+   478→            <div className="space-y-3">
+   479→              {Object.entries(section.content).map(([key, val]) => (
+   480→                <ContentFieldRenderer
+   481→                  key={key}
+   482→                  keyName={key}
+   483→                  value={val}
+   484→                  onChange={handleContentChange}
+   485→                />
+   486→              ))}
+   487→              {Object.keys(section.content).length === 0 && (
+   488→                <p className="text-xs text-zinc-600 italic">No content fields</p>
+   489→              )}
+   490→            </div>
+   491→          </div>
+   492→
+   493→          <Separator className="bg-zinc-800" />
+   494→
+   495→          {/* Style fields */}
+   496→          <div>
+   497→            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+   498→              Style
+   499→            </h4>
+   500→            <div className="space-y-3">
+   501→              {/* Background Color */}
+   502→              <div>
+   503→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   504→                  Background Color
+   505→                </Label>
+   506→                <div className="flex items-center gap-2">
+   507→                  <input
+   508→                    type="color"
+   509→                    value={localStyle.backgroundColor ?? '#000000'}
+   510→                    onChange={(e) =>
+   511→                      handleStyleChange({ backgroundColor: e.target.value })
+   512→                    }
+   513→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   514→                  />
+   515→                  <Input
+   516→                    value={localStyle.backgroundColor ?? ''}
+   517→                    onChange={(e) =>
+   518→                      handleStyleChange({ backgroundColor: e.target.value || undefined })
+   519→                    }
+   520→                    placeholder="transparent"
+   521→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   522→                  />
+   523→                </div>
+   524→              </div>
+   525→
+   526→              {/* Text Color */}
+   527→              <div>
+   528→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   529→                  Text Color
+   530→                </Label>
+   531→                <div className="flex items-center gap-2">
+   532→                  <input
+   533→                    type="color"
+   534→                    value={localStyle.textColor ?? '#ffffff'}
+   535→                    onChange={(e) =>
+   536→                      handleStyleChange({ textColor: e.target.value })
+   537→                    }
+   538→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   539→                  />
+   540→                  <Input
+   541→                    value={localStyle.textColor ?? ''}
+   542→                    onChange={(e) =>
+   543→                      handleStyleChange({ textColor: e.target.value || undefined })
+   544→                    }
+   545→                    placeholder="inherit"
+   546→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   547→                  />
+   548→                </div>
+   549→              </div>
+   550→
+   551→              <Separator className="bg-zinc-800" />
+   552→              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+   553→                Element Overrides
+   554→              </h4>
+   555→
+   556→              {/* Headline Color */}
+   557→              <div>
+   558→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   559→                  Headline Color
+   560→                </Label>
+   561→                <div className="flex items-center gap-2">
+   562→                  <input
+   563→                    type="color"
+   564→                    value={localStyle.headlineColor ?? '#000000'}
+   565→                    onChange={(e) =>
+   566→                      handleStyleChange({ headlineColor: e.target.value })
+   567→                    }
+   568→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   569→                  />
+   570→                  <Input
+   571→                    value={localStyle.headlineColor ?? ''}
+   572→                    onChange={(e) =>
+   573→                      handleStyleChange({ headlineColor: e.target.value || undefined })
+   574→                    }
+   575→                    placeholder="inherit"
+   576→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   577→                  />
+   578→                </div>
+   579→              </div>
+   580→
+   581→              {/* Button Background Color */}
+   582→              <div>
+   583→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   584→                  Button Background
+   585→                </Label>
+   586→                <div className="flex items-center gap-2">
+   587→                  <input
+   588→                    type="color"
+   589→                    value={localStyle.buttonBackgroundColor ?? '#000000'}
+   590→                    onChange={(e) =>
+   591→                      handleStyleChange({ buttonBackgroundColor: e.target.value })
+   592→                    }
+   593→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   594→                  />
+   595→                  <Input
+   596→                    value={localStyle.buttonBackgroundColor ?? ''}
+   597→                    onChange={(e) =>
+   598→                      handleStyleChange({ buttonBackgroundColor: e.target.value || undefined })
+   599→                    }
+   600→                    placeholder="use primary"
+   601→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   602→                  />
+   603→                </div>
+   604→              </div>
+   605→
+   606→              {/* Button Text Color */}
+   607→              <div>
+   608→                <Label className="text-xs text-zinc-400 mb-1.5 block">
+   609→                  Button Text Color
+   610→                </Label>
+   611→                <div className="flex items-center gap-2">
+   612→                  <input
+   613→                    type="color"
+   614→                    value={localStyle.buttonTextColor ?? '#ffffff'}
+   615→                    onChange={(e) =>
+   616→                      handleStyleChange({ buttonTextColor: e.target.value })
+   617→                    }
+   618→                    className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+   619→                  />
+   620→                  <Input
+   621→                    value={localStyle.buttonTextColor ?? ''}
+   622→                    onChange={(e) =>
+   623→                      handleStyleChange({ buttonTextColor: e.target.value || undefined })
+   624→                    }
+   625→                    placeholder="auto-contrast"
+   626→                    className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+   627→                  />
+   628→                </div>
+   629→              </div>
+   630→
+   631→              {/* Padding Y */}
+   632→              {renderSelect(
+   633→                'Padding Vertical',
+   634→                localStyle.paddingY,
+   635→                [
+   636→                  { label: 'Small', value: 'sm' },
+   637→                  { label: 'Medium', value: 'md' },
+   638→                  { label: 'Large', value: 'lg' },
+   639→                  { label: 'Extra Large', value: 'xl' },
+   640→                ],
+   641→                (val) =>
+   642→                  handleStyleChange({
+   643→                    paddingY: val as SectionStyle['paddingY'],
+   644→                  })
+   645→              )}
+   646→
+   647→              {/* Padding X */}
+   648→              {renderSelect(
+   649→                'Padding Horizontal',
+   650→                localStyle.paddingX,
+   651→                [
+   652→                  { label: 'Small', value: 'sm' },
+   653→                  { label: 'Medium', value: 'md' },
+   654→                  { label: 'Large', value: 'lg' },
+   655→                ],
+   656→                (val) =>
+   657→                  handleStyleChange({
+   658→                    paddingX: val as SectionStyle['paddingX'],
+   659→                  })
+   660→              )}
+   661→
+   662→              {/* Max Width */}
+   663→              {renderSelect(
+   664→                'Max Width',
+   665→                localStyle.maxWidth,
+   666→                [
+   667→                  { label: 'Small', value: 'sm' },
+   668→                  { label: 'Medium', value: 'md' },
+   669→                  { label: 'Large', value: 'lg' },
+   670→                  { label: 'Extra Large', value: 'xl' },
+   671→                  { label: 'Full', value: 'full' },
+   672→                ],
+   673→                (val) =>
+   674→                  handleStyleChange({
+   675→                    maxWidth: val as SectionStyle['maxWidth'],
+   676→                  })
+   677→              )}
+   678→
+   679→              {/* Border Radius */}
+   680→              {renderSelect(
+   681→                'Border Radius',
+   682→                localStyle.borderRadius,
+   683→                [
+   684→                  { label: 'None', value: 'none' },
+   685→                  { label: 'Small', value: 'sm' },
+   686→                  { label: 'Medium', value: 'md' },
+   687→                  { label: 'Large', value: 'lg' },
+   688→                ],
+   689→                (val) =>
+   690→                  handleStyleChange({
+   691→                    borderRadius: val as SectionStyle['borderRadius'],
+   692→                  })
+   693→              )}
+   694→            </div>
+   695→          </div>
+   696→
+   697→          <Separator className="bg-zinc-800" />
+   698→
+   699→          {/* Visibility */}
+   700→          <div className="flex items-center justify-between">
+   701→            <Label className="text-xs text-zinc-400">Visible</Label>
+   702→            <Switch
+   703→              checked={section.visible}
+   704→              onCheckedChange={handleVisibilityToggle}
+   705→            />
+   706→          </div>
+   707→
+   708→          <Separator className="bg-zinc-800" />
+   709→
+   710→          {/* Delete */}
+   711→          <Button
+   712→            variant="ghost"
+   713→            size="sm"
+   714→            className="w-full justify-start gap-2 text-red-400/80 hover:text-red-300 hover:bg-red-400/10"
+   715→            onClick={handleDelete}
+   716→          >
+   717→            <Trash2 className="h-4 w-4" />
+   718→            Delete Section
+   719→          </Button>
+   720→        </div>
+   721→      </ScrollArea>
+   722→    </div>
+   723→  );
+   724→}
+   725→
+   726→// ── Main VisualEditor Component ─────────────────────────────────────
+   727→
+   728→// ── Page type labels & icons for editor tabs ────────────────────────
+   729→
+   730→const PAGE_TYPE_ICONS: Record<string, LucideIcon> = {
+   731→  home: Layout,
+   732→  collection: Grid3X3,
+   733→  product: Star,
+   734→  cart: PanelBottom,
+   735→  checkout: MousePointerClick,
+   736→  custom: FileText,
+   737→};
+   738→
+   739→const PAGE_TYPE_LABELS: Record<string, string> = {
+   740→  home: 'Home',
+   741→  collection: 'Shop',
+   742→  product: 'Product',
+   743→  cart: 'Cart',
+   744→  checkout: 'Checkout',
+   745→  custom: 'Custom',
+   746→};
+   747→
+   748→export function VisualEditor() {
+   749→  const {
+   750→    store,
+   751→    setStore,
+   752→    selectedSectionId,
+   753→    setSelectedSectionId,
+   754→    moveSection,
+   755→    addSection,
+   756→    removeSection,
+   757→    editorCurrentPageId,
+   758→    setEditorCurrentPageId,
+   759→    addCustomPage,
+   760→    removeCustomPage,
+   761→    renameCustomPage,
+   762→  } = useStoreEditor();
+   763→
+   764→  // Pages available for tab switching (real pages only, no dynamic product pages)
+   765→  // Includes custom pages (section-editable like Home)
+   766→  const editorPages = useMemo(
+   767→    () => (store?.pages.filter((p) => !p.type || p.type === 'home' || p.type === 'custom' || p.type === 'collection' || p.type === 'cart' || p.type === 'checkout') ?? []),
+   768→    [store?.pages]
+   769→  );
+   770→
+   771→  // Custom pages only (for delete/rename)
+   772→  const customPages = useMemo(
+   773→    () => (store?.pages.filter((p) => p.type === 'custom') ?? []),
+   774→    [store?.pages]
+   775→  );
+   776→
+   777→  // State for inline rename input
+   778→  const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
+   779→  const [renameValue, setRenameValue] = useState('');
+   780→
+   781→  // State for add-page dialog
+   782→  const [showAddPageDialog, setShowAddPageDialog] = useState(false);
+   783→  const [newPageName, setNewPageName] = useState('');
+   784→
+   785→  // Handle adding a new custom page
+   786→  const handleAddPage = useCallback(() => {
+   787→    const name = newPageName.trim();
+   788→    if (!name) return;
+   789→    const newId = addCustomPage(name);
+   790→    if (newId) {
+   791→      toast.success(`Added "${name}" page`);
+   792→      setNewPageName('');
+   793→      setShowAddPageDialog(false);
+   794→    }
+   795→  }, [newPageName, addCustomPage]);
+   796→
+   797→  // Handle deleting a custom page
+   798→  const handleDeletePage = useCallback((pageId: string, pageName: string) => {
+   799→    removeCustomPage(pageId);
+   800→    toast.success(`Deleted "${pageName}" page`);
+   801→  }, [removeCustomPage]);
+   802→
+   803→  // Handle starting rename
+   804→  const handleStartRename = useCallback((pageId: string, currentName: string) => {
+   805→    setRenamingPageId(pageId);
+   806→    setRenameValue(currentName);
+   807→  }, []);
+   808→
+   809→  // Handle committing rename
+   810→  const handleCommitRename = useCallback(() => {
+   811→    if (!renamingPageId || !renameValue.trim()) {
+   812→      setRenamingPageId(null);
+   813→      return;
+   814→    }
+   815→    renameCustomPage(renamingPageId, renameValue.trim());
+   816→    toast.success(`Renamed to "${renameValue.trim()}"`);
+   817→    setRenamingPageId(null);
+   818→  }, [renamingPageId, renameValue, renameCustomPage]);
+   819→
+   820→  // Current page for section editing (only home-type pages have editable sections)
+   821→  const currentPage = useMemo(
+   822→    () => store?.pages.find((p) => p.id === editorCurrentPageId) ?? store?.pages.find((p) => p.isHomepage) ?? store?.pages[0],
+   823→    [store?.pages, editorCurrentPageId]
+   824→  );
+   825→
+   826→  // Whether the currently selected page is a template (non-editable via visual editor)
+   827→  // Custom pages are section-editable (like home), only collection/cart/checkout/product are templates
+   828→  const isTemplatePage = currentPage && currentPage.type && currentPage.type !== 'home' && currentPage.type !== 'custom';
+   829→
+   830→  const sections = currentPage?.sections ?? [];
+   831→  const pageId = currentPage?.id ?? '';
+   832→
+   833→  const selectedSection = useMemo(
+   834→    () => sections.find((s) => s.id === selectedSectionId) ?? null,
+   835→    [sections, selectedSectionId]
+   836→  );
+   837→
+   838→  // Drag end handler
+   839→  const handleDragEnd = useCallback(
+   840→    (event: DragEndEvent) => {
+   841→      const { active, over } = event;
+   842→      if (!over || active.id === over.id || !pageId) return;
+   843→
+   844→      const oldIndex = sections.findIndex((s) => s.id === active.id);
+   845→      const newIndex = sections.findIndex((s) => s.id === over.id);
+   846→
+   847→      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+   848→        moveSection(pageId, oldIndex, newIndex);
+   849→      }
+   850→    },
+   851→    [sections, pageId, moveSection]
+   852→  );
+   853→
+   854→  // Add section handler
+   855→  const handleAddSection = useCallback(
+   856→    (type: SectionType) => {
+   857→      if (!pageId) return;
+   858→      const newSection = createDefaultSection(type);
+   859→      addSection(pageId, newSection);
+   860→      setSelectedSectionId(newSection.id);
+   861→      toast.success(`Added ${SECTION_TYPE_LABELS[type] || type} section`);
+   862→    },
+   863→    [pageId, addSection, setSelectedSectionId]
+   864→  );
+   865→
+   866→  // Toggle visibility for section list items
+   867→  const handleToggleVisibility = useCallback(
+   868→    (sectionId: string) => {
+   869→      if (!store) return;
+   870→      const updatedStore = {
+   871→        ...store,
+   872→        updatedAt: new Date().toISOString(),
+   873→        pages: store.pages.map((page) => ({
+   874→          ...page,
+   875→          sections: page.sections.map((s) =>
+   876→            s.id === sectionId ? { ...s, visible: !s.visible } : s
+   877→          ),
+   878→        })),
+   879→      };
+   880→      setStore(updatedStore);
+   881→    },
+   882→    [store, setStore]
+   883→  );
+   884→
+   885→  const handleDeleteSection = useCallback(
+   886→    (sectionId: string) => {
+   887→      if (!pageId) return;
+   888→      const section = sections.find((s) => s.id === sectionId);
+   889→      removeSection(pageId, sectionId);
+   890→      if (selectedSectionId === sectionId) {
+   891→        setSelectedSectionId(null);
+   892→      }
+   893→      if (section) {
+   894→        toast.success(`Deleted ${SECTION_TYPE_LABELS[section.type] || section.type} section`);
+   895→      }
+   896→    },
+   897→    [pageId, sections, selectedSectionId, removeSection, setSelectedSectionId]
+   898→  );
+   899→
+   900→  // Handle page tab click (before early return to satisfy rules-of-hooks)
+   901→  const handlePageTabClick = useCallback(
+   902→    (pageId: string) => {
+   903→      if (renamingPageId && renamingPageId !== pageId) {
+   904→        setRenamingPageId(null); // Cancel rename if clicking another tab
+   905→      }
+   906→      setEditorCurrentPageId(pageId);
+   907→    },
+   908→    [setEditorCurrentPageId, renamingPageId]
+   909→  );
+   910→
+   911→  if (!store || !currentPage) {
+   912→    return (
+   913→      <div className="flex h-full items-center justify-center bg-zinc-950">
+   914→        <p className="text-sm text-zinc-600">No store loaded</p>
+   915→      </div>
+   916→    );
+   917→  }
+   918→
+   919→  return (
+   920→    <div className="flex h-full overflow-hidden bg-zinc-950">
+   921→      {/* Section List Panel */}
+   922→      <div
+   923→        className={[
+   924→          'flex flex-col h-full overflow-hidden border-r border-zinc-800',
+   925→          selectedSection && !isTemplatePage ? 'w-64 lg:w-72' : 'w-full',
+   926→        ].join(' ')}
+   927→      >
+   928→        {/* Page Tabs + Add Page button */}
+   929→        <div className="flex items-center gap-0.5 overflow-x-auto border-b border-zinc-800 px-2 py-2" style={{scrollbarWidth: 'none'}}>
+   930→          {editorPages.map((page) => {
+   931→            const isActive = page.id === editorCurrentPageId;
+   932→            const isCustom = page.type === 'custom';
+   933→            const Icon = PAGE_TYPE_ICONS[page.type || 'home'] || Layout;
+   934→            const isRenaming = renamingPageId === page.id;
+   935→
+   936→            return (
+   937→              <div key={page.id} className="flex shrink-0 items-center gap-0.5">
+   938→                <button
+   939→                  onClick={() => handlePageTabClick(page.id)}
+   940→                  className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+   941→                    isActive
+   942→                      ? 'bg-zinc-800 text-zinc-100'
+   943→                      : 'text-zinc-500 hover:bg-zinc-800/50 hover:text-zinc-300'
+   944→                  }`}
+   945→                >
+   946→                  <Icon className="h-3 w-3" />
+   947→                  {isRenaming ? (
+   948→                    <input
+   949→                      autoFocus
+   950→                      value={renameValue}
+   951→                      onChange={(e) => setRenameValue(e.target.value)}
+   952→                      onKeyDown={(e) => {
+   953→                        if (e.key === 'Enter') handleCommitRename();
+   954→                        if (e.key === 'Escape') setRenamingPageId(null);
+   955→                      }}
+   956→                      onBlur={handleCommitRename}
+   957→                      className="w-16 bg-zinc-700 border border-zinc-600 rounded px-1 py-0 text-xs text-zinc-100 outline-none"
+   958→                      onClick={(e) => e.stopPropagation()}
+   959→                    />
+   960→                  ) : (
+   961→                    <span className="whitespace-nowrap">{page.name}</span>
+   962→                  )}
+   963→                </button>
+   964→                {/* Context menu for custom pages: rename + delete */}
+   965→                {isCustom && !isRenaming && (
+   966→                  <Popover>
+   967→                    <PopoverTrigger asChild>
+   968→                      <button
+   969→                        className="flex items-center justify-center w-5 h-5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
+   970→                        onClick={(e) => e.stopPropagation()}
+   971→                        aria-label="Page actions"
+   972→                      >
+   973→                        <MoreHorizontal className="h-3.5 w-3.5" />
+   974→                      </button>
+   975→                    </PopoverTrigger>
+   976→                    <PopoverContent className="w-36 p-1 bg-zinc-900 border-zinc-800" align="start">
+   977→                      <button
+   978→                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+   979→                        onClick={() => handleStartRename(page.id, page.name)}
+   980→                      >
+   981→                        <Pencil className="h-3 w-3" />
+   982→                        Rename
+   983→                      </button>
+   984→                      <button
+   985→                        className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-red-400 hover:bg-red-400/10 hover:text-red-300"
+   986→                        onClick={() => handleDeletePage(page.id, page.name)}
+   987→                      >
+   988→                        <Trash2 className="h-3 w-3" />
+   989→                        Delete Page
+   990→                      </button>
+   991→                    </PopoverContent>
+   992→                  </Popover>
+   993→                )}
+   994→              </div>
+   995→            );
+   996→          })}
+   997→
+   998→          {/* Add Page button */}
+   999→          <Popover open={showAddPageDialog} onOpenChange={setShowAddPageDialog}>
+  1000→            <PopoverTrigger asChild>
+  1001→              <button className="flex shrink-0 items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-zinc-600 hover:bg-zinc-800/50 hover:text-zinc-400 transition-colors">
+  1002→                <Plus className="h-3 w-3" />
+  1003→                <span className="whitespace-nowrap">Page</span>
+  1004→              </button>
+  1005→            </PopoverTrigger>
+  1006→            <PopoverContent className="w-56 p-3 bg-zinc-900 border-zinc-800" align="start">
+  1007→              <h4 className="text-xs font-semibold text-zinc-300 mb-2">Add Custom Page</h4>
+  1008→              <div className="flex gap-2">
+  1009→                <Input
+  1010→                  autoFocus
+  1011→                  value={newPageName}
+  1012→                  onChange={(e) => setNewPageName(e.target.value)}
+  1013→                  onKeyDown={(e) => {
+  1014→                    if (e.key === 'Enter') handleAddPage();
+  1015→                    if (e.key === 'Escape') setShowAddPageDialog(false);
+  1016→                  }}
+  1017→                  placeholder="Page name"
+  1018→                  className="flex-1 h-8 bg-zinc-800 border-zinc-700 text-zinc-100 text-sm"
+  1019→                />
+  1020→                <Button size="sm" onClick={handleAddPage} disabled={!newPageName.trim()} className="h-8 px-3">
+  1021→                  Add
+  1022→                </Button>
+  1023→              </div>
+  1024→            </PopoverContent>
+  1025→          </Popover>
+  1026→        </div>
+  1027→
+  1028→        {/* Panel header — only for section-editable pages */}
+  1029→        {!isTemplatePage && (
+  1030→          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+  1031→            <h3 className="text-sm font-semibold text-zinc-200">Sections</h3>
+  1032→            <span className="text-xs text-zinc-600 tabular-nums">
+  1033→              {sections.length}
+  1034→            </span>
+  1035→          </div>
+  1036→        )}
+  1037→
+  1038→        {/* Section list with DnD — only for section-editable pages */}
+  1039→        {!isTemplatePage ? (
+  1040→          <ScrollArea className="flex-1 min-h-0">
+  1041→            <div className="p-2">
+  1042→              {sections.length === 0 ? (
+  1043→                <div className="flex flex-col items-center justify-center py-8 text-center">
+  1044→                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/60">
+  1045→                    <FileText className="h-4 w-4 text-zinc-500" />
+  1046→                  </div>
+  1047→                  <p className="text-xs text-zinc-500">No sections yet</p>
+  1048→                  <p className="mt-1 text-[10px] text-zinc-600">Click "Add Section" below to add content</p>
+  1049→                </div>
+  1050→              ) : (
+  1051→              <DndContext
+  1052→                collisionDetection={closestCenter}
+  1053→                onDragEnd={handleDragEnd}
+  1054→              >
+  1055→                <SortableContext
+  1056→                  items={sections.map((s) => s.id)}
+  1057→                  strategy={verticalListSortingStrategy}
+  1058→                >
+  1059→                  <div className="space-y-0.5">
+  1060→                    {sections.map((section) => (
+  1061→                      <SortableSectionItem
+  1062→                        key={section.id}
+  1063→                        section={section}
+  1064→                        isSelected={section.id === selectedSectionId}
+  1065→                        onSelect={() =>
+  1066→                          setSelectedSectionId(
+  1067→                            section.id === selectedSectionId ? null : section.id
+  1068→                          )
+  1069→                        }
+  1070→                        onToggleVisibility={() =>
+  1071→                          handleToggleVisibility(section.id)
+  1072→                        }
+  1073→                        onDelete={() => handleDeleteSection(section.id)}
+  1074→                      />
+  1075→                    ))}
+  1076→                  </div>
+  1077→                </SortableContext>
+  1078→              </DndContext>
+  1079→              )}
+  1080→            </div>
+  1081→          </ScrollArea>
+  1082→        ) : (
+  1083→          <div className="flex flex-1 min-h-0 flex-col items-center justify-center px-6 text-center">
+  1084→            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-800/60">
+  1085→              {(() => {
+  1086→                const TIcon = PAGE_TYPE_ICONS[currentPage.type || 'home'] || Layout;
+  1087→                return <TIcon className="h-6 w-6 text-zinc-500" />;
+  1088→              })()}
+  1089→            </div>
+  1090→            <p className="text-sm font-medium text-zinc-300">{PAGE_TYPE_LABELS[currentPage.type || 'home'] || 'Template'} Page</p>
+  1091→            <p className="mt-1.5 max-w-[200px] text-xs leading-relaxed text-zinc-600">
+  1092→              Switch to Home to edit sections.
+  1093→            </p>
+  1094→          </div>
+  1095→        )}
+  1096→
+  1097→        {/* Add section button — only for section-editable pages */}
+  1098→        {!isTemplatePage && (
+  1099→          <div className="border-t border-zinc-800 p-2">
+  1100→            <AddSectionPopover onAdd={handleAddSection} />
+  1101→          </div>
+  1102→        )}
+  1103→      </div>
+  1104→
+  1105→      {/* Properties Panel — only for section-editable pages */}
+  1106→      {selectedSection && !isTemplatePage && (
+  1107→        <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 min-h-0 border-r border-zinc-800">
+  1108→          <PropertiesPanel section={selectedSection} pageId={pageId} />
+  1109→        </div>
+  1110→      )}
+  1111→    </div>
+  1112→  );
+  1113→}
+  1114→
+  1115→export default VisualEditor;
+  1116→

@@ -785,3 +785,35 @@ Stage Summary:
 - Lint passes clean
 - Browser verification: landing page 200, editor view with full 3-panel layout confirmed working
 
+---
+Task ID: Error Investigation + Fixes
+Agent: Main Agent
+Task: Investigate failures on Prompts C/D/E, fix identified issues, improve UX
+
+Work Log:
+- Read dev.log — found ALL 3 AI providers failing on every generation attempt
+- Live-tested each provider:
+  - z-ai: 429 "Too many requests" (shared sandbox quota exhausted)
+  - GROQ: 403 "Forbidden" (geo-blocked from HK sandbox)
+  - Gemini: 400 "API key not valid" (key AQ.Ab8RN... is NOT a valid Google AI key; valid keys start with AIza...)
+- Diagnosed: the "only 3 products" issue is createFallbackStore() triggered when ALL providers fail
+- Diagnosed: chat "try again" message is the same provider failure in chat-edit endpoint
+- Fixed: Gemini model name from gemini-1.5-flash to gemini-2.0-flash (correct practice; won't help with invalid key)
+- Created /api/ai-status lightweight endpoint that pings all providers and returns classified error types
+- Added AI status indicator to landing page ("AI unavailable" warning next to Generate button)
+- Improved fallback toast: differentiates "all providers down" vs "AI returned invalid data"
+- Improved FallbackBanner: specific messages for provider-down vs incomplete vs other failures
+- Created src/lib/section-meta.ts: shared section type metadata (icons, labels, default content, createDefaultSection)
+- Refactored VisualEditor to import from section-meta (removed ~120 lines of duplicated code)
+- Improved empty-page "+" button in StoreRenderer: now shows a section type picker grid (12 section types) instead of only adding a hero section
+- Updated onAddSectionClick prop to accept SectionType parameter
+- Verified: custom pages DO have full section management (add/reorder/delete/edit/visibility) in the VisualEditor left panel — this was already working
+- Verified: page loads correctly with no console errors
+- Verified: "AI unavailable" indicator shows when all providers are down
+
+Stage Summary:
+- ROOT CAUSE: All 3 AI providers are non-functional (z-ai rate limit, GROQ geo-block, Gemini invalid API key)
+- This is NOT a code bug — it's a provider availability crisis in the sandbox
+- Code fixes made: Gemini model name, AI status endpoint, improved error messages, section picker for custom pages
+- CANNOT verify generation reliability until at least one AI provider is working
+- Nothing should be marked as "Locked" without user-confirmed testing

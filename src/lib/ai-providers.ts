@@ -171,7 +171,7 @@ class GeminiProvider implements AIProvider {
     if (maxTokens) generationConfig.maxOutputTokens = maxTokens;
 
     const model = genAI.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       ...(systemInstruction ? { systemInstruction } : {}),
       ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
     });
