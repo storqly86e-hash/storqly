@@ -61,6 +61,66 @@ const staggerContainer = {
   visible: { opacity: 1, transition: { staggerChildren: 0.15, delayChildren: 0.1 } },
 }
 
+// ─── Background Image Enrichment (lazy, non-blocking) ─────
+// Triggered after store generation completes. Fetches real product
+// images sequentially without blocking the user or exhausting rate limits.
+
+function triggerBackgroundImageEnrichment(store: Store) {
+  if (!store.products || store.products.length === 0) return
+
+  // Only enrich products that still have AI-hallucinated Unsplash URLs
+  // (Real enriched URLs from the image search service will have different patterns)
+  const needsEnrichment = store.products.filter(p =>
+    p.images.length > 0 && p.images[0].includes('unsplash.com/photo-')
+  )
+
+  if (needsEnrichment.length === 0) return
+
+  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products need enrichment`)
+
+  fetch('/api/store/enrich-images', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      products: needsEnrichment.map(p => ({
+        id: p.id,
+        name: p.name,
+        images: [...p.images],
+        category: p.category,
+        description: p.description,
+      })),
+      storeName: store.name,
+    }),
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.enriched > 0) {
+        console.log(`[Storqly] Background enrichment complete: ${data.enriched} enriched, ${data.kept} kept, ${data.failed} failed in ${data.latencyMs}ms`)
+        // Update product images in the store via the Zustand store
+        // The enrich-images endpoint mutated the products array in-place,
+        // but we need to update the Zustand store to trigger re-renders.
+        // Dynamic import to avoid circular dependency
+        import('@/lib/store').then(({ useStoreEditor }) => {
+          const currentStore = useStoreEditor.getState().store
+          if (currentStore) {
+            const updatedProducts = currentStore.products.map(prod => {
+              const enriched = data.products?.find((ep: { id: string; images: string[] }) => ep.id === prod.id)
+              if (enriched && enriched.images[0] !== prod.images[0]) {
+                return { ...prod, images: enriched.images }
+              }
+              return prod
+            })
+            useStoreEditor.getState().setStore({ ...currentStore, products: updatedProducts })
+          }
+        })
+      }
+    })
+    .catch(err => {
+      // Non-fatal — products still show AI placeholder images
+      console.warn('[Storqly] Background enrichment failed (non-fatal):', err)
+    })
+}
+
 // ─── Features Data ────────────────────────────────────────────────────
 
 const features = [
@@ -368,6 +428,8 @@ function LandingPage() {
                   setStoreWithFallback(data.store, true, data._fallbackReason || 'AI generation failed')
                 } else {
                   setStore(data.store)
+                  // Trigger lazy background image enrichment (non-blocking)
+                  triggerBackgroundImageEnrichment(data.store)
                 }
 
                 // Soft cap toast

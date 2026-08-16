@@ -14,7 +14,6 @@ import { NextRequest } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
 import { normalizeStore, normalizeProducts } from '@/lib/normalize-store';
 import { sanitizePrompt, extractProductCount } from '@/lib/sanitize-prompt';
-import { enrichProductImages } from '@/lib/unsplash';
 import type { Store, StoreProduct } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
@@ -317,19 +316,12 @@ export async function POST(req: NextRequest) {
 
         const store = normResult.store;
 
-        // ── Enrich Phase 1 product images ──
-        send('progress', { stage: 'images', message: 'Finding product images...' });
-        try {
-          const imgResult = await enrichProductImages(store);
-          if (imgResult.enriched > 0) {
-            log(`[Store Generate] Phase 1 images: ${imgResult.enriched}/${store.products.length} enriched in ${imgResult.latencyMs}ms`);
-          }
-        } catch (imgErr) {
-          const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
-          warn(`[Store Generate] Phase 1 image enrichment failed (non-fatal): ${imgMsg}`);
-        }
+        // ── Image enrichment is now LAZY (not blocking generation) ──
+        // The client triggers background enrichment via /api/store/enrich-images
+        // after the store is loaded in the editor. This reduces generation from
+        // 9+ API calls to exactly 1, preventing rate-limit exhaustion.
 
-        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
+        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms (no image enrichment — lazy)`);
 
         // ═══════════════════════════════════════════════════════════
         // PHASE 2: Additional Product Batches (if requested > PHASE1_BATCH_SIZE)
@@ -410,19 +402,7 @@ export async function POST(req: NextRequest) {
                   break;
                 }
 
-                // Enrich batch product images
-                send('progress', { stage: 'images', message: `Finding product images for ${batchRange}...` });
-                try {
-                  // Build a mini store-like object for the enrichment function
-                  const batchStoreLike = { products: normalizedBatch, name: store.name };
-                  const imgResult = await enrichProductImages(batchStoreLike);
-                  if (imgResult.enriched > 0) {
-                    log(`[Store Generate] Phase 2 batch ${batchNum} images: ${imgResult.enriched}/${normalizedBatch.length} enriched in ${imgResult.latencyMs}ms`);
-                  }
-                } catch (imgErr) {
-                  const imgMsg = imgErr instanceof Error ? imgErr.message : String(imgErr);
-                  warn(`[Store Generate] Phase 2 batch ${batchNum} image enrichment failed (non-fatal): ${imgMsg}`);
-                }
+                // Phase 2 image enrichment is lazy (same as Phase 1)
 
                 // Accumulate products into store
                 for (const p of normalizedBatch) {

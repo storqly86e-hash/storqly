@@ -2,12 +2,17 @@
 // Storqly AI Orchestrator
 // ========================================
 // Routing layer that sends requests to the correct AI model.
-// Uses z-ai-web-dev-sdk. Supports retry with exponential backoff.
-//
-// v2: Global rate limiter prevents burst API calls from store generation
-//     from exhausting the rate limit and blocking subsequent chat requests.
+// v3: Multi-provider failover (z-ai → GROQ → Gemini).
+// JSON repair/normalization is provider-agnostic.
 
-import ZAI from 'z-ai-web-dev-sdk';
+import {
+  getProviders,
+  resetAllProviders,
+  isRateLimitError,
+  isTimeoutError,
+  isAuthError,
+  type AIProvider,
+} from '@/lib/ai-providers';
 
 // ─── Task Types ────────────────────────────────────────────────
 export type AITaskType = 'store-generation' | 'chat-edit' | 'coding-task' | 'product-batch';
@@ -21,8 +26,9 @@ interface TaskConfig {
   label: string;
   temperature?: number;
   timeout?: number;
-  maxRetries?: number;
   maxTokens?: number;
+  /** Max retries PER PROVIDER before switching to next */
+  retriesPerProvider?: number;
 }
 
 const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
@@ -30,26 +36,29 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     label: 'Store Generation',
     temperature: 0.7,
     timeout: 35_000,
-    maxRetries: 3,
+    maxTokens: undefined,
+    retriesPerProvider: 2,
   },
   'chat-edit': {
     label: 'Chat Edit',
     temperature: 0.5,
     timeout: 45_000,
-    maxRetries: 4,
     maxTokens: 8192,
+    retriesPerProvider: 1,
   },
   'coding-task': {
     label: 'Coding Task',
     temperature: 0.3,
     timeout: 45_000,
-    maxRetries: 2,
+    maxTokens: undefined,
+    retriesPerProvider: 1,
   },
   'product-batch': {
     label: 'Product Batch Generation',
     temperature: 0.7,
     timeout: 30_000,
-    maxRetries: 3,
+    maxTokens: undefined,
+    retriesPerProvider: 1,
   },
 };
 
@@ -59,54 +68,25 @@ export interface AIOrchestratorResult {
   error?: string;
   attempts: number;
   taskType: AITaskType;
+  provider?: string;
 }
 
 // ─── Global Rate Limiter ──────────────────────────────────────
-// Prevents burst AI calls (e.g., store generation firing phase 1 + phase 2 +
-// image enrichment back-to-back) from exhausting the rate limit.
-// Ensures minimum 1.5s between ANY AI chat completion calls.
+// Prevents burst AI calls. Ensures minimum 1s between ALL AI calls.
 let lastAICallTime = 0;
-const MIN_AI_CALL_INTERVAL_MS = 1_500;
+const MIN_AI_CALL_INTERVAL_MS = 1_000;
 
 async function waitForRateLimit(): Promise<void> {
   const now = Date.now();
   const elapsed = now - lastAICallTime;
   if (elapsed < MIN_AI_CALL_INTERVAL_MS) {
     const waitMs = MIN_AI_CALL_INTERVAL_MS - elapsed;
-    console.log(`[AI Orchestrator] Rate-limit guard: waiting ${waitMs}ms before AI call`);
     await new Promise(r => setTimeout(r, waitMs));
   }
 }
 
-// ─── Singleton ZAI instance with auth recovery ─────────────────
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-
-async function getZAI(forceNew = false): Promise<Awaited<ReturnType<typeof ZAI.create>>> {
-  if (!zaiInstance || forceNew) {
-    zaiInstance = await ZAI.create();
-  }
-  return zaiInstance;
-}
-
-/** Invalidate the ZAI singleton (e.g. on 401 auth errors) */
-function resetZAI() {
-  zaiInstance = null;
-}
-
 /** Sleep helper */
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Check if an error is a 401 auth error that needs instance refresh */
-function isAuthError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized');
-}
-
-/** Check if an error is a rate limit (429) */
-function isRateLimitError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes('429') || msg.includes('Too many requests') || msg.includes('rate limit');
-}
 
 // ─── JSON extraction & repair ──────────────────────────────────
 
@@ -367,7 +347,7 @@ export function iterativeRepair(jsonStr: string): string {
   return current;
 }
 
-// ─── Core orchestrator ──────────────────────────────────────────
+// ─── Core orchestrator with multi-provider failover ──────────────
 
 const RETRY_EXTRA_INSTRUCTIONS = [
   '',
@@ -384,101 +364,122 @@ export async function executeAI(
     timeout?: number;
     maxRetries?: number;
     responseFormat?: 'json_object';
+    /** Force a specific provider (for testing: 'groq', 'gemini', 'z-ai') */
+    forceProvider?: string;
   }
 ): Promise<AIOrchestratorResult> {
   const config = TASK_CONFIGS[taskType];
   const systemPrompt = options?.systemPrompt ?? '';
   const primaryTemp = options?.temperature ?? config.temperature ?? 0.7;
   const timeout = options?.timeout ?? config.timeout ?? 30_000;
-  const maxRetries = options?.maxRetries ?? config.maxRetries ?? 2;
   const useJsonMode = options?.responseFormat === 'json_object';
+  const retriesPerProvider = config.retriesPerProvider ?? 2;
 
-  const buildMessages = (extraSystem?: string): AIMessage[] => {
+  // Build message array (system prompt as first 'assistant' message — z-ai convention)
+  const buildMessages = (extraSystem?: string) => {
     const fullSystem = extraSystem ? systemPrompt + extraSystem : systemPrompt;
-    const msgs: AIMessage[] = [];
+    const msgs: Array<{ role: 'assistant' | 'user'; content: string }> = [];
     if (fullSystem) msgs.push({ role: 'assistant', content: fullSystem });
     for (const m of messages) msgs.push(m);
     return msgs;
   };
 
-  const attempt = async (temp: number, extraSystem?: string, forceNewClient?: boolean): Promise<{ content: string } | null> => {
-    const zai = await getZAI(forceNewClient);
-    const msgs = buildMessages(extraSystem);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const completion = await Promise.race([
-        zai.chat.completions.create({
-          messages: msgs,
-          temperature: temp,
-          thinking: { type: 'disabled' },
-          ...(config.maxTokens ? { max_tokens: config.maxTokens } : {}),
-          ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
-        }),
-        new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`AI call timed out after ${timeout}ms`)), timeout);
-        }),
-      ]);
-      const content = completion.choices[0]?.message?.content;
-      if (!content || content.trim().length === 0) throw new Error('Empty response');
-      return { content: content.trim() };
-    } catch (err) {
-      throw err;
-    } finally {
-      if (timer) clearTimeout(timer);
-    }
-  };
+  // Get provider chain (ordered: primary → backup1 → backup2)
+  const allProviders = getProviders();
+  const providers = options?.forceProvider
+    ? allProviders.filter(p => p.name === options.forceProvider)
+    : allProviders;
 
+  if (providers.length === 0) {
+    return {
+      success: false,
+      content: null,
+      error: 'No AI providers configured',
+      attempts: 0,
+      taskType,
+    };
+  }
+
+  let totalAttempts = 0;
   let lastError = 'Unknown error';
 
-  for (let i = 0; i < maxRetries; i++) {
-    // Exponential backoff: 0s, then escalating for rate limits.
-    // Rate limit backoff is more aggressive (5s, 10s, 15s, 20s) because the
-    // limit window needs time to reset — short delays just waste a retry.
-    if (i > 0) {
-      const baseDelay = isRateLimitError(lastError) ? 5000 : 3000;
-      const delay = isRateLimitError(lastError)
-        ? baseDelay * i  // 5s, 10s, 15s, 20s — linear escalation for rate limits
-        : baseDelay * Math.pow(1.5, i - 1);
-      console.warn(`[AI Orchestrator] Waiting ${(delay / 1000).toFixed(1)}s before retry ${i + 1} for ${taskType}...`);
-      await sleep(delay);
+  for (let pi = 0; pi < providers.length; pi++) {
+    const provider = providers[pi];
+    const isPrimary = pi === 0;
+
+    if (pi > 0) {
+      console.log(`[AI Orchestrator] Switching to ${provider.name} (${isPrimary ? 'primary' : `backup ${pi}`}) for ${taskType}`);
+      provider.reset(); // Fresh connection for new provider
     }
 
-    const temp = i === 0 ? primaryTemp : Math.max(0.2, primaryTemp - 0.2 * i);
-    const extraSystem = RETRY_EXTRA_INSTRUCTIONS[i] || '';
+    for (let ri = 0; ri < retriesPerProvider; ri++) {
+      totalAttempts++;
+      const temp = totalAttempts === 1 ? primaryTemp : Math.max(0.2, primaryTemp - 0.1 * (totalAttempts - 1));
+      const extraSystem = RETRY_EXTRA_INSTRUCTIONS[totalAttempts - 1] || '';
 
-    // On 401 auth errors, reset the ZAI instance to get a fresh token
-    // On 429 rate limits, also reset to get a fresh connection (rate limits may be session-tied)
-    const useFreshClient = i > 0 && (isAuthError(lastError) || isRateLimitError(lastError));
-    if (useFreshClient) {
-      console.warn(`[AI Orchestrator] ${isAuthError(lastError) ? 'Auth' : 'Rate limit'} error detected — recreating ZAI instance for retry ${i + 1}...`);
-      resetZAI();
-    }
-
-    try {
-      // Global rate limiter: ensure minimum spacing between ALL AI calls
-      await waitForRateLimit();
-      const result = await attempt(temp, extraSystem, useFreshClient);
-      if (result) {
-        lastAICallTime = Date.now();
-        return { success: true, content: result.content, attempts: i + 1, taskType };
+      // Backoff before retry (not on first attempt of each provider)
+      if (ri > 0) {
+        const delay = isRateLimitError(lastError) ? 3000 * ri : 1000 * ri;
+        console.warn(`[AI Orchestrator] [${provider.name}] Waiting ${(delay / 1000).toFixed(1)}s before retry ${ri + 1}...`);
+        await sleep(delay);
       }
-    } catch (err: unknown) {
-      lastError = err instanceof Error ? err.message : String(err);
-      console.warn(`[AI Orchestrator] Attempt ${i + 1} failed for ${taskType}: ${lastError}`);
-      // Track time of failed call for rate limit tracking
-      lastAICallTime = Date.now();
-      // Extra penalty on 429: push out the next allowed time
-      if (isRateLimitError(lastError)) {
-        lastAICallTime += 3_000;
+
+      // On auth/rate-limit errors, reset provider before retry
+      if (ri > 0 && (isAuthError(lastError) || isRateLimitError(lastError))) {
+        provider.reset();
+      }
+
+      try {
+        await waitForRateLimit();
+        const msgs = buildMessages(extraSystem);
+        const content = await provider.call({
+          messages: msgs,
+          temperature: temp,
+          maxTokens: config.maxTokens,
+          jsonMode: useJsonMode,
+          timeout,
+        });
+
+        lastAICallTime = Date.now();
+        if (!isPrimary) {
+          console.log(`[AI Orchestrator] ✅ ${provider.name} succeeded for ${taskType} (fallback from ${providers[0].name})`);
+        }
+        return {
+          success: true,
+          content,
+          attempts: totalAttempts,
+          taskType,
+          provider: provider.name,
+        };
+      } catch (err: unknown) {
+        lastError = err instanceof Error ? err.message : String(err);
+        const is429 = isRateLimitError(lastError);
+        const isTimeout = isTimeoutError(lastError);
+
+        console.warn(`[AI Orchestrator] [${provider.name}] Attempt ${ri + 1}/${retriesPerProvider} failed for ${taskType}: ${lastError.substring(0, 120)}`);
+
+        // Track failed call for rate limiting
+        lastAICallTime = Date.now();
+        if (is429) lastAICallTime += 2_000;
+
+        // On rate limit or timeout: skip remaining retries on this provider, go to next
+        if ((is429 || isTimeout) && ri === 0) {
+          console.warn(`[AI Orchestrator] [${provider.name}] ${is429 ? 'Rate limited' : 'Timed out'} — skipping to next provider`);
+          break; // Exit retry loop, move to next provider
+        }
       }
     }
   }
 
+  // All providers exhausted
+  console.error(`[AI Orchestrator] ❌ All ${providers.length} providers failed for ${taskType}. Providers tried: ${providers.map(p => p.name).join(', ')}`);
+  resetAllProviders();
+
   return {
     success: false,
     content: null,
-    error: `AI failed after ${maxRetries} attempts for ${taskType}. Last: ${lastError}`,
-    attempts: maxRetries,
+    error: `All ${providers.length} providers failed for ${taskType}. Last: ${lastError}`,
+    attempts: totalAttempts,
     taskType,
   };
 }
