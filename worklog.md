@@ -558,3 +558,18 @@ Stage Summary:
 - Generation pipeline is healthy: 33s for 10-product store with parallel images
 - 3 files modified: unsplash.ts (parallel images), page.tsx (120s timeout), route.ts (timestamps)
 - Performance improvement: 43-49s → 33s total, 17-26s → 6.3s for images
+---
+Task ID: 2
+Agent: main
+Task: Fix broken product image when enrichment fails
+
+Work Log:
+- Identified root cause: when image enrichment fails, product keeps AI-hallucinated Unsplash URL (fake photo-ID) → broken image in browser
+- Added FALLBACK_IMAGE_URL constant (known-good real Unsplash photo)
+- Modified both the `url === null` and `catch` branches in enrichProductImages to replace with the fallback
+- Lint clean, server recompiled without errors
+
+Stage Summary:
+- 1 file modified: unsplash.ts
+- Failed image enrichment now shows a real product photo instead of a broken placeholder
+- Not blocking for Part 2, but improves visual quality

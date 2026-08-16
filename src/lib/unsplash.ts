@@ -15,6 +15,10 @@ const execFileAsync = promisify(execFile);
 const imageCache = new Map<string, { url: string; fetchedAt: number }>();
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
+// Known-good fallback image (real Unsplash photo — used when enrichment fails
+// so the product card shows a real photo instead of a broken AI-hallucinated URL)
+const FALLBACK_IMAGE_URL = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600';
+
 interface ImageSearchResult {
   success: boolean;
   query: string;
@@ -287,15 +291,25 @@ export async function enrichProductImages(
         }
         enriched++;
       } else {
+        // Image search failed — replace the AI-hallucinated Unsplash URL
+        // with a known-good fallback so the product card shows a real photo
+        if (product.images.length > 0) {
+          product.images[0] = FALLBACK_IMAGE_URL;
+        } else {
+          product.images.push(FALLBACK_IMAGE_URL);
+        }
         failed++;
       }
     } catch {
+      if (product.images.length > 0) {
+        product.images[0] = FALLBACK_IMAGE_URL;
+      } else {
+        product.images.push(FALLBACK_IMAGE_URL);
+      }
       failed++;
     }
   }
 
   const latencyMs = Date.now() - startTime;
-  console.log(`[ImageEnrich] Done: ${enriched} enriched, ${failed} failed in ${latencyMs}ms`);
-
   return { enriched, failed, latencyMs };
 }
