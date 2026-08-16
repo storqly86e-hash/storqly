@@ -1,6 +1,12 @@
 import { create } from 'zustand';
-import type { Store, StorePage, Section, SectionStyle, ChatMessage, ChatEditOperation } from './store-schema';
+import type { Store, StorePage, Section, SectionStyle, ChatMessage, ChatEditOperation, SectionType } from './store-schema';
 import { createBlankStore } from './store-schema';
+
+// All valid section types — used to sanitize AI-generated operations
+const VALID_SECTION_TYPES: SectionType[] = ['hero','featured-products','product-grid','text-banner','image-gallery','testimonials','newsletter','faq','cta','categories','spacer','divider','rich-text','header','footer'];
+function sanitizeSectionType(type: string): SectionType {
+  return VALID_SECTION_TYPES.includes(type as SectionType) ? (type as SectionType) : 'rich-text';
+}
 
 export type AppView = 'landing' | 'editor';
 
@@ -146,15 +152,17 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
         case 'add-section': {
           const { pageId, section, index } = op.payload;
+          // Sanitize: coerce unknown section types to 'rich-text' to prevent crashes
+          const sanitized = { ...section, type: sanitizeSectionType(section.type) };
           updatedStore = {
             ...updatedStore,
             pages: updatedStore.pages.map((page) => {
               if (page.id !== pageId) return page;
               const sections = [...page.sections];
               if (index !== undefined) {
-                sections.splice(index, 0, section);
+                sections.splice(index, 0, sanitized);
               } else {
-                sections.push(section);
+                sections.push(sanitized);
               }
               return { ...page, sections };
             }),
@@ -239,13 +247,17 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
         case 'add-page': {
           const { name, slug, sections } = op.payload;
+          // Sanitize section types in page payload
+          const sanitizedSections = (sections || []).map((s: any) =>
+            ({ ...s, type: sanitizeSectionType(s.type) })
+          );
           const newPage: StorePage = {
             id: crypto.randomUUID(),
             name,
             slug: slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
             type: 'custom',
             isHomepage: false,
-            sections: sections || [],
+            sections: sanitizedSections,
           };
           updatedStore = {
             ...updatedStore,

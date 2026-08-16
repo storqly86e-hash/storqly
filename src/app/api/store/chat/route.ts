@@ -58,6 +58,23 @@ function buildChatSystemPrompt(store: Store): string {
     '9. add-page: { "type": "add-page", "payload": { "name": "<Page Name>", "slug": "<url-safe-slug>", "sections": [<section objects>] } } — Creates a new custom page. sections is optional (empty if omitted).\n' +
     '10. remove-page: { "type": "remove-page", "payload": { "pageId": "<id>" } } — Deletes a CUSTOM page only. Never delete Home, Shop, Cart, or Checkout.\n' +
     '11. rename-page: { "type": "rename-page", "payload": { "pageId": "<id>", "name": "<New Name>" } }\n\n' +
+    '## VALID SECTION TYPES (MANDATORY — ONLY use these exact type strings in add-section)\n\n' +
+    'When adding sections, you MUST use one of these exact type values. NEVER invent a custom type string.\n' +
+    'If the user asks for something conceptual (e.g. "our story", "core values", "team", "mission"), map it to the closest type below:\n' +
+    '- "hero": Full-width hero banner with headline, subheadline, and CTA button. Use for: landing/mission/founding story intros.\n' +
+    '- "text-banner": Single text block with headline and body text. Use for: announcements, stories, descriptions, "about us" text, mission statements, value propositions.\n' +
+    '- "rich-text": Rich text content block. Use for: detailed content, formatted text, longer descriptions, multiple paragraphs.\n' +
+    '- "featured-products": Curated product showcase. Use for: product highlights, featured items, best sellers.\n' +
+    '- "product-grid": Grid of all products. Use for: full product catalog browsing.\n' +
+    '- "testimonials": Customer reviews/quotes. Use for: social proof, customer stories, reviews.\n' +
+    '- "image-gallery": Image grid. Use for: photo collections, brand imagery, portfolio.\n' +
+    '- "faq": Accordion Q&A. Use for: frequently asked questions, common inquiries.\n' +
+    '- "cta": Call-to-action banner. Use for: conversion prompts, special offers, signup pushes.\n' +
+    '- "categories": Product category grid. Use for: category browsing, product organization.\n' +
+    '- "newsletter": Email signup. Use for: email capture, subscription forms.\n' +
+    '- "spacer": Empty vertical space. Use for: visual breathing room between sections.\n' +
+    '- "divider": Horizontal line separator. Use for: visual separation between content areas.\n' +
+    'HEADER/FOOTER types exist ("header", "footer") but should NOT be added via add-section — they are managed automatically.\n\n' +
     '## Style Fields Reference\n\n' +
     'Section-level style fields (affect the ENTIRE section):\n' +
     '- backgroundColor: hex color for section background\n' +

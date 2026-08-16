@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { Component, useMemo, useState } from 'react';
 import {
   parseColorToRGB,
   contrastTextColor,
@@ -43,9 +43,42 @@ import type {
   SpacerContent,
   StoreProduct,
 } from '@/lib/store-schema';
-import { useState } from 'react';
 import { StoreImage } from './store-image';
 
+
+// ─── Error boundary for individual sections ──────────────────────────
+// Prevents a malformed section from crashing the entire page.
+
+interface SectionErrorBoundaryState { hasError: boolean; error: Error | null }
+class SectionErrorBoundary extends Component<
+  { children: React.ReactNode; sectionType: string },
+  SectionErrorBoundaryState
+> {
+  constructor(props: { children: React.ReactNode; sectionType: string }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center py-8 px-6 text-center">
+          <div className="max-w-sm">
+            <p className="text-sm font-medium" style={{ color: '#888' }}>
+              Section render error ({this.props.sectionType})
+            </p>
+            <p className="mt-1 text-xs" style={{ color: '#aaa' }}>
+              {this.state.error?.message || 'Unknown error'}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ─── Section Wrapper ────────────────────────────────────────────────────
 
@@ -1003,38 +1036,49 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
 
   if (!section.visible) return null;
 
+  let element: React.ReactNode = null;
+
   switch (section.type) {
     case 'header':
-      return <HeaderSection {...props} />;
+      element = <HeaderSection {...props} />; break;
     case 'hero':
-      return <HeroSection {...props} />;
+      element = <HeroSection {...props} />; break;
     case 'featured-products':
-      return <FeaturedProductsSection {...props} />;
+      element = <FeaturedProductsSection {...props} />; break;
     case 'product-grid':
-      return <ProductGridSection {...props} />;
+      element = <ProductGridSection {...props} />; break;
     case 'text-banner':
-      return <TextBannerSection {...props} />;
+      element = <TextBannerSection {...props} />; break;
     case 'image-gallery':
-      return <ImageGallerySection {...props} />;
+      element = <ImageGallerySection {...props} />; break;
     case 'testimonials':
-      return <TestimonialsSection {...props} />;
+      element = <TestimonialsSection {...props} />; break;
     case 'newsletter':
-      return <NewsletterSection {...props} />;
+      element = <NewsletterSection {...props} />; break;
     case 'faq':
-      return <FAQSection {...props} />;
+      element = <FAQSection {...props} />; break;
     case 'cta':
-      return <CTASection {...props} />;
+      element = <CTASection {...props} />; break;
     case 'categories':
-      return <CategoriesSection {...props} />;
+      element = <CategoriesSection {...props} />; break;
     case 'footer':
-      return <FooterSection {...props} />;
+      element = <FooterSection {...props} />; break;
     case 'rich-text':
-      return <RichTextSection {...props} />;
+      element = <RichTextSection {...props} />; break;
     case 'spacer':
-      return <SpacerSection {...props} />;
+      element = <SpacerSection {...props} />; break;
     case 'divider':
-      return <DividerSection {...props} />;
+      element = <DividerSection {...props} />; break;
     default:
       return null;
   }
+
+  // Wrap each section in its own error boundary so a malformed
+  // section (e.g. AI-generated content with wrong shape) can never
+  // crash the entire page.
+  return (
+    <SectionErrorBoundary sectionType={section.type}>
+      {element}
+    </SectionErrorBoundary>
+  );
 }

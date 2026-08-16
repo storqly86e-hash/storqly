@@ -624,3 +624,25 @@ Stage Summary:
 - Both Part 2 issues fixed with minimal CSS + wiring changes
 - No new dependencies or architectural changes
 - All 7-step Part 2 flow verified end-to-end via Agent Browser
+---
+Task ID: Crash Safety — Unknown Section Types
+Agent: Main Agent
+Task: Fix editor crash when chat AI invents section types not in the supported list
+
+Work Log:
+- Root cause confirmed: AI generated types like "our-values", "team-grid" etc. not in SECTION_TYPE_ICONS record → undefined → React crash
+- Fix 1 (visual-editor): All SECTION_TYPE_ICONS[type] and SECTION_TYPE_LABELS[type] lookups now have `|| FileText` / `|| humanized type string` fallbacks (lines 280, 281, 596, 597, 1047, 1080)
+- Fix 2 (chat prompt): Added "VALID SECTION TYPES" section to AI system prompt with all 13 types + guidance on mapping conceptual requests to valid types
+- Fix 3 (store.ts): Added `sanitizeSectionType()` function + `VALID_SECTION_TYPES` constant. Both `add-section` and `add-page` operations now sanitize unknown types → 'rich-text'
+- Fix 4 (sections.tsx): Added `SectionErrorBoundary` class component wrapping each section render. Catches malformed content crashes (e.g. image-gallery with non-array images). Shows graceful error message instead of crashing the page.
+- Fixed duplicate `useState` import in sections.tsx that caused 500 error
+
+Testing:
+- User's exact prompt (hero + text + core values): No crash, 3 valid sections added ✅
+- "Add team section, mission banner, partnership logos" (all invented types): No crash ✅
+- Deliberate invented types via add-page: No crash, sanitized ✅
+- Image gallery with malformed content: Caught by SectionErrorBoundary, no page crash ✅
+
+Stage Summary:
+- Four layers of defense: prompt constraint → data sanitization → icon fallback → error boundary
+- No user input can crash the editor regardless of phrasing

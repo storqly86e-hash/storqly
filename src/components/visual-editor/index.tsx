@@ -277,8 +277,8 @@ function SortableSectionItem({
     transition,
   };
 
-  const Icon = SECTION_TYPE_ICONS[section.type];
-  const label = SECTION_TYPE_LABELS[section.type];
+  const Icon = SECTION_TYPE_ICONS[section.type] || FileText;
+  const label = SECTION_TYPE_LABELS[section.type] || section.type.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
 
   return (
     <div
@@ -593,8 +593,8 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
     setStore(updatedStore);
   }, [store, section.id, setStore]);
 
-  const Icon = SECTION_TYPE_ICONS[section.type];
-  const typeLabel = SECTION_TYPE_LABELS[section.type];
+  const Icon = SECTION_TYPE_ICONS[section.type] || FileText;
+  const typeLabel = SECTION_TYPE_LABELS[section.type] || section.type.replace(/-/g, ' ').replace(/^\w/, c => c.toUpperCase());
 
   const renderSelect = (
     lbl: string,
@@ -1044,7 +1044,7 @@ export function VisualEditor() {
       const newSection = createDefaultSection(type);
       addSection(pageId, newSection);
       setSelectedSectionId(newSection.id);
-      toast.success(`Added ${SECTION_TYPE_LABELS[type]} section`);
+      toast.success(`Added ${SECTION_TYPE_LABELS[type] || type} section`);
     },
     [pageId, addSection, setSelectedSectionId]
   );
@@ -1077,7 +1077,7 @@ export function VisualEditor() {
         setSelectedSectionId(null);
       }
       if (section) {
-        toast.success(`Deleted ${SECTION_TYPE_LABELS[section.type]} section`);
+        toast.success(`Deleted ${SECTION_TYPE_LABELS[section.type] || section.type} section`);
       }
     },
     [pageId, sections, selectedSectionId, removeSection, setSelectedSectionId]
