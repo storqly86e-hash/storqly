@@ -889,3 +889,24 @@ Stage Summary:
 - New schema fields are backward-compatible (all optional with normalizer fallbacks)
 - No constraints violated: no auth/soft-cap/stripNoOps changes, no heavy animations
 - AI prompt updated to populate badge + secondaryCta on new store generations
+---
+Task ID: 3B
+Agent: Main Agent
+Task: Phase 3B Design Upgrade — Announcement Bar, Hero Backgrounds, Image Enrichment, Overlay Refinement, Rich Footer, Brand Statement, Announcement Text
+
+Work Log:
+- ITEM 1: Added announcement bar to AutoHeader in store-renderer/index.tsx — renders before <header> as a slim bar with theme.colors.primary background. Added announcementText normalization to normalize-store.ts (preserves if present, uses str()).
+- ITEM 2: Updated generate prompt in route.ts — added HERO STYLE instruction for backgroundImage + overlay on hero section. Added generation rule requiring hero section to include style.backgroundImage and style.overlay:true.
+- ITEM 3: Extended enrich-images API to accept optional sectionBackgrounds array. Enriches section background images using fetchImage from unsplash.ts (exported it). Updated triggerBackgroundImageEnrichment in page.tsx to scan homepage sections for unsplash.com/photo- URLs and include them in enrichment request. Response updates section style.backgroundImage values in Zustand store.
+- ITEM 4: Replaced flat bg-black/50 overlay in HeroSection with gradient overlay (linear-gradient from 0.15 to 0.55 opacity). Added text-shadow to h1 (0 2px 12px) and p/subheadline (0 1px 8px) when backgroundImage is present.
+- ITEM 5: Replaced AutoFooter with rich 4-column responsive grid footer: Brand column (name + description + social icons), Quick Links (Home + Shop derived from pages), Support (FAQ/Shipping/Returns/Contact), Powered By. Exported SocialIcon from sections.tsx and imported in index.tsx.
+- ITEM 6: Added BrandStatementContent interface to store-schema.ts. Added 'brand-statement' to SectionType union. Added to VALID_SECTION_TYPES in normalize-store.ts with normalization case. Added to SECTION_TYPE_ICONS (Type), SECTION_TYPE_LABELS, ADDABLE_SECTION_TYPES, and getDefaultContent in section-meta.ts. Created BrandStatementSection component in sections.tsx (full-bleed background, gradient overlay, text-shadows, alignment support). Added case in renderSection switch. Added to chat system prompt.
+- ITEM 7: Added announcementText to generate prompt SCHEMA and added generation rule.
+- Exported fetchImage from unsplash.ts (was private function).
+
+Stage Summary:
+- Lint passes with 0 errors, 0 warnings
+- 7 files modified: store-renderer/index.tsx, store-renderer/sections.tsx, store-schema.ts, normalize-store.ts, section-meta.ts, enrich-images/route.ts, page.tsx, generate/route.ts, chat/route.ts
+- Normalizer never throws (all changes use existing str/enumVal helpers)
+- No auth, soft-cap, stripNoOps, or chat safety rules were modified
+- No 3D/WebGL/heavy animation added

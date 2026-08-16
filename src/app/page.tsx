@@ -113,9 +113,24 @@ function triggerBackgroundImageEnrichment(store: Store) {
     p.images.length > 0 && p.images[0].includes('unsplash.com/photo-')
   )
 
-  if (needsEnrichment.length === 0) return
+  // Scan homepage sections for backgroundImage URLs that need enrichment
+  const homepage = store.pages.find(p => p.isHomepage)
+  const sectionBackgrounds: { sectionId: string; query: string; currentUrl: string }[] = []
+  if (homepage) {
+    for (const section of homepage.sections) {
+      const bgUrl = section.style?.backgroundImage
+      if (bgUrl && bgUrl.includes('unsplash.com/photo-')) {
+        // Build a query from the section type and store name
+        const query = `${store.name} ${section.type} lifestyle setting photo`
+        sectionBackgrounds.push({ sectionId: section.id, query, currentUrl: bgUrl })
+      }
+    }
+  }
 
-  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products need enrichment`)
+  // Skip if nothing needs enrichment
+  if (needsEnrichment.length === 0 && sectionBackgrounds.length === 0) return
+
+  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products, ${sectionBackgrounds.length} section backgrounds`)
 
   fetch('/api/store/enrich-images', {
     method: 'POST',
@@ -129,27 +144,50 @@ function triggerBackgroundImageEnrichment(store: Store) {
         description: p.description,
       })),
       storeName: store.name,
+      sectionBackgrounds: sectionBackgrounds.length > 0 ? sectionBackgrounds : undefined,
     }),
   })
     .then(res => res.json())
     .then(data => {
-      if (data.enriched > 0) {
+      // Update product images in the store via the Zustand store
+      const hasProductEnrichment = data.enriched > 0
+      const hasSectionEnrichment = data.sectionBackgrounds && data.sectionBackgrounds.length > 0
+
+      if (hasProductEnrichment || hasSectionEnrichment) {
         console.log(`[Storqly] Background enrichment complete: ${data.enriched} enriched, ${data.kept} kept, ${data.failed} failed in ${data.latencyMs}ms`)
-        // Update product images in the store via the Zustand store
-        // The enrich-images endpoint mutated the products array in-place,
-        // but we need to update the Zustand store to trigger re-renders.
         // Dynamic import to avoid circular dependency
         import('@/lib/store').then(({ useStoreEditor }) => {
           const currentStore = useStoreEditor.getState().store
           if (currentStore) {
-            const updatedProducts = currentStore.products.map(prod => {
-              const enriched = data.products?.find((ep: { id: string; images: string[] }) => ep.id === prod.id)
-              if (enriched && enriched.images[0] !== prod.images[0]) {
-                return { ...prod, images: enriched.images }
-              }
-              return prod
-            })
-            useStoreEditor.getState().setStore({ ...currentStore, products: updatedProducts })
+            // Update product images
+            let updatedProducts = currentStore.products
+            if (hasProductEnrichment) {
+              updatedProducts = currentStore.products.map(prod => {
+                const enriched = data.products?.find((ep: { id: string; images: string[] }) => ep.id === prod.id)
+                if (enriched && enriched.images[0] !== prod.images[0]) {
+                  return { ...prod, images: enriched.images }
+                }
+                return prod
+              })
+            }
+
+            // Update section background images
+            let updatedPages = currentStore.pages
+            if (hasSectionEnrichment) {
+              const bgMap = new Map(data.sectionBackgrounds.map((sb: { sectionId: string; url: string }) => [sb.sectionId, sb.url]))
+              updatedPages = currentStore.pages.map(page => ({
+                ...page,
+                sections: page.sections.map(section => {
+                  const newBg = bgMap.get(section.id)
+                  if (newBg && section.style?.backgroundImage !== newBg) {
+                    return { ...section, style: { ...section.style, backgroundImage: newBg } }
+                  }
+                  return section
+                }),
+              }))
+            }
+
+            useStoreEditor.getState().setStore({ ...currentStore, products: updatedProducts, pages: updatedPages })
           }
         })
       }

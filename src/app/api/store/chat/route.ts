@@ -71,6 +71,7 @@ function buildChatSystemPrompt(store: Store): string {
     '- "faq": Accordion Q&A. Use for: frequently asked questions, common inquiries.\n' +
     '- "cta": Call-to-action banner. Use for: conversion prompts, special offers, signup pushes.\n' +
     '- "categories": Product category grid. Use for: category browsing, product organization.\n' +
+    '- "brand-statement": Full-width brand statement with large headline and body text on a background image. Use for: mission statements, brand values, taglines, philosophy.\n' +
     '- "newsletter": Email signup. Use for: email capture, subscription forms.\n' +
     '- "spacer": Empty vertical space. Use for: visual breathing room between sections.\n' +
     '- "divider": Horizontal line separator. Use for: visual separation between content areas.\n' +

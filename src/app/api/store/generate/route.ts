@@ -45,9 +45,10 @@ FORMAT RULES:
 4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
 
 SCHEMA (compact):
-{"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
+{"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","announcementText":"<short promo like Free shipping on orders over $50 or New drops every Friday>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
 
 SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}
+HERO STYLE: For the hero section ONLY, add "backgroundImage":"https://images.unsplash.com/photo-<lifestyle-id>?w=1400","overlay":true to style. Use a real Unsplash photo ID that matches the store theme (lifestyle/setting photo, NOT a product photo).
 
 SECTION CONTENTS (use ONLY these 4):
 - hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>"}
@@ -63,7 +64,9 @@ GENERATION RULES:
 - MAX 4 sections per page, ONLY these types in this order: hero, featured-products, testimonials (1 item only), newsletter.
 - NO header, footer, cta, faq, gallery, categories, or any other section types.
 - NO variants field on products.
-- Theme colors must match the brand.`;
+- Theme colors must match the brand.
+- The hero section must include style.backgroundImage (a lifestyle/setting photo URL from Unsplash) and style.overlay:true.
+- Include a relevant announcementText (short promo, shipping offer, or tagline).`;
 }
 
 // ─── Phase 2 System Prompt (products only) ────────────────────────

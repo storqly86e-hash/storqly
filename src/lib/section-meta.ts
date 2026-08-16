@@ -41,6 +41,7 @@ export const SECTION_TYPE_ICONS: Record<SectionType, LucideIcon> = {
   faq: HelpCircle,
   cta: MousePointerClick,
   categories: FolderOpen,
+  'brand-statement': Type,
   spacer: Minus,
   divider: Minus,
   'rich-text': FileText,
@@ -59,6 +60,7 @@ export const SECTION_TYPE_LABELS: Record<SectionType, string> = {
   faq: 'FAQ',
   cta: 'CTA',
   categories: 'Categories',
+  'brand-statement': 'Brand Statement',
   spacer: 'Spacer',
   divider: 'Divider',
   'rich-text': 'Rich Text',
@@ -77,6 +79,7 @@ export const ADDABLE_SECTION_TYPES: SectionType[] = [
   'faq',
   'cta',
   'categories',
+  'brand-statement',
   'spacer',
   'divider',
   'rich-text',
@@ -163,6 +166,12 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
         headline: 'Shop by Category',
         items: [],
         columns: 4,
+      };
+    case 'brand-statement':
+      return {
+        headline: 'Our Promise',
+        body: 'Quality craftsmanship in every detail.',
+        alignment: 'center',
       };
     case 'spacer':
       return { height: 'md' };

@@ -20,7 +20,7 @@ import { defaultTheme } from './store-schema';
 
 const VALID_SECTION_TYPES = new Set<string>([
   'hero', 'featured-products', 'product-grid', 'text-banner', 'image-gallery',
-  'testimonials', 'newsletter', 'faq', 'cta', 'categories', 'header',
+  'testimonials', 'newsletter', 'faq', 'cta', 'categories', 'brand-statement', 'header',
   'footer', 'rich-text', 'spacer', 'divider',
 ]);
 
@@ -354,6 +354,14 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
     }
     case 'divider': {
       return {};
+    }
+    case 'brand-statement': {
+      return {
+        headline: str(c.headline, 'Our Promise'),
+        body: c.body !== undefined ? str(c.body, '') : undefined,
+        backgroundImage: c.backgroundImage !== undefined ? str(c.backgroundImage, '') : undefined,
+        alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
+      };
     }
     default: {
       // Unknown section type — return generic content that won't crash the renderer
@@ -748,6 +756,7 @@ export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: numb
     name: storeName.substring(0, 100),
     slug: slugify(storeName),
     description: r.description !== undefined ? oneLine(str(r.description, '')) : undefined,
+    announcementText: r.announcementText !== undefined ? str(r.announcementText, '') : undefined,
     theme: r.theme ? normalizeTheme(r.theme, log) : defaultTheme,
     pages: Array.isArray(r.pages)
       ? r.pages.map((p: unknown) => normalizePage(p, log))

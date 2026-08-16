@@ -149,7 +149,7 @@ function buildSearchQuery(
  * Returns the image URL or null on failure.
  * Includes rate-limit guard (minimum 2s between calls).
  */
-async function fetchImage(query: string): Promise<string | null> {
+export async function fetchImage(query: string): Promise<string | null> {
   // Check cache first
   const cached = imageCache.get(query);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {

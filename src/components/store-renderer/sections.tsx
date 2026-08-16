@@ -37,6 +37,7 @@ import type {
   FAQContent,
   CTAContent,
   CategoriesContent,
+  BrandStatementContent,
   RichTextContent,
   HeaderContent,
   FooterContent,
@@ -422,7 +423,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     >
       {/* Image background overlay */}
       {style.backgroundImage && style.overlay && (
-        <div className="absolute inset-0 bg-black/50 pointer-events-none" />
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)' }} />
       )}
       {/* Subtle gradient overlay for depth */}
       {bgGradient && (
@@ -452,13 +453,16 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
           <h1
             className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl"
-            style={headlineColor ? { color: headlineColor } : undefined}
+            style={{ textShadow: style.backgroundImage ? '0 2px 12px rgba(0,0,0,0.3)' : undefined, ...(headlineColor ? { color: headlineColor } : {}) }}
           >
             {content.headline}
           </h1>
 
           {content.subheadline && (
-            <p className={`mt-4 text-base opacity-80 sm:text-lg md:text-xl ${isSplit ? 'max-w-xl' : 'max-w-2xl'} mx-${isSplit ? '0' : 'auto'}`}>
+            <p
+              className={`mt-4 text-base opacity-80 sm:text-lg md:text-xl ${isSplit ? 'max-w-xl' : 'max-w-2xl'} mx-${isSplit ? '0' : 'auto'}`}
+              style={{ textShadow: style.backgroundImage ? '0 1px 8px rgba(0,0,0,0.2)' : undefined }}
+            >
               {content.subheadline}
             </p>
           )}
@@ -952,7 +956,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
 // Phase 3A: platform-specific social icons, clickable links, logo, contact info, visual polish
 
 /** Platform-specific SVG social icons. Returns null for unknown platforms. */
-function SocialIcon({ platform, className }: { platform: string; className?: string }) {
+export function SocialIcon({ platform, className }: { platform: string; className?: string }) {
   const cls = className || 'h-4 w-4';
   const p = platform.toLowerCase().trim();
   switch (p) {
@@ -1152,7 +1156,70 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
   );
 }
 
-// ─── 13. Rich Text ──────────────────────────────────────────────────────
+// ─── 13. Brand Statement ───────────────────────────────────────────────
+
+export function BrandStatementSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+  const content = section.content as unknown as BrandStatementContent;
+  const style = section.style;
+  const isSelected = selectedSectionId === section.id;
+
+  const alignMap = {
+    left: 'items-start text-left',
+    center: 'items-center text-center',
+    right: 'items-end text-right',
+  };
+
+  const hasBgImage = !!style.backgroundImage;
+  const textColor = style.textColor || (hasBgImage ? '#ffffff' : theme.colors.text);
+
+  return (
+    <div
+      className={`relative flex min-h-[280px] items-center overflow-hidden transition-all duration-200 cursor-pointer py-16 ${alignMap[content.alignment || 'center']}`}
+      style={{
+        backgroundColor: style.backgroundColor || (hasBgImage ? theme.colors.primary : undefined),
+        backgroundImage: hasBgImage ? `url(${style.backgroundImage})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        color: textColor,
+      }}
+      onClick={(e) => { e.stopPropagation(); onSelectSection?.(isSelected ? null : section.id); }}
+      data-section-id={section.id}
+      data-section-type={section.type}
+    >
+      {/* Gradient overlay for background images */}
+      {hasBgImage && style.overlay && (
+        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)' }} />
+      )}
+      {!hasBgImage && (
+        <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
+      )}
+
+      <div className={`relative z-10 mx-auto w-full ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}>
+        <h2
+          className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl"
+          style={{ textShadow: hasBgImage ? '0 2px 12px rgba(0,0,0,0.3)' : undefined, ...(style.headlineColor ? { color: style.headlineColor } : {}) }}
+        >
+          {content.headline}
+        </h2>
+        {content.body && (
+          <p
+            className="mt-4 max-w-2xl text-lg leading-relaxed opacity-80 sm:text-xl"
+            style={{ textShadow: hasBgImage ? '0 1px 8px rgba(0,0,0,0.2)' : undefined, ...(content.alignment === 'center' ? { marginLeft: 'auto', marginRight: 'auto' } : {}) }}
+          >
+            {content.body}
+          </p>
+        )}
+      </div>
+
+      {/* Selection ring */}
+      {isSelected && (
+        <div className="absolute inset-0 ring-2 ring-[#a855f7] ring-offset-2 pointer-events-none" />
+      )}
+    </div>
+  );
+}
+
+// ─── 14. Rich Text ──────────────────────────────────────────────────────
 
 export function RichTextSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
   const content = section.content as unknown as RichTextContent;
@@ -1268,6 +1335,8 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
       element = <CTASection {...props} />; break;
     case 'categories':
       element = <CategoriesSection {...props} />; break;
+    case 'brand-statement':
+      element = <BrandStatementSection {...props} />; break;
     case 'footer':
       element = <FooterSection {...props} />; break;
     case 'rich-text':

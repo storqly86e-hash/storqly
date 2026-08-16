@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, Fragment, useCallback } from 'react';
 import type { Store, Section, PageType, StorePage, SectionType } from '@/lib/store-schema';
-import { renderSection } from './sections';
+import { renderSection, SocialIcon } from './sections';
 import {
   CollectionPage,
   ProductDetailPage,
@@ -71,13 +71,25 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
   const homePageId = store.pages.find((p) => p.isHomepage)?.id;
 
   return (
-    <header
-      className="sticky top-0 z-40 border-b"
-      style={{
-        backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.border,
-      }}
-    >
+    <>
+      {store.announcementText && (
+        <div
+          className="w-full py-2 text-center text-xs font-medium"
+          style={{
+            backgroundColor: theme.colors.primary,
+            color: '#ffffff',
+          }}
+        >
+          {store.announcementText}
+        </div>
+      )}
+      <header
+        className="sticky top-0 z-40 border-b"
+        style={{
+          backgroundColor: theme.colors.surface,
+          borderColor: theme.colors.border,
+        }}
+      >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
         <span
           className="cursor-pointer text-lg font-bold tracking-tight transition-opacity hover:opacity-70"
@@ -138,71 +150,109 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
           </button>
         </div>
       </div>
-    </header>
+      </header>
+    </>
   );
 }
 
 // ─── Auto-generated footer when none exists ────────────────────────────
-// Phase 3A: Richer fallback footer with brand presence
+// Phase 3B: Rich footer with brand, quick links, support, social icons
 
 function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
   const year = new Date().getFullYear();
-  const productCount = store.products.length;
-  const pageNames = store.pages
-    .filter(p => !p.isHomepage && p.type !== 'product' && p.type !== 'cart' && p.type !== 'checkout')
-    .map(p => p.name);
+  const textMuted = theme.colors.textMuted;
+  const textPrimary = theme.colors.text;
+  const primary = theme.colors.primary;
+  const border = theme.colors.border;
+
+  // Derive quick links from store pages
+  const homePage = store.pages.find(p => p.isHomepage);
+  const shopPage = store.pages.find(p => p.type === 'collection');
+  const quickLinks = [
+    { label: 'Home', href: homePage ? `#${homePage.slug || ''}` : '#' },
+    ...(shopPage ? [{ label: 'Shop', href: `#${shopPage.slug}` }] : []),
+  ];
+
+  const supportLinks = [
+    { label: 'FAQ', href: '#' },
+    { label: 'Shipping', href: '#' },
+    { label: 'Returns', href: '#' },
+    { label: 'Contact', href: '#' },
+  ];
 
   return (
     <footer
       className="border-t mt-auto"
       style={{
         backgroundColor: theme.colors.surface,
-        borderColor: theme.colors.border,
+        borderColor: border,
       }}
     >
       <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="grid gap-8 sm:grid-cols-3">
+        <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand column */}
-          <div className="sm:col-span-1">
-            <span className="text-sm font-bold" style={{ color: theme.colors.text }}>
+          <div>
+            <span className="text-lg font-bold" style={{ color: textPrimary }}>
               {store.name}
             </span>
             {store.description && (
-              <p className="mt-1.5 text-xs leading-relaxed" style={{ color: theme.colors.textMuted }}>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: textMuted }}>
                 {store.description}
               </p>
             )}
-            {productCount > 0 && (
-              <p className="mt-2 text-xs" style={{ color: theme.colors.textMuted }}>
-                {productCount} {productCount === 1 ? 'product' : 'products'} available
-              </p>
-            )}
+            {/* Social icons row */}
+            <div className="mt-4 flex gap-2.5">
+              {['instagram', 'twitter', 'facebook'].map((platform) => (
+                <span
+                  key={platform}
+                  className="flex h-9 w-9 items-center justify-center rounded-full transition-all hover:scale-110 cursor-pointer"
+                  style={{ backgroundColor: primary + '12', color: primary }}
+                  title={platform.charAt(0).toUpperCase() + platform.slice(1)}
+                >
+                  <SocialIcon platform={platform} className="h-4 w-4" />
+                </span>
+              ))}
+            </div>
           </div>
 
-          {/* Navigation column */}
-          {pageNames.length > 0 && (
-            <div>
-              <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
-                Pages
-              </h4>
-              <ul className="space-y-1.5">
-                {pageNames.map(name => (
-                  <li key={name}>
-                    <span className="text-xs transition-colors hover:opacity-70" style={{ color: theme.colors.textMuted }}>
-                      {name}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Built with column */}
+          {/* Quick Links column */}
           <div>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+            <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
+              Quick Links
+            </h4>
+            <ul className="space-y-2.5">
+              {quickLinks.map(link => (
+                <li key={link.label}>
+                  <span className="text-sm transition-colors hover:opacity-70 cursor-pointer" style={{ color: textMuted }}>
+                    {link.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Support column */}
+          <div>
+            <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
+              Support
+            </h4>
+            <ul className="space-y-2.5">
+              {supportLinks.map(link => (
+                <li key={link.label}>
+                  <span className="text-sm transition-colors hover:opacity-70 cursor-pointer" style={{ color: textMuted }}>
+                    {link.label}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Powered by column */}
+          <div>
+            <h4 className="mb-4 text-xs font-semibold uppercase tracking-wider" style={{ color: textMuted }}>
               Powered By
             </h4>
-            <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+            <p className="text-sm" style={{ color: textMuted }}>
               Built with Storqly AI
             </p>
           </div>
@@ -211,9 +261,9 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
         {/* Bottom bar */}
         <div
           className="mt-8 flex flex-col items-center justify-between gap-2 border-t pt-6 sm:flex-row"
-          style={{ borderColor: theme.colors.border }}
+          style={{ borderColor: border }}
         >
-          <p className="text-xs" style={{ color: theme.colors.textMuted }}>
+          <p className="text-xs" style={{ color: textMuted }}>
             &copy; {year} {store.name}. All rights reserved.
           </p>
           <p className="text-[10px] font-mono opacity-30">{BUILD_ID}</p>

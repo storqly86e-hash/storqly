@@ -55,6 +55,7 @@ export type SectionType =
   | 'faq'
   | 'cta'
   | 'categories'
+  | 'brand-statement'
   | 'header'
   | 'footer'
   | 'rich-text'
@@ -180,6 +181,13 @@ export interface CategoriesContent {
   columns: 2 | 3 | 4;
 }
 
+export interface BrandStatementContent {
+  headline: string;
+  body?: string;
+  backgroundImage?: string;
+  alignment: 'left' | 'center' | 'right';
+}
+
 export interface RichTextContent {
   html: string;
 }
@@ -240,6 +248,7 @@ export interface Store {
   name: string;
   slug: string;
   description?: string;
+  announcementText?: string;
   theme: StoreTheme;
   pages: StorePage[];
   products: StoreProduct[];

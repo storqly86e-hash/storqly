@@ -1,0 +1,707 @@
+   186→function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnType<typeof createLogger>): Record<string, unknown> {
+   187→  const c = obj(raw, {} as Record<string, unknown>);
+   188→
+   189→  switch (type) {
+   190→    case 'hero': {
+   191→      // Phase 3A: added VALID_HERO_LAYOUT
+   192→      return {
+   193→        headline: str(c.headline, 'Welcome'),
+   194→        subheadline: c.subheadline !== undefined ? str(c.subheadline, '') : undefined,
+   195→        ctaText: str(c.ctaText, 'Shop Now'),
+   196→        ctaLink: c.ctaLink !== undefined ? str(c.ctaLink, '#') : undefined,
+   197→        backgroundImage: c.backgroundImage !== undefined ? str(c.backgroundImage, '') : undefined,
+   198→        alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
+   199→        height: enumVal(c.height, VALID_HEIGHT, 'lg'),
+   200→        badge: c.badge !== undefined ? str(c.badge, '') : undefined,
+   201→        layout: c.layout !== undefined ? enumVal(c.layout, VALID_HERO_LAYOUT, 'centered') : undefined,
+   202→        heroImage: c.heroImage !== undefined ? str(c.heroImage, '') : undefined,
+   203→        secondaryCtaText: c.secondaryCtaText !== undefined ? str(c.secondaryCtaText, '') : undefined,
+   204→        secondaryCtaLink: c.secondaryCtaLink !== undefined ? str(c.secondaryCtaLink, '#') : undefined,
+   205→      };
+   206→    }
+   207→    case 'featured-products': {
+   208→      return {
+   209→        headline: str(c.headline, 'Featured Products'),
+   210→        subtitle: c.subtitle !== undefined ? str(c.subtitle, '') : undefined,
+   211→        productIds: arr<string>(c.productIds, []),
+   212→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   213→        showPrice: bool(c.showPrice, true),
+   214→        showAddToCart: bool(c.showAddToCart, true),
+   215→      };
+   216→    }
+   217→    case 'product-grid': {
+   218→      return {
+   219→        headline: c.headline !== undefined ? str(c.headline, 'All Products') : undefined,
+   220→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   221→        filterByCategory: c.filterByCategory !== undefined ? str(c.filterByCategory, '') : undefined,
+   222→        showPrice: bool(c.showPrice, true),
+   223→        showAddToCart: bool(c.showAddToCart, true),
+   224→      };
+   225→    }
+   226→    case 'text-banner': {
+   227→      return {
+   228→        headline: str(c.headline, 'Text Banner'),
+   229→        body: c.body !== undefined ? str(c.body, '') : undefined,
+   230→        alignment: enumVal(c.alignment, VALID_ALIGNMENT, 'center'),
+   231→        size: enumVal(c.size, VALID_SIZE, 'md'),
+   232→      };
+   233→    }
+   234→    case 'image-gallery': {
+   235→      const images = arr<Record<string, unknown>>(c.images, []);
+   236→      return {
+   237→        images: images.slice(0, 12).map((img) => ({
+   238→          src: str(img.src, 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'),
+   239→          alt: str(img.alt, ''),
+   240→          caption: img.caption !== undefined ? str(img.caption, '') : undefined,
+   241→        })),
+   242→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   243→        gap: enumVal(c.gap, VALID_GAP, 'md'),
+   244→      };
+   245→    }
+   246→    case 'testimonials': {
+   247→      const items = arr<Record<string, unknown>>(c.items, []);
+   248→      return {
+   249→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   250→        items: items.slice(0, 6).map((item) => ({
+   251→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   252→          quote: str(item.quote, 'Great product!'),
+   253→          author: str(item.author, 'Customer'),
+   254→          role: item.role !== undefined ? str(item.role, '') : undefined,
+   255→          avatar: item.avatar !== undefined ? str(item.avatar, '') : undefined,
+   256→          rating: num(item.rating, 5, 1, 5),
+   257→        })),
+   258→      };
+   259→    }
+   260→    case 'newsletter': {
+   261→      return {
+   262→        headline: str(c.headline, 'Stay Updated'),
+   263→        subtitle: c.subtitle !== undefined ? str(c.subtitle, '') : undefined,
+   264→        placeholderText: c.placeholderText !== undefined ? str(c.placeholderText, 'Enter your email') : undefined,
+   265→        buttonText: str(c.buttonText, 'Subscribe'),
+   266→      };
+   267→    }
+   268→    case 'faq': {
+   269→      const items = arr<Record<string, unknown>>(c.items, []);
+   270→      return {
+   271→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   272→        items: items.slice(0, 8).map((item) => ({
+   273→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   274→          question: str(item.question, 'Common question?'),
+   275→          answer: str(item.answer, 'Common answer.'),
+   276→        })),
+   277→      };
+   278→    }
+   279→    case 'cta': {
+   280→      return {
+   281→        headline: str(c.headline, 'Take Action'),
+   282→        body: c.body !== undefined ? str(c.body, '') : undefined,
+   283→        ctaText: str(c.ctaText, 'Learn More'),
+   284→        ctaLink: c.ctaLink !== undefined ? str(c.ctaLink, '#') : undefined,
+   285→        style: enumVal(c.style, VALID_CTA_STYLE, 'solid'),
+   286→      };
+   287→    }
+   288→    case 'categories': {
+   289→      const items = arr<Record<string, unknown>>(c.items, []);
+   290→      return {
+   291→        headline: c.headline !== undefined ? str(c.headline, '') : undefined,
+   292→        items: items.slice(0, 8).map((item) => ({
+   293→          id: isUUID(str(item.id, '')) ? str(item.id, '') : uuid(),
+   294→          name: str(item.name, 'Category'),
+   295→          image: item.image !== undefined ? str(item.image, '') : undefined,
+   296→          productCount: num(item.productCount, 5, 0),
+   297→          slug: str(item.slug, 'category'),
+   298→        })),
+   299→        columns: VALID_COLUMNS.has(num(c.columns, 3)) ? num(c.columns, 3) : 3,
+   300→      };
+   301→    }
+   302→    case 'header': {
+   303→      const menuItems = arr<Record<string, unknown>>(c.menuItems, []);
+   304→      return {
+   305→        logo: c.logo !== undefined ? str(c.logo, '') : undefined,
+   306→        storeName: str(c.storeName, 'My Store'),
+   307→        showSearch: bool(c.showSearch, true),
+   308→        showCart: bool(c.showCart, true),
+   309→        menuItems: menuItems.slice(0, 8).map((mi) => ({
+   310→          label: str(mi.label, 'Link'),
+   311→          link: str(mi.link, '#'),
+   312→        })),
+   313→      };
+   314→    }
+   315→    case 'footer': {
+   316→      const columns = arr<Record<string, unknown>>(c.columns, []);
+   317→      const socialLinks = arr<Record<string, unknown>>(c.socialLinks, []);
+   318→      const contactRaw = obj(c.contactInfo, {} as Record<string, unknown>);
+   319→      const contactInfo = {
+   320→        email: contactRaw.email !== undefined ? str(contactRaw.email, '') : undefined,
+   321→        phone: contactRaw.phone !== undefined ? str(contactRaw.phone, '') : undefined,
+   322→        address: contactRaw.address !== undefined ? str(contactRaw.address, '') : undefined,
+   323→      };
+   324→      // Strip empty contactInfo
+   325→      const hasContact = contactInfo.email || contactInfo.phone || contactInfo.address;
+   326→      return {
+   327→        storeName: str(c.storeName, 'My Store'),
+   328→        tagline: c.tagline !== undefined ? str(c.tagline, '') : undefined,
+   329→        logo: c.logo !== undefined ? str(c.logo, '') : undefined,
+   330→        columns: columns.slice(0, 4).map((col) => ({
+   331→          title: str(col.title, 'Links'),
+   332→          links: arr<Record<string, unknown>>(col.links, []).slice(0, 6).map((link) => ({
+   333→            label: str(link.label, 'Link'),
+   334→            link: str(link.link, '#'),
+   335→          })),
+   336→        })),
+   337→        socialLinks: socialLinks.slice(0, 6).map((sl) => ({
+   338→          platform: str(sl.platform, 'twitter'),
+   339→          url: str(sl.url, '#'),
+   340→        })),
+   341→        contactInfo: hasContact ? contactInfo : undefined,
+   342→        copyrightText: c.copyrightText !== undefined ? str(c.copyrightText, '') : undefined,
+   343→      };
+   344→    }
+   345→    case 'rich-text': {
+   346→      return {
+   347→        html: str(c.html, '<p>Content coming soon.</p>'),
+   348→      };
+   349→    }
+   350→    case 'spacer': {
+   351→      return {
+   352→        height: enumVal(c.height, VALID_HEIGHT, 'md'),
+   353→      };
+   354→    }
+   355→    case 'divider': {
+   356→      return {};
+   357→    }
+   358→    default: {
+   359→      // Unknown section type — return generic content that won't crash the renderer
+   360→      log.log({ field: `section.type`, action: 'invalid', from: type, to: 'text-banner' });
+   361→      return { headline: 'Section', alignment: 'center', size: 'md' };
+   362→    }
+   363→  }
+   364→}
+   365→
+   366→// ─── Section normalization ────────────────────────────────────────
+   367→
+   368→function normalizeSection(raw: unknown, log: ReturnType<typeof createLogger>): Section {
+   369→  const s = obj(raw, {} as Record<string, unknown>);
+   370→
+   371→  // Validate and normalize type
+   372→  let type = str(s.type, 'text-banner').toLowerCase().trim() as SectionType;
+   373→  if (!VALID_SECTION_TYPES.has(type)) {
+   374→    log.log({ field: 'section.type', action: 'invalid', from: s.type, to: 'text-banner' });
+   375→    type = 'text-banner';
+   376→  }
+   377→
+   378→  return {
+   379→    id: isUUID(str(s.id, '')) ? str(s.id, '') : uuid(),
+   380→    type,
+   381→    content: normalizeSectionContent(type, s.content, log),
+   382→    style: normalizeSectionStyle(s.style, log),
+   383→    visible: bool(s.visible, true),
+   384→  };
+   385→}
+   386→
+   387→// ─── Product normalization ────────────────────────────────────────
+   388→
+   389→function normalizeProduct(raw: unknown, log: ReturnType<typeof createLogger>): StoreProduct {
+   390→  const p = obj(raw, {} as Record<string, unknown>);
+   391→
+   392→  const name = oneLine(str(p.name, 'Product'));
+   393→  const price = num(p.price, 29.99, 0.01, 999999);
+   394→  const images = arr<string>(p.images, ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600']);
+   395→
+   396→  // Normalize variants
+   397→  const rawVariants = arr<Record<string, unknown>>(p.variants, []);
+   398→  const variants = rawVariants.slice(0, 5).map((v) => ({
+   399→    id: isUUID(str(v.id, '')) ? str(v.id, '') : uuid(),
+   400→    name: str(v.name, 'Size'),
+   401→    options: arr<Record<string, unknown>>(v.options, [{ label: 'M', value: 'm' }]).slice(0, 6).map((opt) => ({
+   402→      label: str(opt.label, 'Option'),
+   403→      value: str(opt.value, 'option'),
+   404→    })),
+   405→    price: v.price !== undefined ? num(v.price, undefined as unknown as number, 0) : undefined,
+   406→    inStock: bool(v.inStock, true),
+   407→  }));
+   408→
+   409→  return {
+   410→    id: isUUID(str(p.id, '')) ? str(p.id, '') : uuid(),
+   411→    name,
+   412→    price,
+   413→    compareAtPrice: p.compareAtPrice !== undefined && p.compareAtPrice !== null ? num(p.compareAtPrice, undefined as unknown as number, 0) : undefined,
+   414→    images: images.length > 0 ? images : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'],
+   415→    description: oneLine(str(p.description, '')),
+   416→    category: p.category !== undefined ? str(p.category, '') : undefined,
+   417→    variants: variants.length > 0 ? variants : undefined,
+   418→    featured: bool(p.featured, false),
+   419→    inStock: bool(p.inStock, true),
+   420→  };
+   421→}
+   422→
+   423→// ─── Page normalization ───────────────────────────────────────────
+   424→
+   425→/** Infer page type from slug/name if not explicitly set. */
+   426→function normalizePageType(
+   427→  rawType: unknown,
+   428→  slug: string,
+   429→  name: string,
+   430→  isHomepage: boolean,
+   431→  log: ReturnType<typeof createLogger>
+   432→): PageType {
+   433→  // Explicit type takes priority
+   434→  if (typeof rawType === 'string' && VALID_PAGE_TYPES.has(rawType)) {
+   435→    return rawType as PageType;
+   436→  }
+   437→  // Homepage is always 'home'
+   438→  if (isHomepage) return 'home';
+   439→  // Infer from slug
+   440→  const slugLower = slug.toLowerCase();
+   441→  if (slugLower === 'shop' || slugLower === 'products' || slugLower === 'collection') return 'collection';
+   442→  if (slugLower === 'cart') return 'cart';
+   443→  if (slugLower === 'checkout') return 'checkout';
+   444→  // Infer from name
+   445→  const nameLower = name.toLowerCase();
+   446→  if (nameLower.includes('shop') || nameLower.includes('collection') || nameLower.includes('catalog')) return 'collection';
+   447→  if (nameLower.includes('cart')) return 'cart';
+   448→  if (nameLower.includes('checkout')) return 'checkout';
+   449→  // Default
+   450→  if (rawType !== undefined) {
+   451→    log.log({ field: 'page.type', action: 'coerced', from: String(rawType), to: 'home' });
+   452→  }
+   453→  return 'home';
+   454→}
+   455→
+   456→function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): StorePage {
+   457→  const p = obj(raw, {} as Record<string, unknown>);
+   458→  const isHomepage = bool(p.isHomepage, false);
+   459→  const slug = str(p.slug, '');
+   460→  const name = str(p.name, 'Home').substring(0, 100);
+   461→  const pageType = normalizePageType(p.type, slug, name, isHomepage, log);
+   462→
+   463→  return {
+   464→    id: isUUID(str(p.id, '')) ? str(p.id, '') : uuid(),
+   465→    name,
+   466→    slug,
+   467→    type: pageType,
+   468→    isHomepage,
+   469→    productId: p.productId && typeof p.productId === 'string' ? str(p.productId, '') : undefined,
+   470→    sections: arr<unknown>(p.sections, []).map((s) => normalizeSection(s, log)),
+   471→  };
+   472→}
+   473→
+   474→// ─── Cross-reference fixes ────────────────────────────────────────
+   475→
+   476→/** Hard-cap enforcement: truncate sections and products to safe output limits.
+   477→ *  This is the safety net if the AI ignores the system prompt caps.
+   478→ *  Layers of defense:
+   479→ *    1. System prompt language (strong AI guidance)
+   480→ *    2. THIS function: hard truncation (final safety net)
+   481→ *
+   482→ *  @param maxProducts - If provided, cap products to this number. If undefined, don't cap products.
+   483→ */
+   484→function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>, maxProducts?: number): void {
+   485→  const MAX_SECTIONS = 4;
+   486→
+   487→  // ── Cap products (only if maxProducts is specified) ──
+   488→  if (maxProducts !== undefined && store.products.length > maxProducts) {
+   489→    const before = store.products.length;
+   490→    store.products = store.products.slice(0, maxProducts);
+   491→    // Ensure at least 1 featured product after truncation
+   492→    if (!store.products.some((p) => p.featured) && store.products.length > 0) {
+   493→      store.products[0].featured = true;
+   494→    }
+   495→    log.log({
+   496→      field: 'products',
+   497→      action: 'coerced',
+   498→      from: `${before} products`,
+   499→      to: `${maxProducts} products (capped)`,
+   500→    });
+   501→  }
+   502→
+   503→  // ── Cap sections per page (only for 'home' type — template pages have 0 sections by design) ──
+   504→  for (const page of store.pages) {
+   505→    if (page.type && page.type !== 'home') continue; // Skip non-home pages
+   506→    if (page.sections.length > MAX_SECTIONS) {
+   507→      const before = page.sections.length;
+   508→      page.sections = page.sections.slice(0, MAX_SECTIONS);
+   509→      log.log({
+   510→        field: `pages[${page.name}].sections`,
+   511→        action: 'coerced',
+   512→        from: `${before} sections`,
+   513→        to: `${MAX_SECTIONS} sections (capped)`,
+   514→      });
+   515→    }
+   516→  }
+   517→}
+   518→
+   519→/** Fix productIds in featured-products sections to reference actual products */
+   520→function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>): void {
+   521→  const validProductIds = new Set(store.products.map((p) => p.id));
+   522→  const allProductIds = store.products.map((p) => p.id);
+   523→
+   524→  for (const page of store.pages) {
+   525→    for (const section of page.sections) {
+   526→      if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
+   527→        const before = section.content.productIds.length;
+   528→        // Keep only IDs that reference actual products
+   529→        const validIds = (section.content.productIds as string[]).filter((id) => validProductIds.has(id));
+   530→
+   531→        // Fill missing slots with other product IDs so all products are shown
+   532→        const usedIds = new Set(validIds);
+   533→        for (const pid of allProductIds) {
+   534→          if (validIds.length >= store.products.length) break;
+   535→          if (!usedIds.has(pid)) {
+   536→            validIds.push(pid);
+   537→            usedIds.add(pid);
+   538→          }
+   539→        }
+   540→
+   541→        if (validIds.length !== before) {
+   542→          const invalidCount = before - (validIds.length - (store.products.length - before > 0 ? store.products.length - before : 0));
+   543→          log.log({ field: 'featured-products.productIds', action: 'coerced', from: `${before} IDs (some invalid)`, to: `${validIds.length} valid IDs` });
+   544→        }
+   545→        section.content.productIds = validIds;
+   546→      }
+   547→    }
+   548→  }
+   549→}
+   550→
+   551→/** Strip junk pages: pages with type='home' that are NOT the homepage.
+   552→ *  These are AI-generated pages (e.g. "About Us", "Shipping Policy") with no sections
+   553→ *  that get classified as type='home' by default but are not the actual homepage. */
+   554→function stripJunkPages(store: Store, log: ReturnType<typeof createLogger>): void {
+   555→  const before = store.pages.length;
+   556→  store.pages = store.pages.filter(
+   557→    (p) => !(p.type === 'home' && !p.isHomepage)
+   558→  );
+   559→  const removed = before - store.pages.length;
+   560→  if (removed > 0) {
+   561→    log.log({ field: 'pages', action: 'coerced', from: `${before} pages`, to: `${store.pages.length} pages (${removed} non-homepage 'home' pages removed)` });
+   562→  }
+   563→}
+   564→
+   565→/** Ensure at least one page is marked as homepage */
+   566→function ensureHomepage(store: Store, log: ReturnType<typeof createLogger>): void {
+   567→  const hasHomepage = store.pages.some((p) => p.isHomepage);
+   568→  if (!hasHomepage && store.pages.length > 0) {
+   569→    store.pages[0].isHomepage = true;
+   570→    log.log({ field: 'pages[0].isHomepage', action: 'defaulted', from: false, to: true });
+   571→  }
+   572→}
+   573→
+   574→/** Ensure template pages (Shop, Cart, Checkout) exist */
+   575→function ensureTemplatePages(store: Store, log: ReturnType<typeof createLogger>): void {
+   576→  const pageTypes = new Set(store.pages.map((p) => p.type || 'home'));
+   577→
+   578→  if (!pageTypes.has('collection')) {
+   579→    store.pages.push({
+   580→      id: uuid(),
+   581→      name: 'Shop',
+   582→      slug: 'shop',
+   583→      type: 'collection',
+   584→      isHomepage: false,
+   585→      sections: [],
+   586→    });
+   587→    log.log({ field: 'pages', action: 'defaulted', to: 'added collection page' });
+   588→  }
+   589→
+   590→  if (!pageTypes.has('cart')) {
+   591→    store.pages.push({
+   592→      id: uuid(),
+   593→      name: 'Cart',
+   594→      slug: 'cart',
+   595→      type: 'cart',
+   596→      isHomepage: false,
+   597→      sections: [],
+   598→    });
+   599→    log.log({ field: 'pages', action: 'defaulted', to: 'added cart page' });
+   600→  }
+   601→
+   602→  if (!pageTypes.has('checkout')) {
+   603→    store.pages.push({
+   604→      id: uuid(),
+   605→      name: 'Checkout',
+   606→      slug: 'checkout',
+   607→      type: 'checkout',
+   608→      isHomepage: false,
+   609→      sections: [],
+   610→    });
+   611→    log.log({ field: 'pages', action: 'defaulted', to: 'added checkout page' });
+   612→  }
+   613→}
+   614→
+   615→/** Fill in default metadata for template pages using store name for branding */
+   616→function ensurePageMetadata(store: Store, log: ReturnType<typeof createLogger>): void {
+   617→  const name = store.name || 'My Store';
+   618→
+   619→  // Generate branded metadata from store name (deterministic — no AI needed)
+   620→  const branded: Record<string, Record<string, string>> = {
+   621→    collection: {
+   622→      headline: `The ${name} Collection`,
+   623→      subtitle: `Curated pieces for every style`,
+   624→    },
+   625→    cart: {
+   626→      headline: `Your ${name} Selection`,
+   627→      emptyMessage: `Your ${name} collection awaits. Start exploring our pieces!`,
+   628→    },
+   629→    checkout: {
+   630→      successHeadline: `Welcome to ${name}!`,
+   631→      successMessage: `Thank you for your order from ${name}. Your items are on the way!`,
+   632→    },
+   633→  };
+   634→
+   635→  let fixed = 0;
+   636→  for (const page of store.pages) {
+   637→    const typeDefaults = branded[page.type || ''];
+   638→    if (!typeDefaults) continue;
+   639→
+   640→    if (!page.metadata || typeof page.metadata !== 'object') {
+   641→      page.metadata = { ...typeDefaults };
+   642→      fixed += Object.keys(typeDefaults).length;
+   643→      continue;
+   644→    }
+   645→
+   646→    // Only fill in keys the AI explicitly generated; keep AI text if present
+   647→    const missing = Object.keys(typeDefaults).filter((k) => !page.metadata[k] || typeof page.metadata[k] !== 'string' || page.metadata[k].trim().length === 0);
+   648→    for (const key of missing) {
+   649→      page.metadata[key] = typeDefaults[key];
+   650→      fixed++;
+   651→    }
+   652→  }
+   653→
+   654→  if (fixed > 0) {
+   655→    log.log({ field: 'page metadata', action: 'defaulted', to: `filled ${fixed} metadata values with branded defaults for ${name}` });
+   656→  }
+   657→}
+   658→
+   659→/** Ensure at least one product is marked as featured (for featured-products sections) */
+   660→function ensureFeaturedProducts(store: Store, log: ReturnType<typeof createLogger>): void {
+   661→  const featuredCount = store.products.filter((p) => p.featured).length;
+   662→  if (featuredCount < 1 && store.products.length >= 1) {
+   663→    store.products[0].featured = true;
+   664→    log.log({ field: 'products[0].featured', action: 'defaulted', from: false, to: true });
+   665→  }
+   666→}
+   667→
+   668→/** Pad product array to MIN_PRODUCTS if AI generated too few */
+   669→const MIN_PRODUCTS = 1;
+   670→const PAD_PRODUCT_TEMPLATES = [
+   671→  { name: 'Essential Item', price: 39.99, description: 'A must-have for every collection.', category: 'Essentials', img: 'photo-1505740420928-5e560c06d30e' },
+   672→  { name: 'Popular Choice', price: 59.99, description: 'Customer favorite, highly rated.', category: 'Popular', img: 'photo-1526170375885-4d8ecf77b99f' },
+   673→];
+   674→function padProducts(store: Store, log: ReturnType<typeof createLogger>): void {
+   675→  const deficit = MIN_PRODUCTS - store.products.length;
+   676→  if (deficit <= 0) return;
+   677→  const before = store.products.length;
+   678→  for (let i = 0; i < deficit; i++) {
+   679→    const tmpl = PAD_PRODUCT_TEMPLATES[i % PAD_PRODUCT_TEMPLATES.length];
+   680→    store.products.push({
+   681→      id: uuid(),
+   682→      name: tmpl.name + (store.products.length + 1),
+   683→      price: tmpl.price + store.products.length * 5,
+   684→      compareAtPrice: null,
+   685→      images: [`https://images.unsplash.com/${tmpl.img}?w=600`],
+   686→      description: tmpl.description,
+   687→      category: tmpl.category,
+   688→      featured: false,
+   689→      inStock: true,
+   690→    });
+   691→  }
+   692→  log.log({ field: 'products', action: 'defaulted', from: `${before} products`, to: `${before + deficit} products (padded to min ${MIN_PRODUCTS})` });
+   693→}
+   694→
+   695→// ─── Main entry point ─────────────────────────────────────────────
+   696→
+   697→export interface NormalizeResult {
+   698→  store: Store;
+   699→  log: string[];        // Human-readable log lines
+   700→  summary: string;      // One-line summary
+   701→  isFallback: boolean;  // true if the input was too broken to normalize
+   702→  normalizationCount: number; // Number of fixes applied
+   703→}
+   704→
+   705→/**
+   706→ * Normalize an array of raw product objects into valid StoreProduct[].
+   707→ * Lightweight version — no store/page/section normalization.
+   708→ * Used for Phase 2 batch products.
+   709→ */
+   710→export function normalizeProducts(rawProducts: unknown[]): StoreProduct[] {
+   711→  const log = createLogger();
+   712→  if (!Array.isArray(rawProducts)) return [];
+   713→  return rawProducts.map((p) => normalizeProduct(p, log));
+   714→}
+   715→
+   716→/**
+   717→ * Normalize any valid JSON object into a conformant Store.
+   718→ *
+   719→ * This function NEVER throws. If the input is too malformed to recover,
+   720→ * it returns null and the caller should use a hardcoded fallback store.
+   721→ *
+   722→ * @param raw - Parsed JSON object (JSON.parse already succeeded)
+   723→ * @param prompt - Original user prompt (for fallback name extraction)
+   724→ * @param maxProducts - If provided, cap products to this number. If undefined, don't cap.
+   725→ */
+   726→export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: number): NormalizeResult | null {
+   727→  const log = createLogger();
+   728→
+   729→  // ── Guard: must be a non-null object ──
+   730→  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+   731→    console.warn('[normalizeStore] Input is not an object:', typeof raw);
+   732→    return null;
+   733→  }
+   734→
+   735→  const r = raw as Record<string, unknown>;
+   736→
+   737→  // ── Extract store name (used as fallback for missing name) ──
+   738→  const storeName = oneLine(str(r.name, prompt ? extractStoreNameFromPrompt(prompt) : 'My Store'));
+   739→
+   740→  if (!r.name || typeof r.name !== 'string') {
+   741→    log.log({ field: 'name', action: 'missing', to: storeName });
+   742→  }
+   743→
+   744→  // ── Top-level fields ──
+   745→  const now = new Date().toISOString();
+   746→  const store: Store = {
+   747→    id: isUUID(str(r.id, '')) ? str(r.id, '') : uuid(),
+   748→    name: storeName.substring(0, 100),
+   749→    slug: slugify(storeName),
+   750→    description: r.description !== undefined ? oneLine(str(r.description, '')) : undefined,
+   751→    theme: r.theme ? normalizeTheme(r.theme, log) : defaultTheme,
+   752→    pages: Array.isArray(r.pages)
+   753→      ? r.pages.map((p: unknown) => normalizePage(p, log))
+   754→      : [createDefaultPage(storeName)],
+   755→    products: Array.isArray(r.products)
+   756→      ? (r.products as unknown[]).map((p: unknown) => normalizeProduct(p, log))
+   757→      : [],
+   758→    published: bool(r.published, false),
+   759→    publishedAt: r.publishedAt !== undefined ? str(r.publishedAt, '') : undefined,
+   760→    createdAt: str(r.createdAt, now),
+   761→    updatedAt: str(r.updatedAt, now),
+   762→  };
+   763→
+   764→  // Log missing arrays
+   765→  if (!Array.isArray(r.pages)) log.log({ field: 'pages', action: 'missing' });
+   766→  if (!Array.isArray(r.products)) log.log({ field: 'products', action: 'missing' });
+   767→  if (!r.theme) log.log({ field: 'theme', action: 'missing' });
+   768→
+   769→  // ── Ensure at least one page exists ──
+   770→  if (store.pages.length === 0) {
+   771→    store.pages.push(createDefaultPage(storeName));
+   772→    log.log({ field: 'pages', action: 'defaulted' });
+   773→  }
+   774→
+   775→  // ── Ensure at least one product exists (renderer expects products array) ──
+   776→  if (store.products.length === 0) {
+   777→    store.products.push(createDefaultProduct());
+   778→    log.log({ field: 'products', action: 'defaulted' });
+   779→  }
+   780→
+   781→  // ── Cross-reference fixes ──
+   782→  // IMPORTANT: enforceOutputCaps MUST run before fixProductReferences
+   783→  // because product references depend on the final product list
+   784→  enforceOutputCaps(store, log, maxProducts);
+   785→  padProducts(store, log);
+   786→  fixProductReferences(store, log);
+   787→  stripJunkPages(store, log);
+   788→  ensureHomepage(store, log);
+   789→  ensureFeaturedProducts(store, log);
+   790→  ensureTemplatePages(store, log);
+   791→  ensurePageMetadata(store, log);
+   792→
+   793→  // ── Build result ──
+   794→  const logEntries = log.getLogs();
+   795→  const logLines = logEntries.map(
+   796→    (l) => `[${l.action}] ${l.field}${l.from !== undefined ? ` (was: ${JSON.stringify(l.from).substring(0, 60)})` : ''}${l.to !== undefined ? ` → ${JSON.stringify(l.to).substring(0, 60)}` : ''}`
+   797→  );
+   798→
+   799→  return {
+   800→    store,
+   801→    log: logLines,
+   802→    summary: log.summary(),
+   803→    isFallback: false,
+   804→    normalizationCount: logEntries.length,
+   805→  };
+   806→}
+   807→
+   808→// ─── Default builders (used when AI output is completely missing a section) ──
+   809→
+   810→function createDefaultPage(storeName: string): StorePage {
+   811→  return {
+   812→    id: uuid(),
+   813→    name: 'Home',
+   814→    slug: '',
+   815→    type: 'home',
+   816→    isHomepage: true,
+   817→    sections: [
+   818→      {
+   819→        id: uuid(),
+   820→        type: 'hero',
+   821→        content: {
+   822→          headline: `Welcome to ${storeName}`,
+   823→          subheadline: 'Discover our curated collection.',
+   824→          ctaText: 'Shop Now',
+   825→          ctaLink: '#products',
+   826→          alignment: 'center',
+   827→          height: 'lg',
+   828→        },
+   829→        style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' },
+   830→        visible: true,
+   831→      },
+   832→    ],
+   833→  };
+   834→}
+   835→
+   836→function createDefaultProduct(): StoreProduct {
+   837→  return {
+   838→    id: uuid(),
+   839→    name: 'Featured Product',
+   840→    price: 49.99,
+   841→    images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'],
+   842→    description: 'Our signature product, crafted with care.',
+   843→    featured: true,
+   844→    inStock: true,
+   845→  };
+   846→}
+   847→
+   848→/** Extract a short store name from a user prompt (lightweight version for normalization) */
+   849→function extractStoreNameFromPrompt(prompt: string): string {
+   850→  const text = prompt.trim();
+   851→
+   852→  // Brand name after "called / named / known as"
+   853→  const calledMatch = text.match(/(?:called|named|known\s+as)\s+([\w&'\-]+(?:\s+[\w&'\-]+){0,2})/i);
+   854→  if (calledMatch?.[1]) {
+   855→    const name = calledMatch[1].replace(/\s+(selling|with|that|for|using|featuring)\s*$/i, '').trim();
+   856→    if (name.length >= 2 && name.length <= 40) return name;
+   857→  }
+   858→
+   859→  // Quoted brand name
+   860→  const quotedMatch = text.match(/["']([^"']{2,40})["']/);
+   861→  if (quotedMatch?.[1]) return quotedMatch[1].trim();
+   862→
+   863→  // Strip common prefixes
+   864→  const stripped = text
+   865→    .replace(/^(build|create|make|design|set\s+up)\s+(a|an|the|my)\s+/i, '')
+   866→    .replace(/\b(online|e-commerce|ecommerce)\s+(store|shop|boutique)\b/gi, '')
+   867→    .replace(/\b(store|shop|boutique|website|site|brand)\b/gi, '')
+   868→    .replace(/\b(selling|with|that|for|using|featuring)\b.*/i, '')
+   869→    .trim();
+   870→
+   871→  // Find title-case run
+   872→  const words = stripped.split(/\s+/).filter(w => w.length >= 2);
+   873→  const isTitle = (w: string) => w[0] === w[0].toUpperCase() && w[0] !== w[0].toLowerCase();
+   874→  let bestRun: string[] = [];
+   875→  let currentRun: string[] = [];
+   876→  for (const w of words) {
+   877→    if (isTitle(w)) {
+   878→      currentRun.push(w.replace(/[^a-zA-Z0-9&'-]/g, ''));
+   879→    } else {
+   880→      if (currentRun.length > bestRun.length) bestRun = currentRun;
+   881→      currentRun = [];
+   882→    }
+   883→  }
+   884→  if (currentRun.length > bestRun.length) bestRun = currentRun;
+   885→
+   886→  if (bestRun.length >= 1) {
+   887→    const candidate = bestRun.slice(0, 3).join(' ');
+   888→    if (candidate.length >= 2 && candidate.length <= 40) return candidate;
+   889→  }
+   890→
+   891→  return 'My Store';
+   892→}
