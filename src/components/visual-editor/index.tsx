@@ -1152,10 +1152,11 @@ export function VisualEditor() {
                   <Popover>
                     <PopoverTrigger asChild>
                       <button
-                        className="p-0.5 text-zinc-600 hover:text-zinc-300 transition-colors rounded"
+                        className="flex items-center justify-center w-5 h-5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-700 transition-colors"
                         onClick={(e) => e.stopPropagation()}
+                        aria-label="Page actions"
                       >
-                        <MoreHorizontal className="h-3 w-3" />
+                        <MoreHorizontal className="h-3.5 w-3.5" />
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-36 p-1 bg-zinc-900 border-zinc-800" align="start">
@@ -1224,6 +1225,15 @@ export function VisualEditor() {
         {!isTemplatePage ? (
           <ScrollArea className="flex-1 min-h-0">
             <div className="p-2">
+              {sections.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center">
+                  <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-zinc-800/60">
+                    <FileText className="h-4 w-4 text-zinc-500" />
+                  </div>
+                  <p className="text-xs text-zinc-500">No sections yet</p>
+                  <p className="mt-1 text-[10px] text-zinc-600">Click "Add Section" below to add content</p>
+                </div>
+              ) : (
               <DndContext
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
@@ -1252,6 +1262,7 @@ export function VisualEditor() {
                   </div>
                 </SortableContext>
               </DndContext>
+              )}
             </div>
           </ScrollArea>
         ) : (

@@ -573,3 +573,26 @@ Stage Summary:
 - 1 file modified: unsplash.ts
 - Failed image enrichment now shows a real product photo instead of a broken placeholder
 - Not blocking for Part 2, but improves visual quality
+---
+Task ID: 2-b
+Agent: main
+Task: Fix Part 2 test failures — ⋯ button invisible, no empty state for custom pages
+
+Work Log:
+- Investigated root cause: features WERE implemented but ⋯ button was invisible (12px icon, text-zinc-600 on bg-zinc-950)
+- Browser test confirmed Popover, Rename, Delete, and Add Section all function correctly when button is found
+- Fixed ⋯ button: increased size (h-3 → h-3.5), brightened color (zinc-600 → zinc-500), added hover:bg-zinc-700, w-5 h-5 for hit target, aria-label="Page actions"
+- Added empty state for custom pages with no sections: FileText icon + "No sections yet" + "Click Add Section below to add content"
+- Ran full 7-step E2E test — all passed:
+  1. +Page creates custom tab ✅
+  2. ⋯ menu: Rename changes tab + nav, Delete removes page + falls back to Home ✅
+  3. Add Section to custom page: Rich Text added and renders in preview ✅
+  4. Nav link in preview switches to custom page ✅
+  5. Fixed pages (Home/Shop/Cart/Checkout) have no ⋯ menu ✅
+  6. Fixed pages regression: all 4 Home sections intact ✅
+  7. Chat "add Contact Us page" creates tab with Hero + Rich Text ✅
+
+Stage Summary:
+- 1 file modified: visual-editor/index.tsx
+- Root cause was UX (invisible button), not missing implementation
+- All 7 Part 2 test steps now pass
