@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Production Dockerfile for Railway [v3]
+# Storqly — Production Dockerfile for Railway [v4]
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
@@ -18,8 +18,19 @@ COPY prisma ./prisma
 # (postinstall runs prisma generate, so prisma/ must be present)
 RUN npm ci
 
-# Copy source code (excludes .git via .dockerignore)
+# Copy source code (excludes .git, node_modules, .next via .dockerignore)
 COPY . .
+
+# ── Pre-build diagnostics ────────────────────────────────────
+RUN echo "=== PRE-BUILD CHECKS ===" && \
+    echo "Node: $(node -v)" && \
+    echo "Next.js: $(npx next --version 2>/dev/null || node -e 'console.log(require("next/package.json").version)')" && \
+    echo "src/app/layout.tsx exists: $(ls -la src/app/layout.tsx 2>/dev/null && echo YES || echo NO)" && \
+    echo "src/app/page.tsx exists: $(ls -la src/app/page.tsx 2>/dev/null && echo YES || echo NO)" && \
+    echo "postcss.config.mjs exists: $(ls -la postcss.config.mjs 2>/dev/null && echo YES || echo NO)" && \
+    echo "tw-animate-css installed: $(ls node_modules/tw-animate-css/dist/tw-animate.css 2>/dev/null && echo YES || echo NO)" && \
+    echo "globals.css @source line: $(head -5 src/app/globals.css)" && \
+    echo "=== CHECKS COMPLETE ==="
 
 # Generate Prisma client + build Next.js standalone
 RUN npx prisma generate && npm run build
