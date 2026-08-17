@@ -5,8 +5,10 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Allow cross-origin requests from Z.ai preview gateway
-  allowedDevOrigins: ["*"],
+  // Production: standalone output for Render deployment
+  output: "standalone",
+  // Allow cross-origin requests from Z.ai preview gateway (dev only, harmless in prod)
+  ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ["*"] as const } : {}),
   // Allow embedding in iframes (Z.ai preview panel, etc.)
   async headers() {
     return [

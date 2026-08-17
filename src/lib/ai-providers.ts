@@ -1,11 +1,11 @@
 // ========================================
 // AI Provider Abstraction Layer
 // ========================================
-// Multi-provider failover: z-ai (primary), GROQ (backup 1), Gemini (backup 2).
+// Multi-provider failover: z-ai (sandbox-only), GROQ (backup 1), Gemini (backup 2).
+// On production (Render), z-ai SDK is unavailable — GROQ/Gemini become primary.
 // Each provider implements the same interface. The orchestrator tries
 // providers in order, switching on 429/timeout/persistent failures.
 
-import ZAI from 'z-ai-web-dev-sdk';
 import Groq from 'groq-sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
@@ -44,21 +44,50 @@ export function isAuthError(err: unknown): boolean {
   return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized') || msg.includes('API_KEY_INVALID');
 }
 
-// ─── z-ai Provider (Primary) ──────────────────────────────────
+// ─── z-ai Provider (Sandbox-only, gracefully disabled on Render) ──
+
+// Detect if z-ai SDK is available (only in Z.ai sandbox)
+let zaiCreate: (() => Promise<unknown>) | null = null;
+try {
+  // Dynamic require: ESLint complains about this, but it's intentional.
+  // The z-ai SDK may not be installed or may fail to load in production.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('z-ai-web-dev-sdk');
+  if (mod?.default?.create) {
+    zaiCreate = mod.default.create;
+  }
+} catch {
+  zaiCreate = null;
+}
 
 class ZAIProvider implements AIProvider {
   readonly name = 'z-ai';
-  private instance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
+  private instance: Awaited<ReturnType<typeof zaiCreate>> | null = null;
+  private available = true;
 
-  private async getInstance(): Promise<Awaited<ReturnType<typeof ZAI.create>>> {
+  private async getInstance(): Promise<unknown> {
+    if (!zaiCreate || !this.available) {
+      throw new Error('z-ai SDK not available in this environment');
+    }
     if (!this.instance) {
-      this.instance = await ZAI.create();
+      try {
+        this.instance = await zaiCreate();
+      } catch {
+        this.available = false;
+        throw new Error('z-ai SDK initialization failed');
+      }
     }
     return this.instance;
   }
 
   async call(options: ProviderCallOptions): Promise<string> {
-    const zai = await this.getInstance();
+    const zai = await this.getInstance() as {
+      chat: {
+        completions: {
+          create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
+        }
+      }
+    };
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
     const completion = await Promise.race([
@@ -84,7 +113,7 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── GROQ Provider (Backup 1) ──────────────────────────────────
+// ─── GROQ Provider (Backup 1 / Production Primary 1) ──────────
 
 class GroqProvider implements AIProvider {
   readonly name = 'groq';
@@ -126,7 +155,7 @@ class GroqProvider implements AIProvider {
   }
 }
 
-// ─── Google AI Studio / Gemini Provider (Backup 2) ─────────────
+// ─── Google AI Studio / Gemini Provider (Backup 2 / Production Primary 2) ──
 
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -146,14 +175,11 @@ class GeminiProvider implements AIProvider {
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
     // Gemini uses a different message format: system instruction + user/assistant history
-    // The orchestrator sends system prompts as role:'assistant' (z-ai convention),
-    // so we need to extract and convert.
     let systemInstruction: string | undefined;
     const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
     for (const msg of messages) {
       if (msg.role === 'assistant' && geminiContents.length === 0) {
-        // First 'assistant' message is actually the system prompt in our convention
         systemInstruction = msg.content;
       } else {
         geminiContents.push({
@@ -163,8 +189,6 @@ class GeminiProvider implements AIProvider {
       }
     }
 
-    // Use gemini-2.0-flash for speed + JSON support
-    // Build a single generationConfig that merges json mode, temperature, and max tokens
     const generationConfig: Record<string, unknown> = {};
     if (jsonMode) generationConfig.responseMimeType = 'application/json';
     if (temperature !== undefined) generationConfig.temperature = temperature;
@@ -200,18 +224,25 @@ let providers: AIProvider[] | null = null;
 function createProviders(): AIProvider[] {
   if (providers) return providers;
 
-  const chain: AIProvider[] = [
-    new ZAIProvider(),
-  ];
+  const chain: AIProvider[] = [];
 
-  // Add GROQ if API key is configured
+  // z-ai: only add if SDK is available (Z.ai sandbox only)
+  if (zaiCreate) {
+    chain.push(new ZAIProvider());
+  }
+
+  // GROQ: add if API key is configured
   if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder') {
     chain.push(new GroqProvider());
   }
 
-  // Add Gemini if API key is configured
+  // Gemini: add if API key is configured
   if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder') {
     chain.push(new GeminiProvider());
+  }
+
+  if (chain.length === 0) {
+    console.warn('[AI Providers] WARNING: No AI providers configured! Store generation will fail.');
   }
 
   providers = chain;

@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════
+# Render Free-Tier Deployment Config
+# ═══════════════════════════════════════════════════════════════════
+# Usage:
+#   1. Push this file to your GitHub repo on the `main` branch
+#   2. In Render Dashboard → New → Blueprint → connect your repo
+#   3. Render reads this file and creates the web service automatically
+#
+# Free tier limits:
+#   - 512 MB RAM, 0.1 CPU
+#   - Sleeps after 15 min inactivity (30-50s cold start)
+#   - 750 hours/month
+# ────────────────────────────────────────────────────────────
+
+services:
+  - type: web
+    name: storqly
+    runtime: node
+    # Use bun for install + build (much faster than npm)
+    buildCommand: bun install && bun run build
+    # Render free tier uses the start command
+    startCommand: node .next/standalone/server.js
+    # Auto-deploy on push to main
+    branch: main
+    # Free tier plan
+    plan: free
+    # Environment variables — set the REAL values in Render Dashboard
+    # These are defaults/fallbacks only
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXTAUTH_URL
+        fromService:
+          name: storqly
+          type: web
+          property: hostport
+        # IMPORTANT: Set these in Render Dashboard, NOT here:
+      # - key: DATABASE_URL
+      #   sync: false
+      # - key: DIRECT_URL
+      #   sync: false
+      # - key: NEXTAUTH_SECRET
+      #   sync: false
+      # - key: GROQ_API_KEY
+      #   sync: false
+      # - key: GOOGLE_AI_API_KEY
+      #   sync: false

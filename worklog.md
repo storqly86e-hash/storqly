@@ -980,3 +980,29 @@ Stage Summary:
 - Z.ai preview panel is controlled by platform gateway — cannot be fixed from app code
 - Dev server is stable and responding correctly
 - User should use "Open in New Tab" button in the Z.ai interface to view the app
+
+---
+Task ID: Production Launch Prep (Free Tier)
+Agent: Main Agent
+Task: Prepare Storqly for deployment on Render free tier + Neon free Postgres.
+
+Work Log:
+- Audited entire codebase: zero hardcoded localhost, zero fs ops, zero local file writes
+- Found 3 production blockers: z-ai image-search CLI, z-ai-web-dev-sdk as primary AI, SQLite
+- Migrated Prisma schema: sqlite → postgresql with directUrl for Neon
+- Updated db.ts: production logging reduced to errors only, documented Neon pooling strategy
+- Rewrote ai-providers.ts: z-ai SDK loaded via try/require, gracefully disabled when unavailable; GROQ/Gemini become production primaries
+- Rewrote marketing-kit/generate/route.ts: z-ai → GROQ streaming → Gemini fallback chain
+- Updated unsplash.ts: ENOENT detection flags imageSearchAvailable=false, skips all future CLI calls
+- Updated next.config.ts: output:'standalone', allowedDevOrigins dev-only
+- Updated package.json: build=prisma generate + next build, postinstall=prisma generate, start uses node
+- Created .env.example with all required vars documented
+- Created render.yaml for Render Blueprint auto-deploy
+- Updated .gitignore: .env.local/.env no longer committed, added db/ upload/ tool-results/
+- Lint: 0 errors, 0 warnings
+
+Stage Summary:
+- App is production-ready pending: Neon DB, Render deploy, env vars
+- On Render: AI works via GROQ+Gemini, images use AI-generated URLs (no enrichment CLI)
+- Free tier cold start: 30-50s acceptable per user's requirement
+- No paid services needed

@@ -1,20 +1,17 @@
 // ========================================
-// Marketing Kit Generator API — Streaming + Auto-Continue
+// Marketing Kit Generator API — Streaming
 // ========================================
 // Streams the AI response token-by-token to the client.
 // Supports auto-continue: if the proxy kills the connection mid-stream,
 // the client sends continueFrom=<partial> and the AI picks up where it left off.
 //
-// No JSON schema, no repair pipeline, no connection to Store data.
-// Uses z-ai-web-dev-sdk directly (bypasses the store orchestrator).
+// Provider priority: z-ai (sandbox) → GROQ (production primary) → Gemini (fallback)
 // Auth guard: returns 401 JSON before creating the SSE stream.
 
 import { NextRequest, NextResponse } from 'next/server';
-import ZAI from 'z-ai-web-dev-sdk';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 const TIMEOUT_MS = 180_000;
-const MAX_RETRIES = 1;
 
 const SYSTEM_PROMPT = `You are a world-class business strategist and direct-response copywriter. You produce comprehensive, actionable marketing and business documents.
 
@@ -25,7 +22,7 @@ OUTPUT RULES:
 4. Use bold (**text**) for emphasis on key terms and actionable items.
 5. When the user requests image prompts (e.g., for Midjourney, DALL-E), provide them as clearly labeled code blocks or quoted blocks.
 6. If the user provides a role/perspective (e.g., \"Act as a Master E-commerce Architect\"), fully adopt that perspective.
-7. Output ONLY the requested document content — no preamble like \"Here is your document\" or \"Sure, I can help with that.\".
+7. Output ONLY the requested document content — no preamble like \"Here is your document\" or \"Sure, I can help with that.\"
 8. The document should be production-ready: professional tone, zero fluff, maximum utility.`;
 
 const CONTINUE_SYSTEM_PROMPT = `You are continuing a partially written marketing/business document. Your job is to pick up EXACTLY where the previous text stopped.
@@ -37,25 +34,150 @@ CRITICAL RULES:
 4. Continue until ALL originally requested sections are complete.
 5. Use the same Markdown formatting (##, ###, bullets, etc.).`;
 
-// ─── Singleton ZAI instance ─────────────────────────────────────
-let zaiInstance: Awaited<ReturnType<typeof ZAI.create>> | null = null;
-
-async function getZAI() {
-  if (!zaiInstance) {
-    zaiInstance = await ZAI.create();
-  }
-  return zaiInstance;
-}
-
-function resetZAI() {
-  zaiInstance = null;
-}
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// ─── POST handler — Real token streaming via SSE ─────────────────
+// ─── Try z-ai SDK (sandbox only) ───────────────────────────
+let zaiInstance: unknown = null;
+
+async function tryZAIStream(
+  messages: Array<{ role: string; content: string }>,
+  onDelta: (text: string) => void,
+): Promise<string | null> {
+  try {
+    // Dynamic require: z-ai SDK may not be available in production.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('z-ai-web-dev-sdk');
+    if (!mod?.default?.create) return null;
+
+    if (!zaiInstance) {
+      zaiInstance = await mod.default.create();
+    }
+    const zai = zaiInstance as {
+      chat: {
+        completions: {
+          create(opts: Record<string, unknown>): Promise<unknown>;
+        }
+      }
+    };
+
+    const aiBody = await zai.chat.completions.create({
+      messages,
+      temperature: 0.8,
+      thinking: { type: 'disabled' },
+      stream: true,
+    });
+
+    const aiStream = aiBody as ReadableStream<Uint8Array> | null;
+    if (!aiStream) return null;
+
+    const reader = aiStream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullContent += delta;
+            onDelta(delta);
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    return fullContent.trim() || null;
+  } catch {
+    zaiInstance = null;
+    return null;
+  }
+}
+
+// ─── GROQ streaming (production primary) ─────────────────────
+async function tryGroqStream(
+  messages: Array<{ role: string; content: string }>,
+  onDelta: (text: string) => void,
+): Promise<string | null> {
+  try {
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey || apiKey === 'placeholder') return null;
+
+    const Groq = (await import('groq-sdk')).default;
+    const client = new Groq({ apiKey });
+
+    const stream = await client.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
+      temperature: 0.8,
+      stream: true,
+    });
+
+    let fullContent = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content;
+      if (delta) {
+        fullContent += delta;
+        onDelta(delta);
+      }
+    }
+
+    return fullContent.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Gemini non-streaming fallback ───────────────────────────
+async function tryGemini(
+  messages: Array<{ role: string; content: string }>,
+): Promise<string | null> {
+  try {
+    const apiKey = process.env.GOOGLE_AI_API_KEY;
+    if (!apiKey || apiKey === 'placeholder') return null;
+
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    let systemInstruction: string | undefined;
+    const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        systemInstruction = msg.content;
+      } else {
+        geminiContents.push({
+          role: msg.role === 'user' ? 'user' : 'model',
+          parts: [{ text: msg.content }],
+        });
+      }
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      ...(systemInstruction ? { systemInstruction } : {}),
+    });
+
+    const completion = await model.generateContent({ contents: geminiContents });
+    return completion.response.text().trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── POST handler ────────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Auth guard — checked BEFORE creating the SSE stream.
   try {
     await requireAuth();
   } catch (e) {
@@ -70,10 +192,9 @@ export async function POST(req: NextRequest) {
       const send = (event: string, data: unknown) => {
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch { /* Stream already closed */ }
+        } catch { /* closed */ }
       };
 
-      // Heartbeat: REAL SSE event so proxy counts it as activity
       const heartbeat = setInterval(() => {
         try { send('ping', { t: Date.now() }); }
         catch { clearInterval(heartbeat); }
@@ -96,117 +217,58 @@ export async function POST(req: NextRequest) {
 
         let userMessage: string;
         if (isContinuation) {
-          // Truncate the partial content to avoid sending too much context
           const partial = continueFrom!.length > 6000
             ? '...' + continueFrom!.slice(-5000)
             : continueFrom!;
-          userMessage = `Continue EXACTLY from where this text stops. Do not repeat any of it.
-
---- PARTIAL OUTPUT ---\n${partial}\n--- END PARTIAL ---\n\nContinue now (start immediately with the next content):`;
-          console.log(`[Marketing Kit] Continuing from ${continueFrom!.length} chars (sending last ${partial.length})...`);
+          userMessage = `Continue EXACTLY from where this text stops. Do not repeat any of it.\n\n--- PARTIAL OUTPUT ---\n${partial}\n--- END PARTIAL ---\n\nContinue now (start immediately with the next content):`;
         } else {
           userMessage = prompt.trim();
-          console.log(`[Marketing Kit] Streaming content for ${userMessage.length} char prompt...`);
         }
 
         send('progress', { message: isContinuation ? 'Continuing...' : 'AI is generating your marketing kit...' });
 
-        let lastError = '';
+        const messages = [
+          { role: 'system' as const, content: systemPrompt },
+          { role: 'user' as const, content: userMessage },
+        ];
 
-        for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-          if (attempt > 0) {
-            const delay = 3000 * attempt;
-            console.warn(`[Marketing Kit] Retry ${attempt} after ${delay}ms...`);
-            send('progress', { message: `Retrying... (attempt ${attempt + 1})` });
-            await sleep(delay);
-          }
+        // Try providers in order: z-ai → GROQ → Gemini
+        let result: string | null = null;
 
-          if (timedOut()) {
-            send('error', { message: 'Generation timed out. Please try again with a shorter prompt.' });
-            return;
-          }
+        // 1. Try z-ai (sandbox streaming)
+        if (!result && !timedOut()) {
+          console.log('[Marketing Kit] Trying z-ai provider...');
+          result = await tryZAIStream(messages, (delta) => send('delta', { content: delta }));
+          if (result) console.log('[Marketing Kit] ✅ z-ai succeeded');
+        }
 
-          try {
-            const zai = await getZAI();
+        // 2. Try GROQ (production streaming)
+        if (!result && !timedOut()) {
+          console.log('[Marketing Kit] Trying GROQ provider...');
+          result = await tryGroqStream(messages, (delta) => send('delta', { content: delta }));
+          if (result) console.log('[Marketing Kit] ✅ GROQ succeeded');
+        }
 
-            // ── Call AI with stream: true → returns ReadableStream<Uint8Array> ──
-            const aiBody = await zai.chat.completions.create({
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userMessage },
-              ],
-              temperature: isContinuation ? 0.6 : 0.8,
-              thinking: { type: 'disabled' },
-              stream: true,
-            });
-
-            // SDK returns response.body (ReadableStream) when stream: true
-            const aiStream = aiBody as ReadableStream<Uint8Array> | null;
-            if (!aiStream) {
-              throw new Error('Empty stream from AI');
-            }
-
-            const reader = aiStream.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let fullContent = '';
-            let tokenCount = 0;
-
-            // Read the AI's SSE stream chunk by chunk
-            while (true) {
-              if (timedOut()) {
-                reader.cancel();
-                throw new Error('Timed out');
-              }
-
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split('\n');
-              buffer = lines.pop() || '';
-
-              for (const line of lines) {
-                const trimmed = line.trim();
-                if (!trimmed || !trimmed.startsWith('data: ')) continue;
-                const payload = trimmed.slice(6);
-                if (payload === '[DONE]') continue;
-
-                try {
-                  const parsed = JSON.parse(payload);
-                  const delta = parsed.choices?.[0]?.delta?.content;
-                  if (delta) {
-                    fullContent += delta;
-                    tokenCount++;
-                    // Forward EVERY token to client
-                    send('delta', { content: delta });
-                  }
-                } catch { /* skip malformed chunks */ }
-              }
-            }
-
-            if (!fullContent.trim()) {
-              throw new Error('Empty response from AI');
-            }
-
-            const elapsed = Date.now() - startTime;
-            console.log(`[Marketing Kit] ✅ Streaming done: ${fullContent.length} chars, ${tokenCount} tokens, ${Math.round(elapsed / 1000)}s, attempt ${attempt + 1}${isContinuation ? ' (continuation)' : ''}`);
-
-            // Send final event with complete content
-            send('result', { content: fullContent.trim() });
-            return;
-          } catch (err: unknown) {
-            lastError = err instanceof Error ? err.message : String(err);
-            console.warn(`[Marketing Kit] Attempt ${attempt + 1} failed: ${lastError}`);
-
-            // Reset ZAI on auth errors
-            if (lastError.includes('401') || lastError.includes('unauthorized')) {
-              resetZAI();
-            }
+        // 3. Try Gemini (fallback, non-streaming)
+        if (!result && !timedOut()) {
+          console.log('[Marketing Kit] Trying Gemini provider (non-streaming)...');
+          send('progress', { message: 'Trying backup AI provider...' });
+          result = await tryGemini(messages);
+          if (result) {
+            console.log('[Marketing Kit] ✅ Gemini succeeded');
+            // Send the complete result as one chunk since Gemini doesn't stream
+            send('delta', { content: result });
           }
         }
 
-        send('error', { message: `Generation failed after ${MAX_RETRIES + 1} attempts. Last error: ${lastError}` });
+        if (!result) {
+          send('error', { message: 'All AI providers failed. Please check your API keys (GROQ_API_KEY, GOOGLE_AI_API_KEY).' });
+          return;
+        }
+
+        const elapsed = Date.now() - startTime;
+        console.log(`[Marketing Kit] ✅ Done: ${result.length} chars, ${Math.round(elapsed / 1000)}s`);
+        send('result', { content: result });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         console.error(`[Marketing Kit] Unexpected error:`, msg);

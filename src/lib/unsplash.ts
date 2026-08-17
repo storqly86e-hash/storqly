@@ -16,6 +16,11 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+// ─── z-ai CLI Availability ────────────────────────────────────
+// On Render/production, the z-ai image-search CLI doesn't exist.
+// After first ENOENT, we skip all future calls (products keep AI URLs).
+let imageSearchAvailable = true;
+
 // ─── In-Memory Cache ────────────────────────────────────────────
 // Maps search query → image URL. Survives for the process lifetime.
 const imageCache = new Map<string, { url: string; fetchedAt: number }>();
@@ -148,8 +153,14 @@ function buildSearchQuery(
  * Search for a single image via z-ai image-search CLI.
  * Returns the image URL or null on failure.
  * Includes rate-limit guard (minimum 2s between calls).
+ *
+ * On Render/production: z-ai CLI is not available, so returns null immediately.
+ * Products keep their AI-generated placeholder URLs (which are often valid Unsplash URLs).
  */
 export async function fetchImage(query: string): Promise<string | null> {
+  // Early return if z-ai CLI is not available (Render/production)
+  if (!imageSearchAvailable) return null;
+
   // Check cache first
   const cached = imageCache.get(query);
   if (cached && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
@@ -188,10 +199,18 @@ export async function fetchImage(query: string): Promise<string | null> {
     return null;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // On Render/production, z-ai CLI doesn't exist — this is expected, not an error
+    if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('spawning')) {
+      // Mark as unavailable so we don't keep retrying
+      if (!imageSearchAvailable) {
+        imageSearchAvailable = false;
+        console.log('[ImageEnrich] z-ai image-search CLI not available — image enrichment disabled (products will keep AI-generated URLs)');
+      }
+      return null;
+    }
     if (msg.includes('429') || msg.includes('Too many requests') || msg.includes('rate limit')) {
       console.warn(`[ImageEnrich] Rate limited on: "${query}" — backing off`);
-      // Increase backoff after a 429
-      lastImageSearchTime = Date.now() + 3_000; // Extra 3s penalty
+      lastImageSearchTime = Date.now() + 3_000;
     } else if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) {
       console.warn(`[ImageEnrich] Timeout for: "${query}"`);
     } else {

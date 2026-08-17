@@ -32,8 +32,6 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
-!.env.local
-!.env
 !.env.example
 
 # vercel
@@ -53,5 +51,11 @@ test
 prompt
 
 server.log
+
+# Database & uploads (local dev only)
+/db/
+/upload/
+/tool-results/
+
 # Skills directory
 /skills/tool-results/
