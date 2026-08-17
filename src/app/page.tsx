@@ -82,6 +82,7 @@ import {
   PanelGroup,
   Panel,
   PanelResizeHandle,
+  type ImperativePanelHandle,
 } from 'react-resizable-panels'
 
 // ─── Animation Variants ───────────────────────────────────────────────
@@ -957,20 +958,6 @@ function LandingPage() {
   )
 }
 
-// ─── Resize Handle ────────────────────────────────────────────────────
-
-function ResizeHandle({ direction }: { direction: 'left' | 'right' }) {
-  return (
-    <PanelResizeHandle
-      className={`group relative flex w-1.5 items-center justify-center bg-zinc-900 transition-colors hover:bg-zinc-800 data-[resize-handle-active]:bg-[#a855f7]/30 ${
-        direction === 'left' ? 'border-l border-zinc-800' : 'border-r border-zinc-800'
-      }`}
-    >
-      <div className="absolute inset-y-0 -left-1 -right-1" />
-    </PanelResizeHandle>
-  )
-}
-
 // ─── Preview Panel (direct Zustand subscription for reliable re-renders) ──
 // This component subscribes to Zustand independently so the preview always
 // re-renders when the store changes, regardless of PanelGroup/Panel
@@ -1006,15 +993,21 @@ function PreviewPanel() {
   }
 
   return (
-    <div className="h-full overflow-auto bg-zinc-100">
-      <StoreRenderer
-        store={store}
-        selectedSectionId={selectedSectionId}
-        onSelectSection={setSelectedSectionId}
-        externalCurrentPageId={editorCurrentPageId}
-        onPageChange={setEditorCurrentPageId}
-        onAddSectionClick={handleAddSectionClick}
-      />
+    <div className="flex h-full flex-col bg-zinc-100">
+      <div className="flex h-8 shrink-0 items-center justify-center border-b border-zinc-200 bg-white">
+        <Eye className="mr-1.5 h-3 w-3 text-zinc-400" />
+        <span className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Preview</span>
+      </div>
+      <div className="flex-1 overflow-auto">
+        <StoreRenderer
+          store={store}
+          selectedSectionId={selectedSectionId}
+          onSelectSection={setSelectedSectionId}
+          externalCurrentPageId={editorCurrentPageId}
+          onPageChange={setEditorCurrentPageId}
+          onAddSectionClick={handleAddSectionClick}
+        />
+      </div>
     </div>
   )
 }
@@ -1026,6 +1019,8 @@ function EditorView() {
   const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
   const [showLeft, setShowLeft] = useState(true)
   const [showRight, setShowRight] = useState(true)
+  const leftPanelRef = useRef<ImperativePanelHandle>(null)
+  const rightPanelRef = useRef<ImperativePanelHandle>(null)
 
   // Clear stale panel layout data that may cause 0-width panels in iframes
   useEffect(() => {
@@ -1033,6 +1028,23 @@ function EditorView() {
       localStorage.removeItem('react-resizable-panels:storqly-editor-layout')
     } catch { /* localStorage may be blocked in some iframe contexts */ }
   }, [])
+
+  // Collapse/expand panels programmatically — never unmount them
+  useEffect(() => {
+    if (showLeft) {
+      leftPanelRef.current?.expand()
+    } else {
+      leftPanelRef.current?.collapse()
+    }
+  }, [showLeft])
+
+  useEffect(() => {
+    if (showRight) {
+      rightPanelRef.current?.expand()
+    } else {
+      rightPanelRef.current?.collapse()
+    }
+  }, [showRight])
 
   // If no store is loaded (e.g. page refresh lost Zustand state),
   // redirect back to landing after a brief moment
@@ -1062,30 +1074,53 @@ function EditorView() {
       {isFallbackStore && <FallbackBanner />}
 
       <div className="flex-1 overflow-hidden">
-        <PanelGroup direction="horizontal">
-          <AnimatePresence mode="wait">
-            {showLeft && (
-              <Panel id="left" order={1} defaultSize={18} minSize={12} maxSize={28}>
-                <VisualEditor />
-              </Panel>
-            )}
-          </AnimatePresence>
+        <PanelGroup direction="horizontal" id="storqly-editor-layout">
+          <Panel
+            id="left"
+            order={1}
+            defaultSize={18}
+            minSize={12}
+            maxSize={28}
+            collapsible={true}
+            collapsedSize={0}
+            ref={leftPanelRef}
+          >
+            <div className="h-full overflow-hidden">
+              <VisualEditor />
+            </div>
+          </Panel>
 
-          {showLeft && showRight && <ResizeHandle direction="left" />}
+          <PanelResizeHandle className="group relative flex w-1.5 items-center justify-center bg-zinc-900 transition-colors hover:bg-zinc-800 data-[resize-handle-active]:bg-[#a855f7]/30 border-l border-zinc-800">
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+          </PanelResizeHandle>
 
-          <Panel id="center" order={2} defaultSize={showLeft && showRight ? 48 : showLeft || showRight ? 72 : 100} minSize={30}>
+          <Panel
+            id="center"
+            order={2}
+            defaultSize={48}
+            minSize={35}
+          >
             <PreviewPanel />
           </Panel>
 
-          {showLeft && showRight && <ResizeHandle direction="right" />}
+          <PanelResizeHandle className="group relative flex w-1.5 items-center justify-center bg-zinc-900 transition-colors hover:bg-zinc-800 data-[resize-handle-active]:bg-[#a855f7]/30 border-r border-zinc-800">
+            <div className="absolute inset-y-0 -left-1 -right-1" />
+          </PanelResizeHandle>
 
-          <AnimatePresence mode="wait">
-            {showRight && (
-              <Panel id="right" order={3} defaultSize={22} minSize={16} maxSize={32}>
-                <ChatPanel />
-              </Panel>
-            )}
-          </AnimatePresence>
+          <Panel
+            id="right"
+            order={3}
+            defaultSize={22}
+            minSize={16}
+            maxSize={32}
+            collapsible={true}
+            collapsedSize={0}
+            ref={rightPanelRef}
+          >
+            <div className="h-full overflow-hidden">
+              <ChatPanel />
+            </div>
+          </Panel>
         </PanelGroup>
       </div>
     </div>

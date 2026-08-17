@@ -933,3 +933,28 @@ Stage Summary:
 - Output size impact of backgroundImage: ~90 chars per URL, 2-4% increase (confirmed from previous analysis)
 - Batch test script provided at /home/z/my-project/batch-test.sh for local verification
 - Client-side error in sandbox is due to memory constraint, not code issue
+---
+Task ID: Fix Permanent Preview Panel
+Agent: Main Agent
+Task: Fix the three-column editor's preview panel to be strictly permanently visible.
+
+Work Log:
+- Identified root cause: `AnimatePresence` wrapping around left/right panels caused `react-resizable-panels` to lose layout calculations, potentially collapsing the center preview panel to 0 width
+- Imported `ImperativePanelHandle` from react-resizable-panels
+- Replaced conditional panel rendering (AnimatePresence + v-if pattern) with collapsible panels:
+  - Left and right panels now use `collapsible={true}` + `collapsedSize={0}`
+  - Panels are ALWAYS in the DOM, never unmounted
+  - `useRef<ImperativePanelHandle>` + `expand()`/`collapse()` for programmatic toggle
+  - Added `id="storqly-editor-layout"` to PanelGroup for stable localStorage key
+  - Center preview panel has `minSize={35}` (guaranteed always visible)
+  - Removed old `ResizeHandle` component (inlined the handles)
+- Added visible "Preview" header label with Eye icon above the store renderer
+- Removed old ResizeHandle component (no longer needed)
+- Lint: 0 errors, 0 warnings
+- Dev server compiles cleanly (GET / 200)
+
+Stage Summary:
+- Preview panel is now STRICTLY PERMANENT — it cannot collapse or disappear
+- All 3 panels always remain in the DOM (left/right use collapsible, center is non-collapsible)
+- Panel toggle buttons still work (collapse/expand) but can never remove the preview
+- Added "Preview" label header for clear visual identification
