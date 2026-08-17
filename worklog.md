@@ -1006,3 +1006,22 @@ Stage Summary:
 - On Render: AI works via GROQ+Gemini, images use AI-generated URLs (no enrichment CLI)
 - Free tier cold start: 30-50s acceptable per user's requirement
 - No paid services needed
+---
+Task ID: 3
+Agent: Main Agent
+Task: Migrate Prisma schema to Neon Postgres and verify connection
+
+Work Log:
+- Updated .env with Neon pooled (DATABASE_URL) and direct (DIRECT_URL) connection strings
+- Ran `prisma db push` — schema applied cleanly, all 6 tables created in 11.25s
+- Verified connection via direct Prisma client query: confirmed Account, ChatHistory, Session, Store, User, VerificationToken tables exist
+- Dev server starts cleanly with Neon, no runtime errors
+- Updated .env.example to reflect actual Neon URL format with channel_binding=require
+- Confirmed .env* is gitignored, credentials won't leak
+- Verified production build config: standalone output, prisma generate in build, standalone start script
+
+Stage Summary:
+- Neon DB is LIVE and schema-synced — ready for Render deployment
+- 6 tables created: Account, ChatHistory, Session, Store, User, VerificationToken
+- DB is empty (0 rows) — clean slate for production
+- Connection strings are in local .env only (gitignored) — user must add to Render dashboard manually
