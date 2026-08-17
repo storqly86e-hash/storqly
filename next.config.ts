@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Production: standalone output for Render deployment
+  // Production: standalone output for Docker deployment (Back4App, etc.)
   output: "standalone",
   // Allow cross-origin requests from Z.ai preview gateway (dev only, harmless in prod)
   ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ["*"] as const } : {}),
