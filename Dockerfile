@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Lean production Dockerfile for Back4App (256 MB RAM)
+# Storqly — Production Dockerfile for Railway
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
@@ -8,13 +8,13 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 
 # Install system deps needed for sharp (native image processing)
-RUN apk add --no-cache vips-dev
+RUN apk add --no-cache python3 make g++ vips-dev
 
 # Copy lockfile first for better Docker layer caching
 COPY package.json bun.lock* package-lock.json* ./
 
 # Install ALL deps (including devDeps needed for build)
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -29,9 +29,9 @@ WORKDIR /app
 
 # Set production environment
 ENV NODE_ENV=production
-# Cap V8 heap at 192 MB (leaves ~64 MB for Node overhead + OS)
-ENV NODE_OPTIONS="--max-old-space-size=192"
-# Back4App expects the app to listen on this port
+# Cap V8 heap at 384 MB (Railway free tier = 512 MB)
+ENV NODE_OPTIONS="--max-old-space-size=384"
+# Railway assigns PORT automatically via env var
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
@@ -52,7 +52,7 @@ USER nextjs
 
 EXPOSE 3000
 
-# Health check so Back4App knows the container is alive
+# Health check so Railway knows the container is alive
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
