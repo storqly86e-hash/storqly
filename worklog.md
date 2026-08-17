@@ -1046,3 +1046,24 @@ Stage Summary:
 - Clean single-commit history, zero secrets
 - PAT removed from local git config (only used transiently in push)
 - Ready for Render to connect this repo
+
+---
+Task ID: 5
+Agent: Main Agent
+Task: Add Dockerfile + .dockerignore for Back4App, push to GitHub
+
+Work Log:
+- Researched Back4App's Docker deployment model (Next.js container docs)
+- Created multi-stage Dockerfile: node:20-alpine builder → lean runner
+- Set NODE_OPTIONS=--max-old-space-size=192 to cap V8 heap at 192MB (leaves ~64MB for Node overhead)
+- Added vips-dev for sharp native image processing in build stage
+- Added .dockerignore to exclude node_modules, .next, tool-results, upload, db, etc.
+- Added HEALTHCHECK using /api/health endpoint
+- Updated next.config.ts comment (Render → generic Docker)
+- Force-pushed to GitHub, verified both files present on remote
+
+Stage Summary:
+- Dockerfile: 2.2KB, multi-stage, 256MB RAM optimized
+- .dockerignore: 410B, excludes all non-essential files
+- GitHub repo now has 2 commits: initial + Dockerfile
+- Ready for Back4App GitHub-integrated deploy
