@@ -5,8 +5,14 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
-  // Production: standalone output for Docker deployment (Back4App, etc.)
+  // Production: standalone output for Docker deployment (Railway, etc.)
   output: "standalone",
+  // Bypass tw-animate-css restrictive exports map (Turbopack can't resolve "style" condition)
+  turbopack: {
+    resolveAlias: {
+      'tw-animate-css': './node_modules/tw-animate-css/dist/tw-animate.css',
+    },
+  },
   // Allow cross-origin requests from Z.ai preview gateway (dev only, harmless in prod)
   ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ["*"] as const } : {}),
   // Allow embedding in iframes (Z.ai preview panel, etc.)
