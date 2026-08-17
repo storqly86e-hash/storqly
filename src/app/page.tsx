@@ -991,7 +991,19 @@ function PreviewPanel() {
     addSection(editorCurrentPageId, newSection)
   }, [editorCurrentPageId, addSection])
 
-  if (!store) return null
+  if (!store) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center bg-zinc-100">
+        <div className="text-center">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-200">
+            <Eye className="h-6 w-6 text-zinc-400" />
+          </div>
+          <p className="text-sm font-medium text-zinc-500">No store to preview</p>
+          <p className="mt-1 text-xs text-zinc-400">Generate a store to see it here</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-full overflow-auto bg-zinc-100">
@@ -1022,12 +1034,22 @@ function EditorView() {
     } catch { /* localStorage may be blocked in some iframe contexts */ }
   }, [])
 
+  // If no store is loaded (e.g. page refresh lost Zustand state),
+  // redirect back to landing after a brief moment
+  const reset = useStoreEditor((s) => s.reset)
+  useEffect(() => {
+    if (!store) {
+      const t = setTimeout(() => { reset() }, 800)
+      return () => clearTimeout(t)
+    }
+  }, [store, reset])
+
   if (!store) {
     return (
       <div className="flex flex-1 items-center justify-center bg-zinc-950">
         <div className="text-center">
           <Loader2 className="mx-auto h-8 w-8 animate-spin text-[#a855f7]" />
-          <p className="mt-3 text-sm text-zinc-500">Loading editor…</p>
+          <p className="mt-3 text-sm text-zinc-500">Redirecting…</p>
         </div>
       </div>
     )
