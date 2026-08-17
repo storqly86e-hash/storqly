@@ -38,11 +38,13 @@ ENV HOSTNAME="0.0.0.0"
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Copy standalone output from builder
-COPY --from=builder /app/.next/standalone ./
-# Copy static assets (public folder + _next/static)
-COPY --from=builder /app/.next/static ./.next/static
+# Copy public folder first (before standalone overwrites)
 COPY --from=builder /app/public ./public
+# Copy standalone output (must come before static)
+COPY --from=builder /app/.next/standalone ./
+# Copy static assets AFTER standalone (standalone has no static/ folder)
+COPY --from=builder /app/.next/static ./.next/static
+RUN find .next/static -name "*.css" -exec ls -la {} \;
 # Copy Prisma schema for potential runtime queries
 COPY --from=builder /app/prisma ./prisma
 
