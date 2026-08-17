@@ -1025,3 +1025,24 @@ Stage Summary:
 - 6 tables created: Account, ChatHistory, Session, Store, User, VerificationToken
 - DB is empty (0 rows) — clean slate for production
 - Connection strings are in local .env only (gitignored) — user must add to Render dashboard manually
+
+---
+Task ID: 4
+Agent: Main Agent
+Task: Push clean code to GitHub (secrets removed, orphan branch)
+
+Work Log:
+- Discovered .env, .env.local, db/custom.db, tool-results/, upload/, skills/ were tracked in git
+- Created orphan branch (clean-main) to eliminate all secret-containing history
+- Fixed .gitignore to include /tool-results/ and /skills/
+- Removed all sensitive files from tracking, verified zero secrets in staged files
+- Single clean commit: 185 files, no .env, no API keys, no DB files
+- Force-pushed as main to github.com/storqly86e-hash/storqly
+- Removed PAT from stored git remote URL
+- Verified via GitHub API: no real secrets in .env.example, Prisma schema clean
+
+Stage Summary:
+- GitHub repo is LIVE at https://github.com/storqly86e-hash/storqly
+- Clean single-commit history, zero secrets
+- PAT removed from local git config (only used transiently in push)
+- Ready for Render to connect this repo
