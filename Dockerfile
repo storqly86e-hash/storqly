@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Production Dockerfile for Railway
+# Storqly — Production Dockerfile for Railway [v2]
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
