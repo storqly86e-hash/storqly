@@ -9,8 +9,10 @@ WORKDIR /app
 
 # Copy lockfile first for better Docker layer caching
 COPY package.json bun.lock* package-lock.json* ./
+COPY prisma ./prisma
 
 # Install ALL deps (including devDeps needed for build)
+# (postinstall runs prisma generate, so prisma/ must be present)
 RUN npm ci
 
 # Copy source code
