@@ -1067,3 +1067,34 @@ Stage Summary:
 - .dockerignore: 410B, excludes all non-essential files
 - GitHub repo now has 2 commits: initial + Dockerfile
 - Ready for Back4App GitHub-integrated deploy
+
+---
+Task ID: Railway CSS Fix - Root Cause & Resolution
+Agent: Main Agent
+Task: Diagnose and fix zero CSS on Railway production deployment
+
+Work Log:
+- Curled Railway live: CSS file ef79b7d401bbedf9.css = 22,395 bytes (BROKEN)
+- JS files and fonts serve 200 OK — static serving IS working, not a standalone issue
+- Container uptime 90+ minutes — Railway never deployed the pushed code
+- Simulated Docker build (no .git): discovered tailwind.config.ts has WRONG content paths
+  - content: ["./pages/**/...", "./components/**/...", "./app/**/..."]
+  - But ALL source is in ./src/ — none of these paths match!
+  - TW4 @source directive was added but tailwind.config.ts (TW3 relic) was still present
+- Deleted tailwind.config.ts — all theme config already in globals.css @theme inline {}
+- Moved tailwindcss-animate to devDeps (was TW3 plugin, unused in TW4)
+- Updated Dockerfile to v3: build-time CSS verification + runtime static verification
+- Added ARG CACHEBUST to force npm ci layer refresh
+- Local build confirmed: 158,112 bytes CSS (was 22KB)
+- Pushed commit 58b181d to GitHub main
+- Railway is NOT auto-deploying — user must manually trigger redeploy
+
+Stage Summary:
+- ROOT CAUSE: tailwind.config.ts had content paths pointing to non-existent directories
+  (./pages/, ./components/, ./app/ instead of ./src/). In Docker (no .git), TW4's
+  auto-detection fails, so ONLY the config's content array was used → zero source
+  files found → zero utility classes generated.
+- User's hypothesis about standalone not serving static files was INCORRECT.
+  JS/fonts serve fine (200 OK). The issue was CSS GENERATION, not CSS SERVING.
+- Fix: delete tailwind.config.ts, rely solely on TW4's @source directive.
+- Railway needs: (1) Manual redeploy, (2) Environment variables set
