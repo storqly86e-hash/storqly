@@ -5,6 +5,8 @@ const nextConfig: NextConfig = {
     ignoreBuildErrors: true,
   },
   reactStrictMode: false,
+  // Allow cross-origin requests from Z.ai preview gateway
+  allowedDevOrigins: ["*"],
   // Allow embedding in iframes (Z.ai preview panel, etc.)
   async headers() {
     return [

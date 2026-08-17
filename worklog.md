@@ -958,3 +958,25 @@ Stage Summary:
 - All 3 panels always remain in the DOM (left/right use collapsible, center is non-collapsible)
 - Panel toggle buttons still work (collapse/expand) but can never remove the preview
 - Added "Preview" label header for clear visual identification
+
+---
+Task ID: Fix Permanent Preview Panel (follow-up)
+Agent: Main Agent
+Task: User reported preview still not visible in Z.ai interface preview panel.
+
+Work Log:
+- Investigated Z.ai preview panel behavior via agent-browser
+- Confirmed Z.ai platform gateway (port 81) returns its own placeholder HTML (Z logo) instead of proxying to Next.js app on port 3000
+- The placeholder has a 5-second auto-reload loop but never transitions to the app
+- Caddy process runs with `/app/Caddyfile` (host namespace), NOT with project's Caddyfile
+- Platform gateway intercepts ALL responses and replaces them with 1364-byte placeholder
+- Dev server IS running correctly (GET / 200, health checks passing)
+- Added `allowedDevOrigins: ["*"]` to next.config.ts to eliminate cross-origin warnings
+- Memory pressure from agent-browser/Chrome was causing dev server crashes — resolved by killing browser processes
+- Confirmed this is a Z.ai platform infrastructure issue, not a code issue
+
+Stage Summary:
+- Preview panel code fix (collapsible panels, permanent center) is correct and compiles clean
+- Z.ai preview panel is controlled by platform gateway — cannot be fixed from app code
+- Dev server is stable and responding correctly
+- User should use "Open in New Tab" button in the Z.ai interface to view the app
