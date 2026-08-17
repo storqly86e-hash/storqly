@@ -7,9 +7,6 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Install system deps needed for sharp (native image processing)
-RUN apk add --no-cache python3 make g++ vips-dev
-
 # Copy lockfile first for better Docker layer caching
 COPY package.json bun.lock* package-lock.json* ./
 
