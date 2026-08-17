@@ -14,6 +14,7 @@ COPY prisma ./prisma
 # Install ALL deps (including devDeps needed for build)
 # (postinstall runs prisma generate, so prisma/ must be present)
 RUN npm ci
+RUN ls node_modules/tw-animate-css || echo "TW-ANIMATE-CSS NOT INSTALLED"
 
 # Copy source code
 COPY . .
