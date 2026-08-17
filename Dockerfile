@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Production Dockerfile for Railway [v2]
+# Storqly — Production Dockerfile for Railway [v3]
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
@@ -7,19 +7,32 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy lockfile first for better Docker layer caching
-COPY package.json bun.lock* package-lock.json* ./
+# Force cache bust when package.json changes
+ARG CACHEBUST=1
+
+# Copy lockfile + prisma first for Docker layer caching
+COPY package.json package-lock.json* ./
 COPY prisma ./prisma
 
 # Install ALL deps (including devDeps needed for build)
 # (postinstall runs prisma generate, so prisma/ must be present)
 RUN npm ci
 
-# Copy source code
+# Copy source code (excludes .git via .dockerignore)
 COPY . .
 
 # Generate Prisma client + build Next.js standalone
 RUN npx prisma generate && npm run build
+
+# ── Build verification ──────────────────────────────────────
+RUN echo "=== BUILD VERIFICATION ===" && \
+    echo "CSS files:" && \
+    find .next/static/chunks -name '*.css' -exec ls -lh {} \; && \
+    echo "Static assets count:" && \
+    find .next/static -type f | wc -l && \
+    echo "Standalone exists:" && \
+    ls -la .next/standalone/server.js && \
+    echo "=== VERIFICATION COMPLETE ==="
 
 # ── Stage 2: Lean runtime ───────────────────────────────────
 FROM node:20-alpine AS runner
@@ -46,6 +59,13 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 # Copy Prisma schema for potential runtime queries
 COPY --from=builder /app/prisma ./prisma
+
+# Verify static files were copied correctly
+RUN echo "Runtime verification:" && \
+    echo "  server.js: $(ls -lh server.js | awk '{print $5}')" && \
+    echo "  static files: $(find .next/static -type f | wc -l)" && \
+    echo "  CSS files:" && \
+    find .next/static -name '*.css' -exec ls -lh {} \;
 
 # Switch to non-root user
 USER nextjs
