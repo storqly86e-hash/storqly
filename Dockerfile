@@ -44,7 +44,6 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 # Copy static assets AFTER standalone (standalone has no static/ folder)
 COPY --from=builder /app/.next/static ./.next/static
-RUN find .next/static -name "*.css" -exec ls -la {} \;
 # Copy Prisma schema for potential runtime queries
 COPY --from=builder /app/prisma ./prisma
 
