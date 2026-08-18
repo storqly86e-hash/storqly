@@ -1152,3 +1152,24 @@ Stage Summary:
 - Cannot verify Railway deployment state from sandbox
 - Added /api/ai-debug endpoint with codeFingerprint (v4-2026-08-18) and key format analysis for definitive deployment verification
 - Two commits made locally, not pushed: 628575d, 8816a89
+---
+Task ID: 2
+Agent: Main
+Task: Add OpenRouter as free AI provider alternative to broken Groq/Gemini keys
+
+Work Log:
+- Searched for free AI APIs: DeepSeek is paid ($0.14/1M min), Qwen free tier removed from OpenRouter Aug 2026
+- Found OpenRouter has 14 free models (Aug 3 2026 snapshot) with coding-capable options
+- Read teamday.ai article listing all free models with rate limits (50 req/day free, 1000/day with $10 credit)
+- Added OpenRouterProvider class to ai-providers.ts using native fetch (no new dependency)
+- Implements OpenAI-compatible API at https://openrouter.ai/api/v1/chat/completions
+- 3 free models with auto-fallback: cohere/north-mini-code → poolside/laguna-s-2.1 → inclusionai/ling-3.0-flash
+- Added OpenRouter streaming to marketing-kit/generate/route.ts with same model fallback
+- Updated /api/ai-debug with OpenRouter key format analysis (sk-or- prefix), fingerprint v5
+- Provider chain order: z-ai (sandbox) → OpenRouter (free, production primary) → Groq → Gemini
+- All changes lint-clean, committed as 3e90cbb
+
+Stage Summary:
+- OpenRouter is now the primary production provider — completely free, no credit card
+- User needs to: (1) get key at openrouter.ai/keys, (2) set OPENROUTER_API_KEY in Railway, (3) redeploy
+- Groq and Gemini remain as backups if valid keys are provided later
