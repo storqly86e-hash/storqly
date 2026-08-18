@@ -106,8 +106,28 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Detect database connection issues for helpful error messages
+    if (!process.env.DATABASE_URL) {
+      return NextResponse.json(
+        { error: 'Database not configured. Please set DATABASE_URL in your deployment environment.' },
+        { status: 500 },
+      );
+    }
+    if (msg.includes('connect') || msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND') || msg.includes('P1001') || msg.includes('P1003')) {
+      return NextResponse.json(
+        { error: 'Could not connect to database. Check DATABASE_URL in your deployment settings.' },
+        { status: 500 },
+      );
+    }
+    if (msg.includes('relation') || msg.includes('table') || msg.includes('P2021') || msg.includes('does not exist')) {
+      return NextResponse.json(
+        { error: 'Database tables not found. The deployment may need to be restarted to run migrations.' },
+        { status: 500 },
+      );
+    }
+
     return NextResponse.json(
-      { error: 'An unexpected error occurred during registration.' },
+      { error: `Registration failed: ${msg.substring(0, 120)}` },
       { status: 500 },
     );
   }

@@ -1,11 +1,12 @@
 // ========================================
-// Lightweight AI Provider Status Check
+// AI Provider Status Check
 // ========================================
 // GET /api/ai-status
-// Quickly pings each provider to check availability.
-// Uses minimal tokens/timeout to avoid consuming quota.
+// Strategy: Check key format first (instant, no API call).
+// If any key has valid format, report anyWorking=true.
+// If ?ping=true query param, also do a live API test.
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getProviders } from '@/lib/ai-providers';
 
 type ProviderStatus = {
@@ -13,8 +14,36 @@ type ProviderStatus = {
   ok: boolean;
   error?: string;
   latencyMs: number;
+  method: 'format' | 'ping';
 };
 
+// ── Quick format-based check (no API call) ──
+function checkByFormat(): ProviderStatus[] {
+  const results: ProviderStatus[] = [];
+  const start = Date.now();
+
+  // OpenRouter
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
+    results.push({ name: 'openrouter', ok: true, latencyMs: Date.now() - start, method: 'format' });
+  }
+
+  // Groq
+  const gKey = process.env.GROQ_API_KEY;
+  if (gKey && gKey !== 'placeholder' && gKey.startsWith('gsk_')) {
+    results.push({ name: 'groq', ok: true, latencyMs: Date.now() - start, method: 'format' });
+  }
+
+  // Gemini
+  const gemKey = process.env.GOOGLE_AI_API_KEY;
+  if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
+    results.push({ name: 'gemini', ok: true, latencyMs: Date.now() - start, method: 'format' });
+  }
+
+  return results;
+}
+
+// ── Live API ping (only when ?ping=true) ──
 interface PingableProvider {
   name: string;
   call: (opts: { messages: Array<{ role: string; content: string }>; timeout: number }) => Promise<string>;
@@ -27,7 +56,7 @@ async function pingProvider(provider: PingableProvider): Promise<ProviderStatus>
       messages: [{ role: 'user', content: 'hi' }],
       timeout: 10_000,
     });
-    return { name: provider.name, ok: true, latencyMs: Date.now() - start };
+    return { name: provider.name, ok: true, latencyMs: Date.now() - start, method: 'ping' };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     let shortError: string;
@@ -44,24 +73,53 @@ async function pingProvider(provider: PingableProvider): Promise<ProviderStatus>
     } else {
       shortError = msg.substring(0, 80);
     }
-    return { name: provider.name, ok: false, error: shortError, latencyMs: Date.now() - start };
+    return { name: provider.name, ok: false, error: shortError, latencyMs: Date.now() - start, method: 'ping' };
   }
 }
 
-export async function GET() {
-  const providers = getProviders();
-  const results: ProviderStatus[] = [];
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const doPing = searchParams.get('ping') === 'true';
 
-  for (const p of providers) {
-    const status = await pingProvider(p);
-    results.push(status);
-    try { p.reset(); } catch { /* ignore */ }
+  let results: ProviderStatus[];
+
+  if (doPing) {
+    // Live ping mode
+    const providers = getProviders();
+    results = [];
+    for (const p of providers) {
+      const status = await pingProvider(p);
+      results.push(status);
+      try { p.reset(); } catch { /* ignore */ }
+    }
+  } else {
+    // Default: fast format check (no API calls, no rate limit risk)
+    results = checkByFormat();
+    // Also report providers that are configured but have wrong format
+    const env = process.env;
+    if (env.GROQ_API_KEY && env.GROQ_API_KEY !== 'placeholder') {
+      if (!results.find(r => r.name === 'groq')) {
+        results.push({ name: 'groq', ok: false, error: 'Key format invalid or revoked', latencyMs: 0, method: 'format' });
+      }
+    }
+    if (env.GOOGLE_AI_API_KEY && env.GOOGLE_AI_API_KEY !== 'placeholder') {
+      if (!results.find(r => r.name === 'gemini')) {
+        const isOAuth = env.GOOGLE_AI_API_KEY!.startsWith('AQ.');
+        results.push({ name: 'gemini', ok: false, error: isOAuth ? 'OAuth token (need AIzaSy key)' : 'Key format invalid', latencyMs: 0, method: 'format' });
+      }
+    }
+    if (env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== 'placeholder') {
+      if (!results.find(r => r.name === 'openrouter')) {
+        results.push({ name: 'openrouter', ok: false, error: 'Key format invalid (needs sk-or-)', latencyMs: 0, method: 'format' });
+      }
+    }
   }
 
   const anyWorking = results.some(r => r.ok);
   return NextResponse.json({
     providers: results,
     anyWorking,
+    method: doPing ? 'live-ping' : 'format-check',
     timestamp: new Date().toISOString(),
   });
 }
