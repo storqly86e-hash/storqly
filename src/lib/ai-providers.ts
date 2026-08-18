@@ -7,7 +7,7 @@
 // providers in order, switching on 429/timeout/persistent failures.
 
 import Groq from 'groq-sdk';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenAI } from '@google/genai';
 
 // ─── Provider Interface ───────────────────────────────────────
 
@@ -159,19 +159,20 @@ class GroqProvider implements AIProvider {
 
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
-  private client: GoogleGenerativeAI | null = null;
+  private client: GoogleGenAI | null = null;
 
-  private getClient(): GoogleGenerativeAI {
+  private getClient(): GoogleGenAI {
     if (!this.client) {
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
-      this.client = new GoogleGenerativeAI(apiKey);
+      // @google/genai SDK (v2+) — supports both AIzaSy and AQ. auth keys
+      this.client = new GoogleGenAI({ apiKey });
     }
     return this.client;
   }
 
   async call(options: ProviderCallOptions): Promise<string> {
-    const genAI = this.getClient();
+    const ai = this.getClient();
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
     // Gemini uses a different message format: system instruction + user/assistant history
@@ -189,25 +190,24 @@ class GeminiProvider implements AIProvider {
       }
     }
 
-    const generationConfig: Record<string, unknown> = {};
-    if (jsonMode) generationConfig.responseMimeType = 'application/json';
-    if (temperature !== undefined) generationConfig.temperature = temperature;
-    if (maxTokens) generationConfig.maxOutputTokens = maxTokens;
+    const config: Record<string, unknown> = {};
+    if (systemInstruction) config.systemInstruction = systemInstruction;
+    if (jsonMode) config.responseMimeType = 'application/json';
+    if (temperature !== undefined) config.temperature = temperature;
+    if (maxTokens) config.maxOutputTokens = maxTokens;
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      ...(systemInstruction ? { systemInstruction } : {}),
-      ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
-    });
-
-    const completion = await Promise.race([
-      model.generateContent({ contents: geminiContents }),
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: 'gemini-2.0-flash',
+        contents: geminiContents,
+        ...(Object.keys(config).length > 0 ? { config } : {}),
+      }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Request timed out')), timeout)
       ),
     ]);
 
-    const content = completion.response.text();
+    const content = response.text;
     if (!content || content.trim().length === 0) throw new Error('Empty response');
     return content.trim();
   }

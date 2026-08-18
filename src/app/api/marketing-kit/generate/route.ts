@@ -147,8 +147,8 @@ async function tryGemini(
     const apiKey = process.env.GOOGLE_AI_API_KEY;
     if (!apiKey || apiKey === 'placeholder') return null;
 
-    const { GoogleGenerativeAI } = await import('@google/generative-ai');
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey });
 
     let systemInstruction: string | undefined;
     const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
@@ -164,13 +164,15 @@ async function tryGemini(
       }
     }
 
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
-      ...(systemInstruction ? { systemInstruction } : {}),
-    });
+    const config: Record<string, unknown> = {};
+    if (systemInstruction) config.systemInstruction = systemInstruction;
 
-    const completion = await model.generateContent({ contents: geminiContents });
-    return completion.response.text().trim() || null;
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: geminiContents,
+      ...(Object.keys(config).length > 0 ? { config } : {}),
+    });
+    return response.text.trim() || null;
   } catch {
     return null;
   }
