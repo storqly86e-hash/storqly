@@ -1196,3 +1196,25 @@ Stage Summary:
 - Registration 500 will be fixed once tables are created via prisma db push
 - AI unavailable will be fixed once OpenRouter provider code is deployed
 - User MUST push from their local machine (no git credentials in sandbox)
+---
+Task ID: 1
+Agent: main
+Task: Fix store generation failure - verify OpenRouter key, update env, push code
+
+Work Log:
+- Read ai-providers.ts, ai-orchestrator.ts, store/generate/route.ts, marketing-kit/generate/route.ts
+- Found .env.local has OPENROUTER_API_KEY=placeholder
+- Tested old GROQ key: returns 403 Forbidden (INVALID)
+- Tested new OpenRouter key (sk-or-v1-5c4e8a...): VALID, is_free_tier=true, usage=0
+- Listed all free models on OpenRouter (16 models found)
+- Verified poolside/laguna-s-2.1:free works with chat + JSON mode
+- Verified nvidia/nemotron-3.5-lightning:free exists in free list
+- Updated .env.local with new OpenRouter key
+- Updated build hash from 2026-08-11-072515Z-279ad2e to 2026-08-18T060045Z-90cf177
+- Committed and pushed to GitHub
+
+Stage Summary:
+- ROOT CAUSE: Railway has OLD INVALID OpenRouter key. Code + models are correct.
+- New key verified working: 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
+- User needs to update OPENROUTER_API_KEY on Railway to trigger redeploy
+- Latest commit: 90cf177 pushed to main
