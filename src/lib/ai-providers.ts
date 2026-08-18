@@ -226,8 +226,9 @@ function createProviders(): AIProvider[] {
 
   const chain: AIProvider[] = [];
 
-  // z-ai: only add if SDK is available (Z.ai sandbox only)
-  if (zaiCreate) {
+  // z-ai: ONLY in sandbox (non-production) environments where the SDK backend is reachable.
+  // On Railway/Render/any real host, NODE_ENV=production and the SDK has no backend → skip entirely.
+  if (zaiCreate && process.env.NODE_ENV !== 'production') {
     chain.push(new ZAIProvider());
   }
 
@@ -243,6 +244,7 @@ function createProviders(): AIProvider[] {
 
   if (chain.length === 0) {
     console.warn('[AI Providers] WARNING: No AI providers configured! Store generation will fail.');
+    console.warn('[AI Providers] GROQ_API_KEY set?', !!process.env.GROQ_API_KEY, '| GOOGLE_AI_API_KEY set?', !!process.env.GOOGLE_AI_API_KEY);
   }
 
   providers = chain;
@@ -260,4 +262,23 @@ export function resetAllProviders(): void {
   for (const p of getProviders()) {
     try { p.reset(); } catch { /* ignore */ }
   }
+}
+
+/** Diagnostic info (no API calls) — useful for debugging env-var issues on deploy */
+export function getProviderDiagnostics(): {
+  env: Record<string, boolean>;
+  zaiSdkLoaded: boolean;
+  nodeEnv: string;
+} {
+  return {
+    env: {
+      GROQ_API_KEY: !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder'),
+      GOOGLE_AI_API_KEY: !!(process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder'),
+      DATABASE_URL: !!process.env.DATABASE_URL,
+      NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
+      NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
+    },
+    zaiSdkLoaded: !!zaiCreate,
+    nodeEnv: process.env.NODE_ENV || 'not set',
+  };
 }
