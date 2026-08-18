@@ -105,24 +105,33 @@ async function tryZAIStream(
   }
 }
 
-// ─── OpenRouter streaming (production primary — free models) ────────
+// ─── OpenRouter — production primary (free models) ────────
+// General-purpose models first (better for marketing content),
+// code models as fallback. Tries streaming first, then non-streaming.
+
+const OPENROUTER_MODELS = [
+  'inclusionai/ling-3.0-flash:free',
+  'google/gemma-3-27b-it:free',
+  'meta-llama/llama-4-scout-17b-16e-instruct:free',
+  'cohere/north-mini-code:free',
+  'deepseek/deepseek-chat-v3-0324:free',
+] as const;
+
 async function tryOpenRouterStream(
   messages: Array<{ role: string; content: string }>,
   onDelta: (text: string) => void,
+  onProgress: (msg: string) => void,
 ): Promise<string | null> {
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey || apiKey === 'placeholder') return null;
 
-    const models = [
-      'cohere/north-mini-code:free',
-      'poolside/laguna-s-2.1:free',
-      'inclusionai/ling-3.0-flash:free',
-    ];
-
     let lastError: Error | null = null;
-    for (const model of models) {
+    for (const model of OPENROUTER_MODELS) {
       try {
+        onProgress(`Trying ${model}...`);
+        console.log(`[Marketing Kit] OpenRouter trying ${model} (streaming)...`);
+
         const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -134,15 +143,16 @@ async function tryOpenRouterStream(
           body: JSON.stringify({
             model,
             messages,
-            temperature: 0.8,
+            temperature: 0.7,
+            max_tokens: 8000,
             stream: true,
           }),
         });
 
         if (!response.ok) {
           const errText = await response.text();
-          lastError = new Error(`OpenRouter ${response.status} on ${model}: ${errText.substring(0, 200)}`);
-          console.warn(`[Marketing Kit] OpenRouter ${model} failed: ${response.status}`);
+          lastError = new Error(`OpenRouter ${response.status} on ${model}: ${errText.substring(0, 300)}`);
+          console.warn(`[Marketing Kit] OpenRouter ${model} HTTP ${response.status}: ${errText.substring(0, 200)}`);
           continue;
         }
 
@@ -152,6 +162,7 @@ async function tryOpenRouterStream(
         const decoder = new TextDecoder();
         let buffer = '';
         let fullContent = '';
+        let chunkCount = 0;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -167,20 +178,30 @@ async function tryOpenRouterStream(
             if (payload === '[DONE]') continue;
             try {
               const parsed = JSON.parse(payload);
+              // Check for error in stream
+              if (parsed.error) {
+                console.warn(`[Marketing Kit] OpenRouter stream error on ${model}:`, parsed.error.message);
+                break;
+              }
               const delta = parsed.choices?.[0]?.delta?.content;
               if (delta) {
                 fullContent += delta;
+                chunkCount++;
                 onDelta(delta);
               }
-            } catch { /* skip */ }
+            } catch { /* skip malformed JSON */ }
           }
         }
 
         const trimmed = fullContent.trim();
         if (trimmed) {
-          console.log(`[Marketing Kit] ✅ OpenRouter ${model} succeeded: ${trimmed.length} chars`);
+          console.log(`[Marketing Kit] ✅ OpenRouter ${model} streaming OK: ${trimmed.length} chars, ${chunkCount} chunks`);
           return trimmed;
         }
+        // Streaming returned empty — try non-streaming as fallback for this model
+        console.log(`[Marketing Kit] OpenRouter ${model} streaming empty, trying non-streaming...`);
+        const nonStreamResult = await tryOpenRouterNonStream(apiKey, model, messages);
+        if (nonStreamResult) return nonStreamResult;
       } catch (e) {
         lastError = e instanceof Error ? e : new Error(String(e));
         console.warn(`[Marketing Kit] OpenRouter ${model} error:`, lastError.message);
@@ -190,6 +211,57 @@ async function tryOpenRouterStream(
     return null;
   } catch (e) {
     console.error('[Marketing Kit] OpenRouter unexpected error:', e);
+    return null;
+  }
+}
+
+// Non-streaming OpenRouter call (fallback when streaming returns empty)
+async function tryOpenRouterNonStream(
+  apiKey: string,
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+): Promise<string | null> {
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`,
+        'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://storqly.com',
+        'X-Title': 'Storqly',
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.7,
+        max_tokens: 8000,
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.warn(`[Marketing Kit] OpenRouter non-stream ${model} HTTP ${response.status}: ${errText.substring(0, 200)}`);
+      return null;
+    }
+
+    const data = await response.json() as {
+      choices: Array<{ message?: { content?: string } }>;
+      error?: { message: string };
+    };
+
+    if (data.error) {
+      console.warn(`[Marketing Kit] OpenRouter non-stream ${model} error:`, data.error.message);
+      return null;
+    }
+
+    const content = data.choices?.[0]?.message?.content?.trim();
+    if (content) {
+      console.log(`[Marketing Kit] ✅ OpenRouter ${model} non-stream OK: ${content.length} chars`);
+      return content;
+    }
+    return null;
+  } catch (e) {
+    console.warn(`[Marketing Kit] OpenRouter non-stream error:`, e);
     return null;
   }
 }
@@ -336,8 +408,11 @@ export async function POST(req: NextRequest) {
         // 2. Try OpenRouter (production primary — free models)
         if (!result && !timedOut()) {
           console.log('[Marketing Kit] Trying OpenRouter (free models)...');
-          send('progress', { message: 'Connecting to AI provider...' });
-          result = await tryOpenRouterStream(messages, (delta) => send('delta', { content: delta }));
+          result = await tryOpenRouterStream(
+            messages,
+            (delta) => send('delta', { content: delta }),
+            (msg) => send('progress', { message: msg }),
+          );
         }
 
         // 3. Try GROQ (backup streaming)
@@ -359,7 +434,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (!result) {
-          send('error', { message: 'All AI providers failed. Set OPENROUTER_API_KEY (free) at https://openrouter.ai/keys — no credit card needed.' });
+          send('error', { message: 'AI generation failed. Please try again in a moment. If this persists, check that OPENROUTER_API_KEY is set correctly in your deployment.' });
           return;
         }
 

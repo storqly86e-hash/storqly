@@ -120,9 +120,11 @@ class ZAIProvider implements AIProvider {
 // Rate limits: 50 req/day (free account), 1000 req/day ($10 credit)
 
 const OPENROUTER_MODELS = [
-  'cohere/north-mini-code:free',       // Best for code generation
-  'poolside/laguna-s-2.1:free',          // Coding agent
-  'inclusionai/ling-3.0-flash:free',     // Fast general-purpose
+  'inclusionai/ling-3.0-flash:free',     // General-purpose (best for marketing)
+  'google/gemma-3-27b-it:free',           // Google's Gemma 3 27B
+  'meta-llama/llama-4-scout-17b-16e-instruct:free',  // Meta's Llama 4
+  'cohere/north-mini-code:free',          // Code specialist
+  'deepseek/deepseek-chat-v3-0324:free',  // DeepSeek V3
 ] as const;
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
