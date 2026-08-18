@@ -1,10 +1,11 @@
 // ========================================
 // AI Provider Abstraction Layer
 // ========================================
-// Multi-provider failover: z-ai (sandbox-only), GROQ (backup 1), Gemini (backup 2).
-// On production (Render), z-ai SDK is unavailable — GROQ/Gemini become primary.
-// Each provider implements the same interface. The orchestrator tries
-// providers in order, switching on 429/timeout/persistent failures.
+// Multi-provider failover chain:
+//   1. z-ai (sandbox-only, local dev)
+//   2. OpenRouter (free models — primary for production)
+//   3. GROQ (backup, if key valid)
+//   4. Gemini (backup, if key valid)
 
 import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
@@ -113,7 +114,101 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── GROQ Provider (Backup 1 / Production Primary 1) ──────────
+// ─── OpenRouter Provider (Free models — Primary for production) ──
+// OpenAI-compatible API at https://openrouter.ai/api/v1
+// Free models: cohere/north-mini-code, poolside/laguna-s-2.1, inclusionai/ling-3.0-flash
+// Rate limits: 50 req/day (free account), 1000 req/day ($10 credit)
+
+const OPENROUTER_MODELS = [
+  'cohere/north-mini-code:free',       // Best for code generation
+  'poolside/laguna-s-2.1:free',          // Coding agent
+  'inclusionai/ling-3.0-flash:free',     // Fast general-purpose
+] as const;
+
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+class OpenRouterProvider implements AIProvider {
+  readonly name = 'openrouter';
+  private lastWorkingModel = 0; // index into OPENROUTER_MODELS
+
+  private getApiKey(): string {
+    const key = process.env.OPENROUTER_API_KEY;
+    if (!key || key === 'placeholder') throw new Error('OPENROUTER_API_KEY not configured');
+    return key;
+  }
+
+  async call(options: ProviderCallOptions): Promise<string> {
+    const apiKey = this.getApiKey();
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+
+    // Convert messages: treat first 'assistant' message as system prompt
+    const openaiMessages: Array<{ role: string; content: string }> = [];
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && openaiMessages.length === 0) {
+        openaiMessages.push({ role: 'system', content: msg.content });
+      } else {
+        openaiMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      model: OPENROUTER_MODELS[this.lastWorkingModel],
+      messages: openaiMessages,
+      temperature,
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
+      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+    };
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+
+    try {
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://storqly.com',
+          'X-Title': 'Storqly',
+        },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const errBody = await response.text().catch(() => '');
+        // If rate-limited on this model, try next model
+        if (response.status === 429 && this.lastWorkingModel < OPENROUTER_MODELS.length - 1) {
+          this.lastWorkingModel++;
+          console.warn(`[OpenRouter] Rate limited on ${body.model}, falling back to ${OPENROUTER_MODELS[this.lastWorkingModel]}`);
+          return this.call(options);
+        }
+        throw new Error(`OpenRouter ${response.status}: ${errBody.substring(0, 200)}`);
+      }
+
+      const data = await response.json() as {
+        choices: Array<{ message?: { content?: string } }>;
+        error?: { message: string };
+      };
+
+      if (data.error) {
+        throw new Error(`OpenRouter error: ${data.error.message}`);
+      }
+
+      const content = data.choices?.[0]?.message?.content;
+      if (!content || content.trim().length === 0) throw new Error('Empty response');
+      return content.trim();
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  reset() {
+    this.lastWorkingModel = 0;
+  }
+}
+
+// ─── GROQ Provider (Backup 1) ──────────
 
 class GroqProvider implements AIProvider {
   readonly name = 'groq';
@@ -155,7 +250,7 @@ class GroqProvider implements AIProvider {
   }
 }
 
-// ─── Google AI Studio / Gemini Provider (Backup 2 / Production Primary 2) ──
+// ─── Google AI Studio / Gemini Provider (Backup 2) ──
 
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -165,7 +260,6 @@ class GeminiProvider implements AIProvider {
     if (!this.client) {
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
-      // @google/genai SDK (v2+) — supports both AIzaSy and AQ. auth keys
       this.client = new GoogleGenAI({ apiKey });
     }
     return this.client;
@@ -227,9 +321,14 @@ function createProviders(): AIProvider[] {
   const chain: AIProvider[] = [];
 
   // z-ai: ONLY in sandbox (non-production) environments where the SDK backend is reachable.
-  // On Railway/Render/any real host, NODE_ENV=production and the SDK has no backend → skip entirely.
   if (zaiCreate && process.env.NODE_ENV !== 'production') {
     chain.push(new ZAIProvider());
+  }
+
+  // OpenRouter: primary for production — free models, no credit card needed.
+  // Get your key at https://openrouter.ai/keys
+  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'placeholder') {
+    chain.push(new OpenRouterProvider());
   }
 
   // GROQ: add if API key is configured
@@ -244,7 +343,7 @@ function createProviders(): AIProvider[] {
 
   if (chain.length === 0) {
     console.warn('[AI Providers] WARNING: No AI providers configured! Store generation will fail.');
-    console.warn('[AI Providers] GROQ_API_KEY set?', !!process.env.GROQ_API_KEY, '| GOOGLE_AI_API_KEY set?', !!process.env.GOOGLE_AI_API_KEY);
+    console.warn('[AI Providers] OPENROUTER_API_KEY (free) or GROQ_API_KEY or GOOGLE_AI_API_KEY needed.');
   }
 
   providers = chain;
@@ -269,6 +368,7 @@ export function getProviderDiagnostics(): {
   env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
+  openrouterModels: readonly string[];
 } {
   const maskKey = (v: string | undefined) => {
     if (!v || v === 'placeholder') return false;
@@ -277,6 +377,7 @@ export function getProviderDiagnostics(): {
   };
   return {
     env: {
+      OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY),
       GROQ_API_KEY: maskKey(process.env.GROQ_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
@@ -285,5 +386,6 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
+    openrouterModels: [...OPENROUTER_MODELS],
   };
 }
