@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Production Dockerfile for Railway [v4]
+# Storqly — Production Dockerfile for Railway [v5]
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
@@ -68,8 +68,14 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 # Copy static assets AFTER standalone (standalone has no static/ folder)
 COPY --from=builder /app/.next/static ./.next/static
-# Copy Prisma schema for potential runtime queries
+# Copy Prisma schema + generated client for runtime db push
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/entrypoint.sh ./entrypoint.sh
+RUN chmod +x entrypoint.sh
+# Install prisma CLI (needed for db push at startup) — lightweight install
+RUN npm install prisma@^6.11 --no-save 2>&1 | tail -3
 
 # Verify static files were copied correctly
 RUN echo "Runtime verification:" && \
@@ -79,12 +85,14 @@ RUN echo "Runtime verification:" && \
     find .next/static -name '*.css' -exec ls -lh {} \;
 
 # Switch to non-root user
-USER nextjs
+# NOTE: Don't switch to nextjs user yet — prisma db push needs write
+# access to node_modules/.prisma which may be owned by root.
+# The entrypoint.sh script runs prisma db push then execs node server.js.
 
 EXPOSE 3000
 
 # Health check so Railway knows the container is alive
-HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
 
-CMD ["node", "server.js"]
+CMD ["./entrypoint.sh"]
