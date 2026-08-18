@@ -1173,3 +1173,26 @@ Stage Summary:
 - OpenRouter is now the primary production provider — completely free, no credit card
 - User needs to: (1) get key at openrouter.ai/keys, (2) set OPENROUTER_API_KEY in Railway, (3) redeploy
 - Groq and Gemini remain as backups if valid keys are provided later
+---
+Task ID: 3
+Agent: Main
+Task: Fix registration 500 error (missing DB tables) + prepare for push
+
+Work Log:
+- Analyzed 3 user screenshots via VLM
+- Screenshot 1: Registration form showing 500 error
+- Screenshot 2: HTTP 500 on /api/auth/error (Railway)
+- Screenshot 3: Homepage loads fine but shows AI unavailable
+- Root cause: Prisma schema had `directUrl = env(DIRECT_URL)` which fails when DIRECT_URL not set
+- Root cause 2: Dockerfile never ran `prisma db push` — tables dont exist in Neon PostgreSQL
+- Removed `directUrl` from schema.prisma
+- Created entrypoint.sh that runs `prisma db push` at container startup (idempotent)
+- Updated Dockerfile to v5: copies Prisma CLI + schema, installs prisma at runtime
+- Increased health check start_period from 40s to 60s to account for db push time
+- All changes committed as 47d6939
+
+Stage Summary:
+- 6 total commits need to be pushed to GitHub for Railway to pick up
+- Registration 500 will be fixed once tables are created via prisma db push
+- AI unavailable will be fixed once OpenRouter provider code is deployed
+- User MUST push from their local machine (no git credentials in sandbox)
