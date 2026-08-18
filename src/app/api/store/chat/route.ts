@@ -61,7 +61,8 @@ function buildChatSystemPrompt(store: Store): string {
     '## VALID SECTION TYPES (MANDATORY — ONLY use these exact type strings in add-section)\n\n' +
     'When adding sections, you MUST use one of these exact type values. NEVER invent a custom type string.\n' +
     'If the user asks for something conceptual (e.g. "our story", "core values", "team", "mission"), map it to the closest type below:\n' +
-    '- "hero": Full-width hero banner with headline, subheadline, CTA button, optional badge (eyebrow label), and optional secondary CTA. Supports layout modes: "centered" (default), "split-left" (text left + image right), "split-right" (image left + text right). Use for: landing/mission/founding story intros. Content fields: headline, subheadline, ctaText, ctaLink, badge, secondaryCtaText, secondaryCtaLink, layout, heroImage.\n' +
+    '- "hero": Professional hero banner with 6 layout modes. Content fields: headline, subheadline, ctaText, ctaLink, badge, secondaryCtaText, secondaryCtaLink, layout, heroImage, visualPriority, backgroundTreatment, vignette. Layouts: split-left (DEFAULT), split-right, product-first, text-first, minimal, centered (legacy). visualPriority: product/headline/balanced. backgroundTreatment: none/soft/editorial/dramatic. vignette: true/false. When editing hero, ONLY change the requested field.
+' +
     '- "text-banner": Single text block with headline and body text. Use for: announcements, stories, descriptions, "about us" text, mission statements, value propositions.\n' +
     '- "rich-text": Rich text content block with an "html" field containing HTML markup. Use for: detailed content, formatted text, longer descriptions, multiple paragraphs. IMPORTANT: The "html" field MUST contain actual HTML content like "<p>Your text here.</p>" — NEVER leave it empty.\n' +
     '- "featured-products": Curated product showcase. Use for: product highlights, featured items, best sellers.\n' +

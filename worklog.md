@@ -1218,3 +1218,28 @@ Stage Summary:
 - New key verified working: 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
 - User needs to update OPENROUTER_API_KEY on Railway to trigger redeploy
 - Latest commit: 90cf177 pushed to main
+
+---
+Task ID: banner-system-upgrade
+Agent: main
+Task: Upgrade Storqly e-commerce banner system with professional composition engine
+
+Work Log:
+- Inspected existing hero renderer (sections.tsx lines 358-516), store schema, image pipeline, normalize-store, chat editor, generation prompt
+- Documented existing image pipeline contract: enrich-images API takes product+section data, returns enriched URLs, uses z-ai CLI for search, in-memory cache. NO changes made.
+- Extended HeroContent in store-schema.ts with: HeroLayout type (6 modes), visualPriority, backgroundTreatment, vignette
+- Updated normalize-store.ts: added VALID_HERO_LAYOUT (6 values), VALID_VISUAL_PRIORITY, VALID_BG_TREATMENT, normalization for new fields
+- Updated section-meta.ts: new hero defaults use split-left layout with soft background treatment
+- Rewrote generation prompt: LLM now acts as art director, generates layout/backgroundTreatment/vignette/visualPriority per store type with detailed rules
+- Completely rewrote HeroSection renderer (236 lines): 6 layout modes, background treatment CSS filters, vignette, product image with drop-shadow, responsive mobile composition, contextual accent glow, typography hierarchy per layout, subtle float animation
+- Updated chat prompt: new hero description with all fields and edit examples
+- Updated demo store and fallback stores to use new layout
+
+Stage Summary:
+- 6 files modified: store-schema.ts, normalize-store.ts, section-meta.ts, generate/route.ts, sections.tsx, chat/route.ts
+- 0 new dependencies, 0 image pipeline changes
+- All 6 layout modes: centered (legacy), split-left, split-right, product-first, text-first, minimal
+- 4 background treatments: none, soft, editorial, dramatic
+- Product images now visible on mobile (not hidden)
+- Chat can edit: layout, backgroundTreatment, vignette, visualPriority without regenerating images
+- Pre-existing lint errors only (0 new)

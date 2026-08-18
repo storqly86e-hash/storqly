@@ -28,6 +28,7 @@ import type {
   StoreTheme,
   Section,
   HeroContent,
+  HeroLayout,
   FeaturedProductsContent,
   ProductGridContent,
   TextBannerContent,
@@ -362,156 +363,236 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const content = section.content as unknown as HeroContent;
   const style = section.style;
   const isSelected = selectedSectionId === section.id;
-
-  const heightMap = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
-  const alignMap = {
-    left: 'items-start text-left',
-    center: 'items-center text-center',
-    right: 'items-end text-right',
-  };
-
-  // Phase 3A: layout mode
   const layout = content.layout || 'centered';
-  const isSplit = layout !== 'centered';
-  const imageOnRight = layout === 'split-left'; // text left, image right
-  const imageOnLeft = layout === 'split-right'; // image left, text right
 
-  // Resolve hero image: explicit content.heroImage, or first featured product image
-  const resolvedHeroImage = content.heroImage
-    || (isSplit ? products.find(p => p.featured)?.images[0] || products[0]?.images[0] : undefined);
+  const isCentered = layout === 'centered' || layout === 'minimal';
+  const hasProductLayout = layout === 'split-left' || layout === 'split-right' || layout === 'product-first' || layout === 'text-first';
 
-  // Background: gradient default, or custom color/image
-  const bgGradient = !style.backgroundImage && !style.backgroundColor
+  // ── Product image resolution (memoized) ──
+  const resolvedHeroImage = useMemo(() => {
+    if (content.heroImage) return content.heroImage;
+    if (!hasProductLayout) return undefined;
+    return products.find(p => p.featured)?.images[0] || products[0]?.images[0];
+  }, [content.heroImage, content.layout, products]);
+
+  const showProduct = !!resolvedHeroImage && hasProductLayout;
+
+  // ── Height ──
+  const heightMap: Record<string, string> = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
+  const minHeight = layout === 'minimal'
+    ? 'min-h-[400px]'
+    : (heightMap[content.height] || heightMap.md);
+
+  // ── Alignment (centered / minimal layouts) ──
+  const alignClass = isCentered
+    ? ({ left: 'items-start text-left', center: 'items-center text-center', right: 'items-end text-right' } as const)[content.alignment]
+    : 'items-center';
+
+  // ── Background ──
+  const hasBgImage = !!style.backgroundImage;
+  const bgGradient = !hasBgImage && !style.backgroundColor
     ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
     : undefined;
 
-  const outerClasses = [
-    'relative flex transition-all duration-200 cursor-pointer overflow-hidden',
-    heightMap[content.height] || heightMap.md,
-    isSplit ? 'items-center' : alignMap[content.alignment],
-    pyClass(style.paddingY),
-    isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
-  ].join(' ');
+  // ── Background treatment (CSS filter on background image) ──
+  const bgTreatmentFilter = (() => {
+    switch (content.backgroundTreatment) {
+      case 'soft': return 'brightness(0.8)';
+      case 'editorial': return 'brightness(0.75) saturate(1.1)';
+      case 'dramatic': return 'brightness(0.55) contrast(1.1)';
+      default: return undefined;
+    }
+  })();
 
-  // CTA click handler: stop propagation to prevent section selection.
-  // Navigation to specific pages is handled by the parent via ctaLink.
-  const handleCtaClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
+  // ── Overlay ──
+  const overlayGradient = (() => {
+    if (!hasBgImage) return undefined;
+    if (content.backgroundTreatment === 'editorial') return 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)';
+    if (content.backgroundTreatment === 'dramatic') return 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.65) 100%)';
+    if (style.overlay) return 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)';
+    return undefined;
+  })();
 
+  // ── Colors ──
   const textColor = style.textColor || '#ffffff';
-  const buttonBg = section.style.buttonBackgroundColor || '#ffffff';
-  const buttonFg = section.style.buttonTextColor || contrastTextColor(buttonBg);
-  const headlineColor = section.style.headlineColor || undefined;
+  const buttonBg = style.buttonBackgroundColor || '#ffffff';
+  const buttonFg = style.buttonTextColor || contrastTextColor(buttonBg);
+  const headlineColor = style.headlineColor || undefined;
+
+  // ── Text shadow (background image only, not gradient) ──
+  const headlineShadow = hasBgImage ? '0 2px 20px rgba(0,0,0,0.4)' : undefined;
+  const subheadlineShadow = hasBgImage ? '0 1px 10px rgba(0,0,0,0.25)' : undefined;
+
+  // ── Typography sizing by layout ──
+  const headlineClass = layout === 'minimal'
+    ? 'text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]'
+    : layout === 'product-first'
+      ? 'text-2xl lg:text-3xl font-extrabold tracking-tight leading-[1.1]'
+      : 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
+
+  // ── Grid layout ──
+  const gridClass = showProduct
+    ? layout === 'product-first' || layout === 'text-first'
+      ? 'grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center'
+      : 'grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center'
+    : '';
+
+  const textColClass = [
+    layout === 'split-right' && 'lg:order-2',
+    layout === 'product-first' && 'lg:col-span-2',
+    layout === 'text-first' && 'lg:col-span-3',
+  ].filter(Boolean).join(' ');
+
+  const productColClass = [
+    layout === 'split-right' && 'lg:order-1',
+    layout === 'product-first' && 'lg:col-span-3',
+    layout === 'text-first' && 'lg:col-span-2',
+  ].filter(Boolean).join(' ');
+
+  // ── Decorative accent glow (single, contextual) ──
+  const showAccent = layout === 'split-left' || layout === 'split-right' || layout === 'product-first';
+  const accentPos = layout === 'split-left'
+    ? 'right-[15%] top-1/2 -translate-y-1/2'
+    : layout === 'split-right'
+      ? 'left-[15%] top-1/2 -translate-y-1/2'
+      : layout === 'product-first'
+        ? 'left-[20%] top-1/2 -translate-y-1/2'
+        : '';
+
+  // ── CTA click handler ──
+  const handleCtaClick = (e: React.MouseEvent) => e.stopPropagation();
 
   return (
-    <div
-      className={outerClasses}
-      style={{
-        backgroundColor: style.backgroundColor || theme.colors.primary,
-        backgroundImage: style.backgroundImage ? `url(${style.backgroundImage})` : bgGradient,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        color: textColor,
-      }}
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelectSection?.(isSelected ? null : section.id);
-      }}
-      data-section-id={section.id}
-      data-section-type={section.type}
-    >
-      {/* Image background overlay */}
-      {style.backgroundImage && style.overlay && (
-        <div className="absolute inset-0 pointer-events-none" style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)' }} />
-      )}
-      {/* Subtle gradient overlay for depth */}
-      {bgGradient && (
-        <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
-      )}
-      {/* Decorative blur orbs — always present for visual richness */}
-      <div className="absolute right-[10%] top-[10%] h-40 w-40 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-[10%] left-[10%] h-32 w-32 rounded-full bg-white/5 blur-2xl pointer-events-none" />
-      {/* Extra decorative orb for split layouts */}
-      {isSplit && (
-        <div className="absolute left-[30%] top-[20%] h-24 w-24 rounded-full bg-white/5 blur-2xl pointer-events-none" />
-      )}
+    <>
+      {/* Inline keyframes: subtle float on desktop only */}
+      <style>{`@keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}@media(min-width:1024px){.hero-float{animation:heroFloat 6s ease-in-out infinite}}`}</style>
 
-      {/* Content area */}
-      <div className={`relative z-10 mx-auto w-full ${isSplit ? 'max-w-7xl' : maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)} ${isSplit ? 'grid grid-cols-1 gap-8 lg:grid-cols-2 lg:gap-12 items-center' : ''}`}>
-        {/* Text column */}
-        <div className={isSplit ? (imageOnLeft ? 'lg:order-2' : 'lg:order-1') : ''}>
-          {/* Badge */}
-          {content.badge && (
-            <span
-              className="mb-4 inline-block rounded-full border border-white/25 px-3 py-1 text-xs font-semibold uppercase tracking-widest backdrop-blur-sm"
-              style={{ color: textColor }}
+      <div
+        className={`relative flex transition-all duration-200 cursor-pointer overflow-hidden ${minHeight} ${alignClass} ${pyClass(style.paddingY)} ${isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40'}`}
+        style={{ color: textColor }}
+        onClick={(e) => { e.stopPropagation(); onSelectSection?.(isSelected ? null : section.id); }}
+        data-section-id={section.id}
+        data-section-type={section.type}
+      >
+        {/* Base background: solid color or theme gradient (no bg image) */}
+        {!hasBgImage && (
+          <div className="absolute inset-0" style={{
+            backgroundColor: style.backgroundColor || undefined,
+            backgroundImage: bgGradient || undefined,
+          }} />
+        )}
+
+        {/* Background image layer (separate for CSS filter support) */}
+        {hasBgImage && (
+          <div className="absolute inset-0" style={{
+            backgroundImage: `url(${style.backgroundImage})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: bgTreatmentFilter || undefined,
+          }} />
+        )}
+
+        {/* Gradient depth overlay for non-image gradient backgrounds */}
+        {bgGradient && (
+          <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
+        )}
+
+        {/* Image overlay */}
+        {overlayGradient && (
+          <div className="absolute inset-0 pointer-events-none" style={{ background: overlayGradient }} />
+        )}
+
+        {/* Vignette */}
+        {content.vignette && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.4) 100%)' }}
+          />
+        )}
+
+        {/* Single subtle gradient accent glow (contextual position) */}
+        {showAccent && (
+          <div
+            className={`absolute h-80 w-80 rounded-full pointer-events-none ${accentPos}`}
+            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)' }}
+          />
+        )}
+
+        {/* Content area */}
+        <div className={`relative z-10 mx-auto w-full ${pxClass(style.paddingX)} ${isCentered ? maxWidthClass(style.maxWidth) : 'max-w-7xl'} ${gridClass}`}>
+          {/* Text column */}
+          <div className={textColClass}>
+            {/* Badge */}
+            {content.badge && (
+              <span
+                className="mb-4 inline-block rounded-full border border-current/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] bg-white/10 backdrop-blur-sm"
+                style={{ color: textColor }}
+              >
+                {content.badge}
+              </span>
+            )}
+
+            <h1
+              className={`${headlineClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
+              style={{ textShadow: headlineShadow, ...(headlineColor ? { color: headlineColor } : {}) }}
             >
-              {content.badge}
-            </span>
-          )}
+              {content.headline}
+            </h1>
 
-          <h1
-            className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl lg:text-6xl"
-            style={{ textShadow: style.backgroundImage ? '0 2px 12px rgba(0,0,0,0.3)' : undefined, ...(headlineColor ? { color: headlineColor } : {}) }}
-          >
-            {content.headline}
-          </h1>
+            {content.subheadline && (
+              <p
+                className={`mt-4 text-base opacity-80 sm:text-lg ${layout === 'minimal' ? 'max-w-lg' : 'max-w-xl'} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
+                style={{ textShadow: subheadlineShadow }}
+              >
+                {content.subheadline}
+              </p>
+            )}
 
-          {content.subheadline && (
-            <p
-              className={`mt-4 text-base opacity-80 sm:text-lg md:text-xl ${isSplit ? 'max-w-xl' : 'max-w-2xl'} mx-${isSplit ? '0' : 'auto'}`}
-              style={{ textShadow: style.backgroundImage ? '0 1px 8px rgba(0,0,0,0.2)' : undefined }}
-            >
-              {content.subheadline}
-            </p>
-          )}
+            {/* CTA buttons */}
+            {(content.ctaText || content.secondaryCtaText) && (
+              <div className={`mt-8 flex flex-wrap gap-3 ${!showProduct && content.alignment === 'center' ? 'justify-center' : ''} ${!showProduct && content.alignment === 'right' ? 'justify-end' : ''}`}>
+                {content.ctaText && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
+                    style={{ backgroundColor: buttonBg, color: buttonFg }}
+                    onClick={handleCtaClick}
+                  >
+                    {content.ctaText}
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                )}
+                {content.secondaryCtaText && (
+                  <button
+                    className="inline-flex items-center gap-2 rounded-full border border-current/30 px-7 py-3 text-sm font-semibold backdrop-blur-sm hover:bg-white/10 transition-all"
+                    style={{ color: textColor }}
+                    onClick={handleCtaClick}
+                  >
+                    {content.secondaryCtaText}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
-          {/* CTA buttons */}
-          {(content.ctaText || content.secondaryCtaText) && (
-            <div className={`mt-8 flex flex-wrap gap-3 ${!isSplit && content.alignment === 'center' ? 'justify-center' : ''} ${!isSplit && content.alignment === 'right' ? 'justify-end' : ''}`}>
-              {content.ctaText && (
-                <button
-                  className="inline-flex items-center gap-2 rounded-lg px-6 py-3 text-sm font-semibold shadow-lg transition-all hover:scale-105 hover:shadow-xl sm:text-base"
-                  style={{ backgroundColor: buttonBg, color: buttonFg }}
-                  onClick={handleCtaClick}
-                >
-                  {content.ctaText}
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
-              {content.secondaryCtaText && (
-                <button
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/30 px-6 py-3 text-sm font-semibold backdrop-blur-sm transition-all hover:bg-white/10 hover:scale-105 sm:text-base"
-                  style={{ color: textColor, borderColor: textColor + '40' }}
-                  onClick={handleCtaClick}
-                >
-                  {content.secondaryCtaText}
-                </button>
-              )}
+          {/* Product image column (visible on mobile + desktop) */}
+          {showProduct && (
+            <div className={productColClass}>
+              <div
+                className="hero-float relative mx-auto w-auto"
+                style={{ filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.25))' }}
+              >
+                <StoreImage
+                  src={resolvedHeroImage!}
+                  alt={content.headline}
+                  fallbackColor={theme.colors.primary}
+                  className="max-h-[250px] w-auto mx-auto object-contain lg:max-h-[400px] xl:max-h-[480px]"
+                />
+              </div>
             </div>
           )}
         </div>
-
-        {/* Image column (split layouts only) */}
-        {isSplit && resolvedHeroImage && (
-          <div className={`relative ${imageOnLeft ? 'lg:order-1' : 'lg:order-2'} hidden lg:block`}>
-            <div className="relative">
-              {/* Decorative background shape behind image */}
-              <div
-                className="absolute -inset-4 rounded-2xl opacity-20 blur-xl"
-                style={{ backgroundColor: textColor }}
-              />
-              <StoreImage
-                src={resolvedHeroImage}
-                alt={content.headline}
-                className="relative rounded-2xl shadow-2xl object-cover w-full aspect-[4/3]"
-              />
-            </div>
-          </div>
-        )}
       </div>
-    </div>
+    </>
   );
 }
 

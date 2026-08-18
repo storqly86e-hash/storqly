@@ -86,6 +86,21 @@ export interface Section {
   visible: boolean;
 }
 
+// ── Hero layout modes ─────────────────────────────────────
+// centered: text only, centered (minimal/legacy)
+// split-left: text left 50% + product right 50%
+// split-right: product left 50% + text right 50%
+// product-first: product 60% dominant + text 40%
+// text-first: text 60% dominant + product 40%
+// minimal: premium centered, no product, generous whitespace
+export type HeroLayout =
+  | 'centered'
+  | 'split-left'
+  | 'split-right'
+  | 'product-first'
+  | 'text-first'
+  | 'minimal';
+
 // Section content schemas by type
 export interface HeroContent {
   headline: string;
@@ -97,10 +112,14 @@ export interface HeroContent {
   height: 'sm' | 'md' | 'lg' | 'xl';
   // Phase 3A: Design richness
   badge?: string;                       // Eyebrow text above headline (e.g. "NEW COLLECTION")
-  layout?: 'centered' | 'split-left' | 'split-right';  // Text+image split layout
-  heroImage?: string;                  // Foreground image for split layouts
+  layout?: HeroLayout;                 // Layout mode — controls composition
+  heroImage?: string;                  // Foreground image for split/product layouts
   secondaryCtaText?: string;           // Optional secondary button label (outline style)
   secondaryCtaLink?: string;           // Optional secondary button link
+  // Banner composition engine
+  visualPriority?: 'product' | 'headline' | 'balanced';
+  backgroundTreatment?: 'none' | 'soft' | 'editorial' | 'dramatic';
+  vignette?: boolean;
 }
 
 export interface FeaturedProductsContent {
@@ -340,7 +359,7 @@ export function createDemoStore(): Store {
         sections: [
           {
             id: sid(1), type: 'hero', visible: true, style: { height: 'lg', overlay: true },
-            content: { headline: 'Timeless Elegance, Handcrafted With Love', subheadline: 'Discover our curated collection of artisan jewelry — each piece tells a story.', ctaText: 'Explore Collection', alignment: 'center' },
+            content: { headline: 'Timeless Elegance, Handcrafted With Love', subheadline: 'Discover our curated collection of artisan jewelry — each piece tells a story.', ctaText: 'Explore Collection', ctaLink: '#products', alignment: 'left', height: 'lg', layout: 'split-left', backgroundTreatment: 'editorial', vignette: true, visualPriority: 'balanced', badge: 'HANDCRAFTED' },
           },
           {
             id: sid(2), type: 'featured-products', visible: true, style: { paddingY: 'xl' },

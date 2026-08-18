@@ -51,7 +51,30 @@ SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md"
 HERO STYLE: For the hero section ONLY, add "backgroundImage":"https://images.unsplash.com/photo-<lifestyle-id>?w=1400","overlay":true to style. Use a real Unsplash photo ID that matches the store theme (lifestyle/setting photo, NOT a product photo).
 
 SECTION CONTENTS (use ONLY these 4):
-- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>"}
+- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>", layout: "<one of: split-left, split-right, product-first, text-first, minimal>", visualPriority: "<product or headline or balanced>", backgroundTreatment: "<soft or editorial or dramatic>", vignette: true}
+
+HERO LAYOUT RULES (choose the BEST layout for the store type):
+- split-left: DEFAULT for most stores. Text left 50%, product image right 50%.
+- split-right: Product image left 50%, text right 50%. Good for right-to-left brands.
+- product-first: Product 60% dominant + text 40%. Use for: cosmetics, electronics, shoes, accessories, jewelry, watches, sneakers, packaged products — anything with a visually strong product.
+- text-first: Text 60% dominant + product 40%. Use for: fashion campaigns, seasonal collections, brand launches, announcements.
+- minimal: No product image. Premium centered layout with generous whitespace. Use for: luxury brands, high-end fashion, minimalist aesthetics, spa/wellness, fine art.
+
+HERO visualPriority RULES:
+- "product" when layout is product-first
+- "headline" when layout is text-first or minimal
+- "balanced" when layout is split-left or split-right
+
+HERO backgroundTreatment RULES:
+- "soft": slightly darkened background, gentle contrast. DEFAULT for most stores.
+- "editorial": subtle blur effect, magazine-quality feel. Use for: fashion, beauty, lifestyle brands.
+- "dramatic": strong contrast, deep shadows, moody atmosphere. Use for: luxury, nightlife, premium alcohol,高端 brands.
+
+HERO RULES:
+- The hero section must include style.backgroundImage (a lifestyle/setting photo URL from Unsplash) and style.overlay:true.
+- Always set vignette:true in the hero content.
+- Choose layout based on what will look most professional for this specific store type.
+- Do NOT use "centered" layout — use "minimal" instead for text-only hero banners.
 - featured-products: {headline, subtitle, productIds: ["<ids>"], columns: 3, showPrice: true, showAddToCart: true}
 - testimonials: {headline, items: [{id, quote, author, role, rating: 5}]}
 - newsletter: {headline, subtitle, placeholderText: "Enter your email", buttonText: "Subscribe"}
@@ -124,7 +147,7 @@ function createFallbackStore(prompt: string): Store {
     pages: [{
       id: uid(), name: 'Home', slug: '', isHomepage: true,
       sections: [
-        { id: uid(), type: 'hero', content: { headline: `Welcome to ${storeName}`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'center', height: 'lg' }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
+        { id: uid(), type: 'hero', content: { headline: `Welcome to ${storeName}`, subheadline: 'Discover our curated collection of quality products.', ctaText: 'Shop Now', ctaLink: '#products', alignment: 'left', height: 'lg', layout: 'split-left', backgroundTreatment: 'soft', vignette: true, visualPriority: 'balanced' }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'featured-products', content: { headline: 'Featured Products', subtitle: 'Our most popular items', productIds: products.map(p => p.id), columns: 3, showPrice: true, showAddToCart: true }, style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'testimonials', content: { headline: 'What Customers Say', items: [{ id: uid(), quote: 'Excellent quality and fast shipping!', author: 'Alex M.', role: 'Verified Buyer', rating: 5 }] }, style: { backgroundColor: '#f9fafb', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },
         { id: uid(), type: 'newsletter', content: { headline: 'Stay Updated', subtitle: 'Get exclusive offers and new arrivals.', placeholderText: 'Enter your email', buttonText: 'Subscribe' }, style: { backgroundColor: '#6d28d9', textColor: '#ffffff', paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' }, visible: true },

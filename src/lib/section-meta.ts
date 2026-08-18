@@ -95,8 +95,11 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
         subheadline: 'Add your subheadline here',
         ctaText: 'Shop Now',
         alignment: 'center',
-        height: 'md',
-        layout: 'centered',
+        height: 'lg',
+        layout: 'split-left',
+        backgroundTreatment: 'soft',
+        vignette: true,
+        visualPriority: 'balanced',
       };
     case 'featured-products':
       return {

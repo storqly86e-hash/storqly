@@ -31,7 +31,9 @@ const VALID_PADDING_X = new Set<string>(['sm', 'md', 'lg']);
 const VALID_MAX_WIDTH = new Set<string>(['sm', 'md', 'lg', 'xl', 'full']);
 const VALID_ALIGNMENT = new Set<string>(['left', 'center', 'right']);
 const VALID_HEIGHT = new Set<string>(['sm', 'md', 'lg', 'xl']);
-const VALID_HERO_LAYOUT = new Set<string>(['centered', 'split-left', 'split-right']);
+const VALID_HERO_LAYOUT = new Set<string>(['centered', 'split-left', 'split-right', 'product-first', 'text-first', 'minimal']);
+const VALID_VISUAL_PRIORITY = new Set<string>(['product', 'headline', 'balanced']);
+const VALID_BG_TREATMENT = new Set<string>(['none', 'soft', 'editorial', 'dramatic']);
 const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
 const VALID_COLUMNS = new Set<number>([2, 3, 4]);
 const VALID_PAGE_TYPES = new Set<string>(['home', 'collection', 'product', 'cart', 'checkout']);
@@ -202,6 +204,9 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
         heroImage: c.heroImage !== undefined ? str(c.heroImage, '') : undefined,
         secondaryCtaText: c.secondaryCtaText !== undefined ? str(c.secondaryCtaText, '') : undefined,
         secondaryCtaLink: c.secondaryCtaLink !== undefined ? str(c.secondaryCtaLink, '#') : undefined,
+        visualPriority: c.visualPriority !== undefined ? enumVal(c.visualPriority, VALID_VISUAL_PRIORITY, 'balanced') : undefined,
+        backgroundTreatment: c.backgroundTreatment !== undefined ? enumVal(c.backgroundTreatment, VALID_BG_TREATMENT, 'none') : undefined,
+        vignette: c.vignette !== undefined ? bool(c.vignette, false) : undefined,
       };
     }
     case 'featured-products': {
@@ -832,8 +837,12 @@ function createDefaultPage(storeName: string): StorePage {
           subheadline: 'Discover our curated collection.',
           ctaText: 'Shop Now',
           ctaLink: '#products',
-          alignment: 'center',
+          alignment: 'left',
           height: 'lg',
+          layout: 'split-left',
+          backgroundTreatment: 'soft',
+          vignette: true,
+          visualPriority: 'balanced',
         },
         style: { paddingY: 'xl', paddingX: 'md', maxWidth: 'lg', borderRadius: 'none' },
         visible: true,
