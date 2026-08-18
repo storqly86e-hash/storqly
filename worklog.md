@@ -1128,3 +1128,27 @@ Stage Summary:
 - The 'tw-animate-css not found' error was a SYMPTOM, not the cause
 - Real cause: npm ci failed silently(?), leaving node_modules empty/incomplete
 - Now verified end-to-end: clean npm ci → clean build → 159KB CSS
+---
+Task ID: 1
+Agent: Main
+Task: Investigate why Railway still shows same Groq/Gemini errors after claimed fixes
+
+Work Log:
+- Read ai-providers.ts: confirmed Groq model = llama-4-scout-17b-16e-instruct, Gemini SDK = @google/genai, z-ai excluded in prod
+- Verified package.json has @google/genai ^2.17.1 and groq-sdk ^1.5.0
+- Verified package-lock.json includes both packages
+- Confirmed no references to old llama-3.3-70b-versatile remain in src/
+- Web-searched Groq docs: confirmed llama-4-scout-17b-16e-instruct is a valid current model
+- Read @google/genai SDK source (WebAuth class at line 25786): SDK always sends apiKey as x-goog-api-key header, never as Bearer
+- Tested Groq API directly: gsk_ key returns 403 Forbidden for ALL endpoints (model calls AND model listing)
+- Tested old model llama-3.3-70b-versatile: also 403 (key is dead, not model issue)
+- Enhanced /api/ai-debug with code fingerprint and per-provider key format analysis
+- Committed two diagnostic improvements but could not push (no git credentials in sandbox)
+
+Stage Summary:
+- GROQ KEY ISSUE: Local gsk_ key returns 403 Forbidden for everything — key is revoked/expired/invalid
+- GEMINI KEY ISSUE: AQ. prefix = OAuth access token (~1hr expiry). @google/genai WebAuth sends it in x-goog-api-key header, Google rejects non-AIzaSy format. Confirmed by reading SDK source code (WebAuth class).
+- CODE IS CORRECT: Model name, SDK import, z-ai exclusion all verified in committed source
+- Cannot verify Railway deployment state from sandbox
+- Added /api/ai-debug endpoint with codeFingerprint (v4-2026-08-18) and key format analysis for definitive deployment verification
+- Two commits made locally, not pushed: 628575d, 8816a89
