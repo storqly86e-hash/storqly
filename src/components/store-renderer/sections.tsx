@@ -12,6 +12,9 @@ import {
   maxWidthClass,
   borderRadiusClass,
   gridCols,
+  hexToRgba,
+  darkenHex,
+  lightenHex,
 } from './helpers';
 import { useCartStore } from '@/lib/cart-store';
 import {
@@ -29,6 +32,8 @@ import type {
   Section,
   HeroContent,
   HeroLayout,
+  HeroCtaStyle,
+  HeroProductTreatment,
   FeaturedProductsContent,
   ProductGridContent,
   TextBannerContent,
@@ -357,13 +362,24 @@ export function HeaderSection({
 }
 
 // ─── 2. Hero ────────────────────────────────────────────────────────────
-// Phase 3A: badge, split layout, hero image, secondary CTA, improved decorations
+// Phase 4: Professional e-commerce banner system
+// - 6 layout modes with responsive recomposition
+// - Theme-consistent CTA colors (uses brand palette, not generic white)
+// - Professional typography hierarchy with responsive type scale
+// - 4 product image treatments: floating, framed, cutout, shadow
+// - Directional background overlays based on layout
+// - 3 badge styles: outlined, filled, gradient
+// - 3 CTA styles: filled, outline, gradient
+// - Mobile-first responsive recomposition (not just shrinking)
 
 export function HeroSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
   const content = section.content as unknown as HeroContent;
   const style = section.style;
   const isSelected = selectedSectionId === section.id;
   const layout = content.layout || 'centered';
+  const ctaStyle = content.ctaStyle || 'filled';
+  const productTreatment = content.productTreatment || 'floating';
+  const badgeStyle = content.badgeStyle || 'outlined';
 
   const isCentered = layout === 'centered' || layout === 'minimal';
   const hasProductLayout = layout === 'split-left' || layout === 'split-right' || layout === 'product-first' || layout === 'text-first';
@@ -377,7 +393,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   const showProduct = !!resolvedHeroImage && hasProductLayout;
 
-  // ── Height ──
+  // ── Height (responsive-aware) ──
   const heightMap: Record<string, string> = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
   const minHeight = layout === 'minimal'
     ? 'min-h-[400px]'
@@ -397,75 +413,171 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   // ── Background treatment (CSS filter on background image) ──
   const bgTreatmentFilter = (() => {
     switch (content.backgroundTreatment) {
-      case 'soft': return 'brightness(0.8)';
-      case 'editorial': return 'brightness(0.75) saturate(1.1)';
-      case 'dramatic': return 'brightness(0.55) contrast(1.1)';
+      case 'soft': return 'brightness(0.75)';
+      case 'editorial': return 'brightness(0.7) saturate(1.15)';
+      case 'dramatic': return 'brightness(0.5) contrast(1.15)';
       default: return undefined;
     }
   })();
 
-  // ── Overlay ──
+  // ── Directional overlay (varies by layout for depth) ──
   const overlayGradient = (() => {
     if (!hasBgImage) return undefined;
-    if (content.backgroundTreatment === 'editorial') return 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%)';
-    if (content.backgroundTreatment === 'dramatic') return 'linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.65) 100%)';
-    if (style.overlay) return 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)';
+    // Dramatic: heavier, more cinematic
+    if (content.backgroundTreatment === 'dramatic') {
+      if (layout === 'split-right') return 'linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15) 100%)';
+      if (layout === 'split-left') return 'linear-gradient(to left, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15) 100%)';
+      return 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.65) 100%)';
+    }
+    // Editorial: magazine-quality, subtle direction
+    if (content.backgroundTreatment === 'editorial') {
+      if (layout === 'split-right') return 'linear-gradient(to right, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)';
+      if (layout === 'split-left') return 'linear-gradient(to left, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 55%, transparent 100%)';
+      return 'linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)';
+    }
+    // Soft/default
+    if (layout === 'split-right') return 'linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)';
+    if (layout === 'split-left') return 'linear-gradient(to left, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.1) 60%, transparent 100%)';
+    if (style.overlay) return 'linear-gradient(to bottom, rgba(0,0,0,0.12) 0%, rgba(0,0,0,0.5) 100%)';
     return undefined;
   })();
 
-  // ── Colors ──
+  // ── Colors: theme-consistent derivation ──
   const textColor = style.textColor || '#ffffff';
-  const buttonBg = style.buttonBackgroundColor || '#ffffff';
-  const buttonFg = style.buttonTextColor || contrastTextColor(buttonBg);
+  const primaryColor = theme.colors.primary;
+  const accentColor = theme.colors.accent;
   const headlineColor = style.headlineColor || undefined;
 
-  // ── Text shadow (background image only, not gradient) ──
-  const headlineShadow = hasBgImage ? '0 2px 20px rgba(0,0,0,0.4)' : undefined;
-  const subheadlineShadow = hasBgImage ? '0 1px 10px rgba(0,0,0,0.25)' : undefined;
+  // CTA button colors (theme-consistent instead of always white)
+  const getCtaColors = () => {
+    if (style.buttonBackgroundColor) {
+      return { bg: style.buttonBackgroundColor, fg: style.buttonTextColor || contrastTextColor(style.buttonBackgroundColor) };
+    }
+    switch (ctaStyle) {
+      case 'gradient':
+        return { bg: `linear-gradient(135deg, ${primaryColor} 0%, ${accentColor} 100%)`, fg: '#ffffff', isGradient: true };
+      case 'outline':
+        return { bg: 'transparent', fg: textColor, isOutline: true };
+      case 'filled':
+      default:
+        return { bg: primaryColor, fg: contrastTextColor(primaryColor) };
+    }
+  };
+  const ctaColors = getCtaColors();
 
-  // ── Typography sizing by layout ──
+  // ── Text shadow (background image only) ──
+  const headlineShadow = hasBgImage ? '0 2px 24px rgba(0,0,0,0.45)' : undefined;
+  const subheadlineShadow = hasBgImage ? '0 1px 12px rgba(0,0,0,0.3)' : undefined;
+
+  // ── Professional typography scale ──
   const headlineClass = layout === 'minimal'
-    ? 'text-3xl sm:text-4xl md:text-5xl lg:text-7xl font-extrabold tracking-tight leading-[1.1]'
+    ? 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]'
     : layout === 'product-first'
-      ? 'text-2xl lg:text-3xl font-extrabold tracking-tight leading-[1.1]'
-      : 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
+      ? 'text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1]'
+      : layout === 'text-first'
+        ? 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08]'
+        : 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
 
-  // ── Grid layout ──
+  const subheadlineClass = layout === 'minimal'
+    ? 'text-base sm:text-lg md:text-xl font-light leading-relaxed opacity-75'
+    : 'text-sm sm:text-base md:text-lg font-normal leading-relaxed opacity-80';
+
+  // ── Responsive grid: recompose on mobile (stack, not shrink) ──
   const gridClass = showProduct
     ? layout === 'product-first' || layout === 'text-first'
       ? 'grid grid-cols-1 lg:grid-cols-5 gap-8 lg:gap-12 items-center'
       : 'grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center'
     : '';
 
+  // Text column order/size (responsive recomposition)
   const textColClass = [
     layout === 'split-right' && 'lg:order-2',
-    layout === 'product-first' && 'lg:col-span-2',
+    layout === 'product-first' && 'lg:col-span-2 order-2',
     layout === 'text-first' && 'lg:col-span-3',
+    // Mobile: text always first (except product-first where product leads)
+    layout !== 'product-first' && showProduct && 'order-2 lg:order-1',
   ].filter(Boolean).join(' ');
 
   const productColClass = [
     layout === 'split-right' && 'lg:order-1',
-    layout === 'product-first' && 'lg:col-span-3',
+    layout === 'product-first' && 'lg:col-span-3 order-1',
     layout === 'text-first' && 'lg:col-span-2',
+    // Mobile: product first (except text-first)
+    layout !== 'text-first' && showProduct && 'order-1 lg:order-2',
   ].filter(Boolean).join(' ');
 
-  // ── Decorative accent glow (single, contextual) ──
-  const showAccent = layout === 'split-left' || layout === 'split-right' || layout === 'product-first';
+  // ── Product image treatment styles ──
+  const getProductImageStyle = (): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      maxWidth: '100%',
+      height: 'auto',
+    };
+    switch (productTreatment) {
+      case 'framed':
+        return { ...base, padding: '16px', background: 'rgba(255,255,255,0.12)', borderRadius: '16px', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' };
+      case 'cutout':
+        return { ...base, filter: 'drop-shadow(0 25px 50px rgba(0,0,0,0.35)) drop-shadow(0 8px 20px rgba(0,0,0,0.2))' };
+      case 'shadow':
+        return { ...base, filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.3))', borderRadius: '12px' };
+      case 'floating':
+      default:
+        return { ...base, filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.25)) drop-shadow(0 8px 16px rgba(0,0,0,0.15))' };
+    }
+  };
+
+  // Product max-height responsive
+  const productMaxH = layout === 'product-first'
+    ? 'max-h-[220px] sm:max-h-[300px] lg:max-h-[420px] xl:max-h-[500px]'
+    : 'max-h-[200px] sm:max-h-[280px] lg:max-h-[380px] xl:max-h-[440px]';
+
+  // ── Badge style variants ──
+  const getBadgeStyle = (): React.CSSProperties => {
+    switch (badgeStyle) {
+      case 'filled':
+        return { backgroundColor: hexToRgba(primaryColor, 0.2), borderColor: hexToRgba(primaryColor, 0.3), color: textColor };
+      case 'gradient':
+        return { background: `linear-gradient(135deg, ${hexToRgba(primaryColor, 0.3)} 0%, ${hexToRgba(accentColor, 0.2)} 100%)`, border: 'none', color: textColor };
+      case 'outlined':
+      default:
+        return { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: hexToRgba(textColor, 0.25), color: textColor };
+    }
+  };
+
+  // ── Decorative accent glow (contextual position) ──
+  const showAccent = !isCentered && layout !== 'text-first';
   const accentPos = layout === 'split-left'
-    ? 'right-[15%] top-1/2 -translate-y-1/2'
+    ? 'right-[10%] top-1/2 -translate-y-1/2'
     : layout === 'split-right'
-      ? 'left-[15%] top-1/2 -translate-y-1/2'
+      ? 'left-[10%] top-1/2 -translate-y-1/2'
       : layout === 'product-first'
-        ? 'left-[20%] top-1/2 -translate-y-1/2'
+        ? 'left-[15%] top-1/3 -translate-y-1/2'
         : '';
 
   // ── CTA click handler ──
   const handleCtaClick = (e: React.MouseEvent) => e.stopPropagation();
 
+  // ── CTA button class ──
+  const primaryCtaClass = [
+    'inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg hover:shadow-xl',
+    ctaColors.isOutline && 'border-2 hover:bg-white/10',
+  ].filter(Boolean).join(' ');
+
+  const secondaryCtaClass = [
+    'inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold backdrop-blur-sm transition-all duration-200',
+    'border border-current/25 hover:bg-white/10 hover:border-current/40',
+  ].join(' ');
+
   return (
     <>
-      {/* Inline keyframes: subtle float on desktop only */}
-      <style>{`@keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}@media(min-width:1024px){.hero-float{animation:heroFloat 6s ease-in-out infinite}}`}</style>
+      {/* Inline keyframes */}
+      <style>{`
+        @keyframes heroFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+        @keyframes heroFadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+        @media(min-width:1024px){.hero-float{animation:heroFloat 6s ease-in-out infinite}}
+        .hero-fade-in{animation:heroFadeIn 0.8s ease-out both}
+        .hero-fade-in-delay-1{animation:heroFadeIn 0.8s ease-out 0.15s both}
+        .hero-fade-in-delay-2{animation:heroFadeIn 0.8s ease-out 0.3s both}
+      `}</style>
 
       <div
         className={`relative flex transition-all duration-200 cursor-pointer overflow-hidden ${minHeight} ${alignClass} ${pyClass(style.paddingY)} ${isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40'}`}
@@ -474,7 +586,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         data-section-id={section.id}
         data-section-type={section.type}
       >
-        {/* Base background: solid color or theme gradient (no bg image) */}
+        {/* Base background: solid color or theme gradient */}
         {!hasBgImage && (
           <div className="absolute inset-0" style={{
             backgroundColor: style.backgroundColor || undefined,
@@ -482,7 +594,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           }} />
         )}
 
-        {/* Background image layer (separate for CSS filter support) */}
+        {/* Background image layer with CSS filter */}
         {hasBgImage && (
           <div className="absolute inset-0" style={{
             backgroundImage: `url(${style.backgroundImage})`,
@@ -492,12 +604,12 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           }} />
         )}
 
-        {/* Gradient depth overlay for non-image gradient backgrounds */}
+        {/* Gradient depth for non-image gradient backgrounds */}
         {bgGradient && (
           <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
         )}
 
-        {/* Image overlay */}
+        {/* Directional overlay */}
         {overlayGradient && (
           <div className="absolute inset-0 pointer-events-none" style={{ background: overlayGradient }} />
         )}
@@ -506,15 +618,15 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         {content.vignette && (
           <div
             className="absolute inset-0 pointer-events-none"
-            style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.4) 100%)' }}
+            style={{ background: 'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.45) 100%)' }}
           />
         )}
 
-        {/* Single subtle gradient accent glow (contextual position) */}
+        {/* Subtle accent glow */}
         {showAccent && (
           <div
-            className={`absolute h-80 w-80 rounded-full pointer-events-none ${accentPos}`}
-            style={{ background: 'radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 70%)' }}
+            className={`absolute h-96 w-96 rounded-full pointer-events-none ${accentPos}`}
+            style={{ background: `radial-gradient(circle, ${hexToRgba(primaryColor, 0.08)} 0%, transparent 70%)` }}
           />
         )}
 
@@ -524,24 +636,28 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           <div className={textColClass}>
             {/* Badge */}
             {content.badge && (
-              <span
-                className="mb-4 inline-block rounded-full border border-current/30 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] bg-white/10 backdrop-blur-sm"
-                style={{ color: textColor }}
-              >
-                {content.badge}
-              </span>
+              <div className={`hero-fade-in ${isCentered && content.alignment === 'center' ? 'flex justify-center' : ''} ${isCentered && content.alignment === 'right' ? 'flex justify-end' : ''}`}>
+                <span
+                  className="mb-5 inline-block rounded-full border px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.2em]"
+                  style={getBadgeStyle()}
+                >
+                  {content.badge}
+                </span>
+              </div>
             )}
 
+            {/* Headline */}
             <h1
-              className={`${headlineClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
+              className={`hero-fade-in-delay-1 ${headlineClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
               style={{ textShadow: headlineShadow, ...(headlineColor ? { color: headlineColor } : {}) }}
             >
               {content.headline}
             </h1>
 
+            {/* Subheadline */}
             {content.subheadline && (
               <p
-                className={`mt-4 text-base opacity-80 sm:text-lg ${layout === 'minimal' ? 'max-w-lg' : 'max-w-xl'} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
+                className={`hero-fade-in-delay-2 mt-4 ${subheadlineClass} ${layout === 'minimal' ? 'max-w-lg' : 'max-w-xl'} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
                 style={{ textShadow: subheadlineShadow }}
               >
                 {content.subheadline}
@@ -550,11 +666,17 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
             {/* CTA buttons */}
             {(content.ctaText || content.secondaryCtaText) && (
-              <div className={`mt-8 flex flex-wrap gap-3 ${!showProduct && content.alignment === 'center' ? 'justify-center' : ''} ${!showProduct && content.alignment === 'right' ? 'justify-end' : ''}`}>
+              <div className={`hero-fade-in-delay-2 mt-8 flex flex-wrap gap-3 ${!showProduct && content.alignment === 'center' ? 'justify-center' : ''} ${!showProduct && content.alignment === 'right' ? 'justify-end' : ''}`}>
                 {content.ctaText && (
                   <button
-                    className="inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all duration-200"
-                    style={{ backgroundColor: buttonBg, color: buttonFg }}
+                    className={primaryCtaClass}
+                    style={{
+                      backgroundColor: ctaColors.isGradient ? undefined : (ctaColors.isOutline ? 'transparent' : ctaColors.bg as string),
+                      backgroundImage: ctaColors.isGradient ? ctaColors.bg as string : undefined,
+                      color: ctaColors.fg,
+                      borderColor: ctaColors.isOutline ? hexToRgba(textColor, 0.4) : undefined,
+                      borderWidth: ctaColors.isOutline ? '2px' : undefined,
+                    }}
                     onClick={handleCtaClick}
                   >
                     {content.ctaText}
@@ -563,7 +685,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
                 )}
                 {content.secondaryCtaText && (
                   <button
-                    className="inline-flex items-center gap-2 rounded-full border border-current/30 px-7 py-3 text-sm font-semibold backdrop-blur-sm hover:bg-white/10 transition-all"
+                    className={secondaryCtaClass}
                     style={{ color: textColor }}
                     onClick={handleCtaClick}
                   >
@@ -574,18 +696,18 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
             )}
           </div>
 
-          {/* Product image column (visible on mobile + desktop) */}
+          {/* Product image column */}
           {showProduct && (
             <div className={productColClass}>
               <div
                 className="hero-float relative mx-auto w-auto"
-                style={{ filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.25))' }}
+                style={getProductImageStyle()}
               >
                 <StoreImage
                   src={resolvedHeroImage!}
                   alt={content.headline}
                   fallbackColor={theme.colors.primary}
-                  className="max-h-[250px] w-auto mx-auto object-contain lg:max-h-[400px] xl:max-h-[480px]"
+                  className={`${productMaxH} w-auto mx-auto object-contain`}
                 />
               </div>
             </div>

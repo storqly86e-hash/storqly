@@ -34,6 +34,9 @@ const VALID_HEIGHT = new Set<string>(['sm', 'md', 'lg', 'xl']);
 const VALID_HERO_LAYOUT = new Set<string>(['centered', 'split-left', 'split-right', 'product-first', 'text-first', 'minimal']);
 const VALID_VISUAL_PRIORITY = new Set<string>(['product', 'headline', 'balanced']);
 const VALID_BG_TREATMENT = new Set<string>(['none', 'soft', 'editorial', 'dramatic']);
+const VALID_HERO_CTA_STYLE = new Set<string>(['filled', 'outline', 'gradient']);
+const VALID_PRODUCT_TREATMENT = new Set<string>(['floating', 'framed', 'cutout', 'shadow']);
+const VALID_BADGE_STYLE = new Set<string>(['outlined', 'filled', 'gradient']);
 const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
 const VALID_COLUMNS = new Set<number>([2, 3, 4]);
 const VALID_PAGE_TYPES = new Set<string>(['home', 'collection', 'product', 'cart', 'checkout']);
@@ -207,6 +210,10 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
         visualPriority: c.visualPriority !== undefined ? enumVal(c.visualPriority, VALID_VISUAL_PRIORITY, 'balanced') : undefined,
         backgroundTreatment: c.backgroundTreatment !== undefined ? enumVal(c.backgroundTreatment, VALID_BG_TREATMENT, 'none') : undefined,
         vignette: c.vignette !== undefined ? bool(c.vignette, false) : undefined,
+        // Phase 4: Professional banner
+        ctaStyle: c.ctaStyle !== undefined ? enumVal(c.ctaStyle, VALID_HERO_CTA_STYLE, 'filled') : undefined,
+        productTreatment: c.productTreatment !== undefined ? enumVal(c.productTreatment, VALID_PRODUCT_TREATMENT, 'floating') : undefined,
+        badgeStyle: c.badgeStyle !== undefined ? enumVal(c.badgeStyle, VALID_BADGE_STYLE, 'outlined') : undefined,
       };
     }
     case 'featured-products': {

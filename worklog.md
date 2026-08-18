@@ -1243,3 +1243,44 @@ Stage Summary:
 - Product images now visible on mobile (not hidden)
 - Chat can edit: layout, backgroundTreatment, vignette, visualPriority without regenerating images
 - Pre-existing lint errors only (0 new)
+---
+Task ID: 1
+Agent: main
+Task: Banner System Upgrade — Professional E-Commerce Hero Banners
+
+Work Log:
+- Inspected existing HeroSection component (sections.tsx lines 359-597)
+- Inspected store-schema.ts HeroContent type, normalize-store.ts, section-meta.ts
+- Inspected visual editor PropertiesPanel (generic ContentFieldRenderer)
+- Inspected store generation system prompt (hero layout/treatment rules)
+- Extended HeroContent type with 3 new fields: ctaStyle, productTreatment, badgeStyle
+- Added HeroCtaStyle and HeroProductTreatment types to store-schema.ts
+- Added hexToRgba, darkenHex, lightenHex color utilities to helpers.ts
+- Completely rewrote HeroSection component with professional rendering:
+  - Theme-consistent CTA buttons (uses brand primary/accent colors instead of generic white)
+  - 3 CTA styles: filled (brand color), outline (ghost), gradient (primary→accent)
+  - 4 product image treatments: floating (dual shadow), framed (glass border), cutout (heavy shadow), shadow (single)
+  - 3 badge styles: outlined, filled (brand tint), gradient (brand blend)
+  - Directional background overlays (varies by layout + treatment for depth)
+  - Professional responsive typography scale per layout mode
+  - Fade-in entrance animations for badge, headline, subheadline, CTA
+  - Mobile-first responsive recomposition (product stacks above text, not just shrinks)
+  - Theme color-derived accent glow (uses primary color, not white)
+  - Deeper vignette (35% transparent → 45% dark)
+- Added HeroPropertiesPanel to visual editor with dedicated controls:
+  - Text Content: badge, headline, subheadline, CTA, secondary CTA inputs
+  - Layout & Composition: layout mode, alignment, height, visual priority selects
+  - Background & Effects: background treatment, vignette toggle
+  - Visual Styles: CTA style, product treatment, badge style selects
+  - Color Overrides: text, headline, button bg, button fg color pickers
+  - Spacing: padding Y/X, max width selects
+- Updated normalize-store.ts with validation sets for new fields
+- Updated section-meta.ts default hero content with new fields
+- All changes pass ESLint and TypeScript checks (no new errors)
+- Verified page compiles and serves HTTP 200 successfully
+
+Stage Summary:
+- Modified files: store-schema.ts, sections.tsx, helpers.ts, normalize-store.ts, section-meta.ts, visual-editor/index.tsx
+- Zero breaking changes — all new fields are optional with backward-compatible defaults
+- Image generation pipeline was NOT modified (as required)
+- Banner editing is now partial — text/CTA/layout changes do NOT regenerate images

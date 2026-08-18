@@ -100,6 +100,9 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
         backgroundTreatment: 'soft',
         vignette: true,
         visualPriority: 'balanced',
+        ctaStyle: 'filled',
+        productTreatment: 'floating',
+        badgeStyle: 'outlined',
       };
     case 'featured-products':
       return {

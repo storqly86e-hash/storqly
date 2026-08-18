@@ -352,6 +352,270 @@ function ContentFieldRenderer({
   return null;
 }
 
+// ── Hero Section Properties Panel ─────────────────────────────────
+// Dedicated editor for hero/banner sections with proper select controls
+
+function HeroPropertiesPanel({
+  section,
+  pageId,
+}: {
+  section: Section;
+  pageId: string;
+}) {
+  const { updateSectionContent, updateSectionStyle } = useStoreEditor();
+  const content = section.content as Record<string, unknown>;
+  const [localStyle, setLocalStyle] = useState<SectionStyle>(section.style);
+
+  if (section.style !== localStyle) {
+    setLocalStyle(section.style);
+  }
+
+  const handleContentChange = useCallback(
+    (key: string, value: unknown) => {
+      updateSectionContent(pageId, section.id, { [key]: value });
+    },
+    [pageId, section.id, updateSectionContent]
+  );
+
+  const handleStyleChange = useCallback(
+    (patch: Partial<SectionStyle>) => {
+      const updated = { ...localStyle, ...patch };
+      setLocalStyle(updated);
+      updateSectionStyle(pageId, section.id, patch);
+    },
+    [pageId, section.id, localStyle, updateSectionStyle]
+  );
+
+  const renderSelect = (
+    lbl: string,
+    value: string | undefined,
+    options: { label: string; value: string }[],
+    onChange: (val: string) => void
+  ) => (
+    <div>
+      <Label className="text-xs text-zinc-400 mb-1.5 block">{lbl}</Label>
+      <Select value={value ?? ''} onValueChange={onChange}>
+        <SelectTrigger className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="bg-zinc-900 border-zinc-700">
+          {options.map((opt) => (
+            <SelectItem
+              key={opt.value}
+              value={opt.value}
+              className="text-zinc-300 focus:bg-zinc-800 focus:text-zinc-100"
+            >
+              {opt.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
+  const renderTextInput = (
+    lbl: string,
+    key: string,
+    value: string,
+    placeholder = ''
+  ) => (
+    <div>
+      <Label className="text-xs text-zinc-400 mb-1.5 block">{lbl}</Label>
+      <Input
+        value={value}
+        onChange={(e) => handleContentChange(key, e.target.value)}
+        placeholder={placeholder}
+        className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+      />
+    </div>
+  );
+
+  const renderColorPicker = (
+    lbl: string,
+    value: string | undefined,
+    onChange: (val: string) => void,
+    placeholder = 'auto'
+  ) => (
+    <div>
+      <Label className="text-xs text-zinc-400 mb-1.5 block">{lbl}</Label>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value ?? '#000000'}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-8 w-8 cursor-pointer rounded border border-zinc-700 bg-transparent p-0.5"
+        />
+        <Input
+          value={value ?? ''}
+          onChange={(e) => onChange(e.target.value || undefined)}
+          placeholder={placeholder}
+          className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm font-mono"
+        />
+      </div>
+    </div>
+  );
+
+  return (
+    <ScrollArea className="flex-1 min-h-0">
+      <div className="space-y-5 p-4">
+        {/* Section badge */}
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="gap-1.5 border-zinc-700 bg-zinc-800/60 text-zinc-300">
+            <Layout className="h-3.5 w-3.5" />
+            Hero Banner
+          </Badge>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Text Content ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Text Content</h4>
+          <div className="space-y-3">
+            {renderTextInput('Badge (Eyebrow)', 'badge', (content.badge as string) || '', 'e.g. NEW COLLECTION')}
+            {renderTextInput('Headline', 'headline', (content.headline as string) || '')}
+            {renderTextInput('Subheadline', 'subheadline', (content.subheadline as string) || '', 'Optional description')}
+            {renderTextInput('CTA Button Text', 'ctaText', (content.ctaText as string) || '', 'Shop Now')}
+            {renderTextInput('Secondary CTA', 'secondaryCtaText', (content.secondaryCtaText as string) || '', 'Optional')}
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Layout & Composition ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Layout & Composition</h4>
+          <div className="space-y-3">
+            {renderSelect('Layout Mode', content.layout as string, [
+              { label: 'Split Left (Text | Product)', value: 'split-left' },
+              { label: 'Split Right (Product | Text)', value: 'split-right' },
+              { label: 'Product First (60/40)', value: 'product-first' },
+              { label: 'Text First (60/40)', value: 'text-first' },
+              { label: 'Minimal (Centered, No Product)', value: 'minimal' },
+              { label: 'Centered (Basic)', value: 'centered' },
+            ], (val) => handleContentChange('layout', val))}
+
+            {renderSelect('Alignment', content.alignment as string, [
+              { label: 'Left', value: 'left' },
+              { label: 'Center', value: 'center' },
+              { label: 'Right', value: 'right' },
+            ], (val) => handleContentChange('alignment', val))}
+
+            {renderSelect('Height', content.height as string, [
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium', value: 'md' },
+              { label: 'Large', value: 'lg' },
+              { label: 'Extra Large', value: 'xl' },
+            ], (val) => handleContentChange('height', val))}
+
+            {renderSelect('Visual Priority', content.visualPriority as string, [
+              { label: 'Balanced', value: 'balanced' },
+              { label: 'Product Focus', value: 'product' },
+              { label: 'Headline Focus', value: 'headline' },
+            ], (val) => handleContentChange('visualPriority', val))}
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Background & Effects ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Background & Effects</h4>
+          <div className="space-y-3">
+            {renderSelect('Background Treatment', content.backgroundTreatment as string, [
+              { label: 'None', value: 'none' },
+              { label: 'Soft (Gentle Darken)', value: 'soft' },
+              { label: 'Editorial (Magazine)', value: 'editorial' },
+              { label: 'Dramatic (Cinematic)', value: 'dramatic' },
+            ], (val) => handleContentChange('backgroundTreatment', val))}
+
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-400">Vignette Effect</Label>
+              <Switch
+                checked={!!content.vignette}
+                onCheckedChange={(checked) => handleContentChange('vignette', checked)}
+              />
+            </div>
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Visual Styles ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Visual Styles</h4>
+          <div className="space-y-3">
+            {renderSelect('CTA Button Style', content.ctaStyle as string, [
+              { label: 'Filled (Brand Color)', value: 'filled' },
+              { label: 'Outline (Ghost)', value: 'outline' },
+              { label: 'Gradient (Primary to Accent)', value: 'gradient' },
+            ], (val) => handleContentChange('ctaStyle', val))}
+
+            {renderSelect('Product Image Treatment', content.productTreatment as string, [
+              { label: 'Floating (Dual Shadow)', value: 'floating' },
+              { label: 'Framed (Glass Border)', value: 'framed' },
+              { label: 'Cutout (Heavy Shadow)', value: 'cutout' },
+              { label: 'Shadow (Single Layer)', value: 'shadow' },
+            ], (val) => handleContentChange('productTreatment', val))}
+
+            {renderSelect('Badge Style', content.badgeStyle as string, [
+              { label: 'Outlined (Subtle Border)', value: 'outlined' },
+              { label: 'Filled (Brand Tint)', value: 'filled' },
+              { label: 'Gradient (Brand Blend)', value: 'gradient' },
+            ], (val) => handleContentChange('badgeStyle', val))}
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Color Overrides ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Color Overrides</h4>
+          <div className="space-y-3">
+            {renderColorPicker('Text Color', localStyle.textColor,
+              (val) => handleStyleChange({ textColor: val }), 'white')}
+            {renderColorPicker('Headline Color', localStyle.headlineColor,
+              (val) => handleStyleChange({ headlineColor: val }), 'inherit')}
+            {renderColorPicker('Button Background', localStyle.buttonBackgroundColor,
+              (val) => handleStyleChange({ buttonBackgroundColor: val }), 'use brand primary')}
+            {renderColorPicker('Button Text Color', localStyle.buttonTextColor,
+              (val) => handleStyleChange({ buttonTextColor: val }), 'auto-contrast')}
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Spacing ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Spacing</h4>
+          <div className="space-y-3">
+            {renderSelect('Padding Vertical', localStyle.paddingY, [
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium', value: 'md' },
+              { label: 'Large', value: 'lg' },
+              { label: 'Extra Large', value: 'xl' },
+            ], (val) => handleStyleChange({ paddingY: val as SectionStyle['paddingY'] }))}
+
+            {renderSelect('Padding Horizontal', localStyle.paddingX, [
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium', value: 'md' },
+              { label: 'Large', value: 'lg' },
+            ], (val) => handleStyleChange({ paddingX: val as SectionStyle['paddingX'] }))}
+
+            {renderSelect('Max Width', localStyle.maxWidth, [
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium', value: 'md' },
+              { label: 'Large', value: 'lg' },
+              { label: 'Extra Large', value: 'xl' },
+              { label: 'Full', value: 'full' },
+            ], (val) => handleStyleChange({ maxWidth: val as SectionStyle['maxWidth'] }))}
+          </div>
+        </div>
+      </div>
+    </ScrollArea>
+  );
+}
+
 // ── Properties Panel ────────────────────────────────────────────────
 
 interface PropertiesPanelProps {
@@ -1111,7 +1375,11 @@ export function VisualEditor() {
       {/* Properties Panel — only for section-editable pages */}
       {selectedSection && !isTemplatePage && (
         <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 min-h-0 border-r border-zinc-800">
-          <PropertiesPanel section={selectedSection} pageId={pageId} />
+          {selectedSection.type === 'hero' ? (
+            <HeroPropertiesPanel section={selectedSection} pageId={pageId} />
+          ) : (
+            <PropertiesPanel section={selectedSection} pageId={pageId} />
+          )}
         </div>
       )}
     </div>

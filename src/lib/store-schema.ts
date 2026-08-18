@@ -101,6 +101,12 @@ export type HeroLayout =
   | 'text-first'
   | 'minimal';
 
+// ── Hero CTA style variants ─────────────────────────────────
+export type HeroCtaStyle = 'filled' | 'outline' | 'gradient';
+
+// ── Hero product image treatment ────────────────────────────
+export type HeroProductTreatment = 'floating' | 'framed' | 'cutout' | 'shadow';
+
 // Section content schemas by type
 export interface HeroContent {
   headline: string;
@@ -120,6 +126,10 @@ export interface HeroContent {
   visualPriority?: 'product' | 'headline' | 'balanced';
   backgroundTreatment?: 'none' | 'soft' | 'editorial' | 'dramatic';
   vignette?: boolean;
+  // Phase 4: Professional banner upgrade
+  ctaStyle?: HeroCtaStyle;             // CTA button visual style
+  productTreatment?: HeroProductTreatment; // Product image presentation style
+  badgeStyle?: 'outlined' | 'filled' | 'gradient'; // Badge visual variant
 }
 
 export interface FeaturedProductsContent {

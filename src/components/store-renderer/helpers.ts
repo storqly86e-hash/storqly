@@ -157,3 +157,31 @@ export function gridCols(columns: 2 | 3 | 4) {
     default: return 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3';
   }
 }
+
+// ─── Theme Color Utilities ─────────────────────────────────────────
+
+/** Create rgba string from hex color */
+export function hexToRgba(hex: string, alpha: number): string {
+  const parsed = parseColorToRGB(hex);
+  if (!parsed) return `rgba(0,0,0,${alpha})`;
+  const { r, g, b } = parsed;
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+/** Darken a hex color by amount (0–1) */
+export function darkenHex(hex: string, amount: number): string {
+  const parsed = parseColorToRGB(hex);
+  if (!parsed) return hex;
+  const { r, g, b } = parsed;
+  const d = (c: number) => Math.max(0, Math.round(c * (1 - amount)));
+  return `#${d(r).toString(16).padStart(2, '0')}${d(g).toString(16).padStart(2, '0')}${d(b).toString(16).padStart(2, '0')}`;
+}
+
+/** Lighten a hex color by amount (0–1) */
+export function lightenHex(hex: string, amount: number): string {
+  const parsed = parseColorToRGB(hex);
+  if (!parsed) return hex;
+  const { r, g, b } = parsed;
+  const l = (c: number) => Math.min(255, Math.round(c + (255 - c) * amount));
+  return `#${l(r).toString(16).padStart(2, '0')}${l(g).toString(16).padStart(2, '0')}${l(b).toString(16).padStart(2, '0')}`;
+}
