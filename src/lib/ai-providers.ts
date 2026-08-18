@@ -139,9 +139,12 @@ class OpenRouterProvider implements AIProvider {
     return key;
   }
 
-  async call(options: ProviderCallOptions): Promise<string> {
+  private async callWithParams(
+    options: ProviderCallOptions,
+    useJsonMode: boolean,
+  ): Promise<string> {
     const apiKey = this.getApiKey();
-    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+    const { messages, temperature = 0.7, maxTokens, timeout = 30_000 } = options;
 
     // Convert messages: treat first 'assistant' message as system prompt
     const openaiMessages: Array<{ role: string; content: string }> = [];
@@ -157,8 +160,8 @@ class OpenRouterProvider implements AIProvider {
       model: OPENROUTER_MODELS[this.lastWorkingModel],
       messages: openaiMessages,
       temperature,
-      ...(maxTokens ? { max_tokens: maxTokens } : {}),
-      ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+      max_tokens: maxTokens || 8000,
+      ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
     };
 
     const controller = new AbortController();
@@ -179,13 +182,22 @@ class OpenRouterProvider implements AIProvider {
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => '');
+        const errStr = errBody.substring(0, 300);
+
         // If rate-limited on this model, try next model
         if (response.status === 429 && this.lastWorkingModel < OPENROUTER_MODELS.length - 1) {
           this.lastWorkingModel++;
           console.warn(`[OpenRouter] Rate limited on ${body.model}, falling back to ${OPENROUTER_MODELS[this.lastWorkingModel]}`);
-          return this.call(options);
+          return this.callWithParams(options, useJsonMode);
         }
-        throw new Error(`OpenRouter ${response.status}: ${errBody.substring(0, 200)}`);
+
+        // If 400 and json_mode is on, model might not support response_format — retry without it
+        if (response.status === 400 && useJsonMode && errStr.includes('response_format')) {
+          console.warn(`[OpenRouter] ${body.model} does not support response_format, retrying without json_mode`);
+          return this.callWithParams({ ...options, jsonMode: false }, false);
+        }
+
+        throw new Error(`OpenRouter ${response.status}: ${errStr.substring(0, 200)}`);
       }
 
       const data = await response.json() as {
@@ -203,6 +215,10 @@ class OpenRouterProvider implements AIProvider {
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  async call(options: ProviderCallOptions): Promise<string> {
+    return this.callWithParams(options, !!options.jsonMode);
   }
 
   reset() {

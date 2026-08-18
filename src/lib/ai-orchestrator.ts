@@ -35,8 +35,8 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'store-generation': {
     label: 'Store Generation',
     temperature: 0.7,
-    timeout: 35_000,
-    maxTokens: undefined,
+    timeout: 60_000,
+    maxTokens: 8000,
     retriesPerProvider: 2,
   },
   'chat-edit': {
@@ -50,14 +50,14 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
     label: 'Coding Task',
     temperature: 0.3,
     timeout: 45_000,
-    maxTokens: undefined,
+    maxTokens: 8000,
     retriesPerProvider: 1,
   },
   'product-batch': {
     label: 'Product Batch Generation',
     temperature: 0.7,
-    timeout: 30_000,
-    maxTokens: undefined,
+    timeout: 45_000,
+    maxTokens: 8000,
     retriesPerProvider: 1,
   },
 };
