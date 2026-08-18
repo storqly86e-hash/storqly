@@ -134,7 +134,7 @@ class GroqProvider implements AIProvider {
 
     const completion = await Promise.race([
       client.chat.completions.create({
-        model: 'llama-3.3-70b-versatile',
+        model: 'llama-4-scout-17b-16e-instruct',
         messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
         temperature,
         ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -266,14 +266,19 @@ export function resetAllProviders(): void {
 
 /** Diagnostic info (no API calls) — useful for debugging env-var issues on deploy */
 export function getProviderDiagnostics(): {
-  env: Record<string, boolean>;
+  env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
 } {
+  const maskKey = (v: string | undefined) => {
+    if (!v || v === 'placeholder') return false;
+    if (v.length < 8) return `TOO_SHORT(${v.length}chars)`;
+    return `${v.slice(0, 4)}...${v.slice(-4)}`;
+  };
   return {
     env: {
-      GROQ_API_KEY: !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder'),
-      GOOGLE_AI_API_KEY: !!(process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder'),
+      GROQ_API_KEY: maskKey(process.env.GROQ_API_KEY),
+      GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
       NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,

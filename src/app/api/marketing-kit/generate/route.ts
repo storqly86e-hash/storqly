@@ -118,7 +118,7 @@ async function tryGroqStream(
     const client = new Groq({ apiKey });
 
     const stream = await client.chat.completions.create({
-      model: 'llama-3.3-70b-versatile',
+      model: 'llama-4-scout-17b-16e-instruct',
       messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
       temperature: 0.8,
       stream: true,
