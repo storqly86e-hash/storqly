@@ -1605,7 +1605,7 @@ export default function Home() {
               <p className="text-xs text-zinc-700">
                 Build, customize, and launch — powered by AI.
               </p>
-              <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-11-072515Z-279ad2e</p>
+              <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-18T060045Z-3700f92</p>
             </div>
           </footer>
         )}
