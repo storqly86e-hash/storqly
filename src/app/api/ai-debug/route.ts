@@ -16,9 +16,9 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true; // true = z-ai checks NODE_ENV !== 'production'
 
-function analyzeKeyFormat(value: string | undefined): { format: string; isLikelyOAuth: boolean; isLikelyApiKey: boolean; advice: string } {
+function analyzeGeminiKey(value: string | undefined): { format: string; isLikelyOAuth: boolean; isLikelyApiKey: boolean; advice: string } {
   if (!value || value === 'placeholder') {
-    return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Set this env var in Railway, then redeploy.' };
+    return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Set GOOGLE_AI_API_KEY in Railway, then redeploy.' };
   }
   if (value.startsWith('AIzaSy')) {
     return { format: 'AIzaSy... (permanent API key)', isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Correct format for Google AI API key.' };
@@ -39,14 +39,27 @@ function analyzeKeyFormat(value: string | undefined): { format: string; isLikely
   return { format: `${value.slice(0, 6)}...${value.slice(-4)}`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Unknown key format. Verify it starts with AIzaSy.' };
 }
 
+function analyzeGroqKey(value: string | undefined): { format: string; isLikelyApiKey: boolean; advice: string } {
+  if (!value || value === 'placeholder') {
+    return { format: 'NOT_SET', isLikelyApiKey: false, advice: 'Set GROQ_API_KEY in Railway, then redeploy.' };
+  }
+  if (value.startsWith('gsk_')) {
+    return { format: 'gsk_... (Groq API key format)', isLikelyApiKey: true, advice: '✅ Correct format. If still getting 403, the key may be revoked/expired. Check at https://console.groq.com/keys' };
+  }
+  if (value.length < 20) {
+    return { format: `TOO_SHORT(${value.length} chars)`, isLikelyApiKey: false, advice: 'Key too short. Check for truncation.' };
+  }
+  return { format: `${value.slice(0, 6)}...${value.slice(-4)}`, isLikelyApiKey: false, advice: 'Unknown format. Groq keys should start with gsk_.' };
+}
+
 export async function GET() {
   const diagnostics = getProviderDiagnostics();
   const providers = getProviders();
   const geminiKey = process.env.GOOGLE_AI_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
 
-  const geminiAnalysis = analyzeKeyFormat(geminiKey);
-  const groqAnalysis = analyzeKeyFormat(groqKey);
+  const geminiAnalysis = analyzeGeminiKey(geminiKey);
+  const groqAnalysis = analyzeGroqKey(groqKey);
 
   return NextResponse.json({
     // ── Code Fingerprint (changes with each code update) ──
@@ -56,12 +69,12 @@ export async function GET() {
       geminiSdk: GEMINI_SDK,
       zaiExcludedInProd: ZAI_EXCLUDED_IN_PROD,
       // If this says "old", the deployment did NOT pick up the latest commit.
-      fingerprintVersion: 'v3-2026-08-18',
+      fingerprintVersion: 'v4-2026-08-18',
     },
     // ── Key Format Analysis ──
     keyAnalysis: {
-      groq: { format: groqAnalysis.format, isLikelyOAuth: groqAnalysis.isLikelyOAuth, advice: groqAnalysis.advice },
-      gemini: { format: geminiAnalysis.format, isLikelyOAuth: geminiAnalysis.isLikelyOAuth, advice: geminiAnalysis.advice },
+      groq: { format: groqAnalysis.format, isLikelyApiKey: groqAnalysis.isLikelyApiKey, advice: groqAnalysis.advice },
+      gemini: { format: geminiAnalysis.format, isLikelyOAuth: geminiAnalysis.isLikelyOAuth, isLikelyApiKey: geminiAnalysis.isLikelyApiKey, advice: geminiAnalysis.advice },
     },
     // ── Original diagnostics ──
     ...diagnostics,
