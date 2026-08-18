@@ -119,12 +119,11 @@ class ZAIProvider implements AIProvider {
 // Free models: cohere/north-mini-code, poolside/laguna-s-2.1, inclusionai/ling-3.0-flash
 // Rate limits: 50 req/day (free account), 1000 req/day ($10 credit)
 
+// Tested 2026-08-18: Only poolside/laguna-s-2.1 returns clean content + supports JSON mode.
+// Others either return null content (reasoning-only) or inject thinking into content.
 const OPENROUTER_MODELS = [
-  'inclusionai/ling-3.0-flash:free',     // General-purpose (best for marketing)
-  'google/gemma-3-27b-it:free',           // Google's Gemma 3 27B
-  'meta-llama/llama-4-scout-17b-16e-instruct:free',  // Meta's Llama 4
-  'cohere/north-mini-code:free',          // Code specialist
-  'deepseek/deepseek-chat-v3-0324:free',  // DeepSeek V3
+  'poolside/laguna-s-2.1:free',            // Primary: clean output, JSON mode works
+  'nvidia/nemotron-3.5-lightning:free',    // Backup: includes thinking in content (no JSON mode)
 ] as const;
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';

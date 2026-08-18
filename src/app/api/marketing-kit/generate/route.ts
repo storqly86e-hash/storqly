@@ -109,12 +109,12 @@ async function tryZAIStream(
 // General-purpose models first (better for marketing content),
 // code models as fallback. Tries streaming first, then non-streaming.
 
+// Tested 2026-08-18: poolside is the only free model with clean content output.
+// nemotron includes thinking in content — only usable for non-JSON streaming.
 const OPENROUTER_MODELS = [
-  'inclusionai/ling-3.0-flash:free',
-  'google/gemma-3-27b-it:free',
-  'meta-llama/llama-4-scout-17b-16e-instruct:free',
-  'cohere/north-mini-code:free',
-  'deepseek/deepseek-chat-v3-0324:free',
+  'poolside/laguna-s-2.1:free',
+  'nvidia/nemotron-3.5-lightning:free',
+  'nvidia/nemotron-3-nano-30b-a3b:free',
 ] as const;
 
 async function tryOpenRouterStream(
