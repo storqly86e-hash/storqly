@@ -78,12 +78,65 @@ export interface SectionStyle {
   headlineColor?: string;
 }
 
+// ── Design Library Integration Types ─────────────────────────
+// These types prepare Storqly for the external ecommerce design library.
+// All fields are optional to maintain full backward compatibility.
+// When absent, the system falls back to legacy behavior.
+
+/** Page-level role from the design library composition system (orient, merchandise, educate, etc.) */
+export type DesignRole =
+  | 'orient' | 'merchandise' | 'educate' | 'differentiate'
+  | 'reassure' | 'engage' | 'convert' | 'retain';
+
+/** Component metadata linking a section to a design library variant. */
+export interface ComponentMeta {
+  /** Design library family (e.g. 'hero', 'product-card', 'cta', 'testimonials') */
+  family?: string;
+  /** Design library variant (e.g. 'editorial_product_still_life', 'premium_invitation') */
+  variant?: string;
+  /** Library component id (e.g. 'hero.editorial_product_still_life') */
+  componentId?: string;
+  /** Role this section plays in the page composition */
+  role?: DesignRole;
+  /** Tags from the library for filtering/selection */
+  tags?: string[];
+}
+
+/** Per-breakpoint responsive overrides for a section */
+export interface ResponsiveOverrides {
+  compact?: Partial<Record<string, unknown>>;
+  medium?: Partial<Record<string, unknown>>;
+  wide?: Partial<Record<string, unknown>>;
+}
+
+/** Image art direction for contextual image generation/enrichment */
+export interface ImageArtDirection {
+  /** Brief description of what the image should show */
+  brief?: string;
+  /** Aspect ratio preference (e.g. '3:2', '16:9', '1:1') */
+  aspectRatio?: string;
+  /** Mood/feeling keywords */
+  mood?: string[];
+  /** What to avoid in the image */
+  avoid?: string[];
+  /** Whether this is a contextual background, product shot, campaign image, or UGC */
+  slotType?: 'context_background' | 'product_image' | 'campaign_image' | 'ugc';
+}
+
 export interface Section {
   id: string;
   type: SectionType;
   content: Record<string, unknown>;
   style: SectionStyle;
   visible: boolean;
+  /** Design library component reference — when present, the renderer can resolve
+   *  this to a library-aware component instead of the default section renderer. */
+  componentMeta?: ComponentMeta;
+  /** Responsive overrides per breakpoint — library can specify mobile/tablet/desktop
+   *  content/layout adjustments without changing the base content. */
+  responsiveOverrides?: ResponsiveOverrides;
+  /** Image art direction — guides image search/generation for this section's media. */
+  imageArtDirection?: ImageArtDirection;
 }
 
 // ── Hero layout modes ─────────────────────────────────────
@@ -291,6 +344,18 @@ export interface Store {
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;
+  /** Design library integration metadata. When present, indicates the store was
+   *  generated with design library awareness. Absent = legacy generation. */
+  designLibrary?: {
+    /** Library version (e.g. '1.0.0') */
+    version?: string;
+    /** Composition recipe used (e.g. 'luxury_editorial_launch') */
+    recipe?: string;
+    /** Typography system selected (e.g. 'editorial_serif_sans') */
+    typographySystem?: string;
+    /** Density preset selected (e.g. 'airy', 'balanced', 'compact') */
+    densityPreset?: string;
+  };
 }
 
 // Default theme for new stores

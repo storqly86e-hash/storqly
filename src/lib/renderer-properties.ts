@@ -22,6 +22,8 @@ export const RENDERER_CONSUMED: Record<
       'badgeStyle', 'headlineSize',
       // Phase 5: carousel
       'heroImages', 'carouselEnabled', 'carouselInterval', 'initialSlide',
+      // Design library: image art direction
+      'imageArtDirection',
     ],
     style: [
       'backgroundColor', 'textColor', 'paddingY', 'paddingX', 'maxWidth',

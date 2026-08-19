@@ -1,0 +1,1321 @@
+{
+  "version": "1.0.0",
+  "families": {
+    "announcement-bar": {
+      "records": [
+        {
+          "id": "announcement.utility_single",
+          "family": "announcement-bar",
+          "variant": "utility_single",
+          "intent": "Communicate one useful store-wide message without competing with navigation.",
+          "use_when": [
+            "shipping_threshold",
+            "service_message",
+            "launch_note"
+          ],
+          "avoid_when": [
+            "multiple_messages",
+            "urgent_promotion_needing_detail"
+          ],
+          "slots": [
+            "message",
+            "optional_link",
+            "dismiss_control"
+          ],
+          "layout": {
+            "desktop": "single centered line at 36–40px height",
+            "alignment": "center"
+          },
+          "responsive": {
+            "mobile_behavior": "truncate only with accessible expansion; preserve the actionable link"
+          },
+          "style_hooks": [
+            "surface",
+            "content_color",
+            "height",
+            "label_style",
+            "dismissible"
+          ],
+          "compatible_with": [
+            "header.wordmark_center",
+            "hero.editorial_masthead",
+            "promotion.inline_offer"
+          ],
+          "content_rules": {
+            "max_characters": 90,
+            "one_message_only": true
+          },
+          "motion": "No auto-rotating messages.",
+          "tags": [
+            "announcement",
+            "utility",
+            "low_noise"
+          ],
+          "visual_style": [
+            "quiet utility",
+            "single-line information"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "clear",
+            "service-minded",
+            "practical"
+          ],
+          "incompatible_with": [
+            "announcement.rail_rotating"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "announcement.rail_rotating",
+          "family": "announcement-bar",
+          "variant": "rail_rotating",
+          "intent": "Rotate a small set of meaningful service or offer messages while keeping user control.",
+          "use_when": [
+            "multiple_service_promises",
+            "seasonal_campaign",
+            "high_message_value"
+          ],
+          "avoid_when": [
+            "low_traffic",
+            "complex_terms",
+            "regulated_claims"
+          ],
+          "slots": [
+            "message_items",
+            "previous_control",
+            "next_control",
+            "pause_control"
+          ],
+          "layout": {
+            "desktop": "single-line carousel with explicit controls",
+            "alignment": "center"
+          },
+          "responsive": {
+            "mobile_behavior": "one message at a time with manual controls; never rely on timing alone"
+          },
+          "style_hooks": [
+            "surface",
+            "control_visibility",
+            "rotation_interval",
+            "height"
+          ],
+          "compatible_with": [
+            "header.utility_split",
+            "hero.launch_countdown",
+            "trust.proof_strip"
+          ],
+          "content_rules": {
+            "item_count": "2–4",
+            "max_characters_each": 80
+          },
+          "motion": "Manual-first; auto-rotation paused when focused or hovered.",
+          "tags": [
+            "announcement",
+            "carousel",
+            "service"
+          ],
+          "visual_style": [
+            "quiet utility",
+            "single-line information"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "clear",
+            "service-minded",
+            "campaign-driven"
+          ],
+          "incompatible_with": [
+            "announcement.utility_single"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "header": {
+      "records": [
+        {
+          "id": "header.wordmark_center",
+          "family": "header",
+          "variant": "wordmark_center",
+          "intent": "Create a quiet, fashion/editorial header with centered brand authority.",
+          "use_when": [
+            "luxury",
+            "editorial",
+            "fashion",
+            "small_navigation"
+          ],
+          "avoid_when": [
+            "large_catalog",
+            "many_utility_controls"
+          ],
+          "slots": [
+            "logo",
+            "primary_nav",
+            "account",
+            "search",
+            "cart",
+            "menu_trigger"
+          ],
+          "layout": {
+            "desktop": "left utility cluster, centered wordmark, right commerce cluster",
+            "alignment": "centered brand mark"
+          },
+          "responsive": {
+            "mobile_behavior": "logo remains centered; menu left; cart and optional search right"
+          },
+          "style_hooks": [
+            "logo_scale",
+            "header_height",
+            "border_mode",
+            "surface",
+            "nav_spacing"
+          ],
+          "compatible_with": [
+            "announcement.utility_single",
+            "hero.editorial_product_still_life",
+            "footer.editorial_columns"
+          ],
+          "content_rules": {
+            "primary_nav_items": "3–6",
+            "utility_items": "2–3"
+          },
+          "motion": "Menu drawer slides from edge; header remains stable.",
+          "tags": [
+            "header",
+            "editorial",
+            "centered",
+            "luxury"
+          ],
+          "visual_style": [
+            "navigation-led",
+            "brand-signature",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce",
+            "fashion"
+          ],
+          "brand_personalities": [
+            "organized",
+            "distinctive",
+            "luxurious",
+            "editorial"
+          ],
+          "incompatible_with": [
+            "header.utility_split"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "header.utility_split",
+          "family": "header",
+          "variant": "utility_split",
+          "intent": "Support discovery-heavy stores with a clear utility strip, left navigation, and right commerce actions.",
+          "use_when": [
+            "multi_category",
+            "large_catalog",
+            "search_priority",
+            "marketplace"
+          ],
+          "avoid_when": [
+            "minimal_single_sku",
+            "very_small_navigation"
+          ],
+          "slots": [
+            "utility_message",
+            "logo",
+            "primary_nav",
+            "mega_menu",
+            "search",
+            "account",
+            "wishlist",
+            "cart",
+            "menu_trigger"
+          ],
+          "layout": {
+            "desktop": "utility strip above a two-zone header; nav left, utilities right",
+            "alignment": "left-aligned brand and navigation"
+          },
+          "responsive": {
+            "mobile_behavior": "utility strip collapses to one message; primary nav becomes drawer; search remains accessible from a visible button"
+          },
+          "style_hooks": [
+            "utility_height",
+            "nav_density",
+            "border_mode",
+            "surface",
+            "logo_scale"
+          ],
+          "compatible_with": [
+            "announcement.rail_rotating",
+            "hero.category_portal",
+            "collection.filter_sidebar",
+            "footer.utility_rich"
+          ],
+          "content_rules": {
+            "primary_nav_items": "4–8",
+            "mega_menu_columns": "2–5"
+          },
+          "motion": "Mega menu opens on click or deliberate focus; no hover-only access.",
+          "tags": [
+            "header",
+            "catalog",
+            "utility",
+            "navigation"
+          ],
+          "visual_style": [
+            "navigation-led",
+            "brand-signature"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "organized",
+            "distinctive",
+            "practical"
+          ],
+          "incompatible_with": [
+            "header.wordmark_center"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "navigation": {
+      "records": [
+        {
+          "id": "navigation.mega_menu_editorial",
+          "family": "navigation",
+          "variant": "mega_menu_editorial",
+          "intent": "Expose category hierarchy with a visual editorial panel rather than a dense link wall.",
+          "use_when": [
+            "fashion",
+            "beauty",
+            "home",
+            "category_images_available"
+          ],
+          "avoid_when": [
+            "few_categories",
+            "mobile_only"
+          ],
+          "slots": [
+            "category_groups",
+            "featured_image",
+            "featured_link",
+            "utility_links"
+          ],
+          "layout": {
+            "desktop": "3-column menu: category groups, secondary links, featured image tile",
+            "alignment": "left hierarchy with visual anchor"
+          },
+          "responsive": {
+            "mobile_behavior": "accordion groups with one featured card below",
+            "interaction": "click-to-open and keyboard navigable"
+          },
+          "style_hooks": [
+            "column_count",
+            "image_ratio",
+            "link_spacing",
+            "surface",
+            "heading_style"
+          ],
+          "compatible_with": [
+            "header.wordmark_center",
+            "hero.collection_rail",
+            "collection.lookbook_tiles"
+          ],
+          "content_rules": {
+            "group_count": "2–5",
+            "links_per_group": "3–8"
+          },
+          "motion": "Opacity and height transition under 280ms.",
+          "tags": [
+            "navigation",
+            "mega_menu",
+            "editorial",
+            "discovery"
+          ],
+          "visual_style": [
+            "utility editorial",
+            "information architecture",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "organized",
+            "discovery-oriented",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "navigation.filter_toolbar",
+          "family": "navigation",
+          "variant": "filter_toolbar",
+          "intent": "Make collection filtering and sorting discoverable without overwhelming the product grid.",
+          "use_when": [
+            "collection",
+            "catalog",
+            "many_attributes"
+          ],
+          "avoid_when": [
+            "single_product",
+            "small_catalog"
+          ],
+          "slots": [
+            "result_count",
+            "filter_groups",
+            "sort_control",
+            "view_toggle",
+            "active_filter_chips"
+          ],
+          "layout": {
+            "desktop": "sticky or static toolbar with filter trigger left and sort/view controls right",
+            "alignment": "horizontal utility row"
+          },
+          "responsive": {
+            "mobile_behavior": "filter opens as bottom sheet or drawer; sort remains a separate visible control; active filters persist as chips"
+          },
+          "style_hooks": [
+            "sticky_mode",
+            "control_shape",
+            "border_mode",
+            "density",
+            "chip_style"
+          ],
+          "compatible_with": [
+            "collection.filter_sidebar",
+            "product-grid.editorial_rail",
+            "product-grid.utility_dense"
+          ],
+          "content_rules": {
+            "visible_filter_groups_desktop": "3–6",
+            "always_show_result_count": true
+          },
+          "motion": "Filter drawer uses focus trap and preserves scroll position.",
+          "tags": [
+            "navigation",
+            "filter",
+            "sort",
+            "commerce"
+          ],
+          "visual_style": [
+            "utility editorial",
+            "information architecture"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "organized",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "button": {
+      "records": [
+        {
+          "id": "button.solid_primary",
+          "family": "button",
+          "variant": "solid_primary",
+          "intent": "Provide the clearest conversion action.",
+          "use_when": [
+            "primary_action",
+            "dark_or_light_surface"
+          ],
+          "avoid_when": [
+            "multiple_equal_primary_actions"
+          ],
+          "slots": [
+            "label",
+            "leading_icon",
+            "trailing_icon",
+            "loading_state"
+          ],
+          "layout": {
+            "desktop": "inline-flex min-height 48px with label-led padding",
+            "alignment": "center"
+          },
+          "responsive": {
+            "mobile_behavior": "full width within narrow forms; inline within hero when space allows"
+          },
+          "style_hooks": [
+            "surface",
+            "content",
+            "radius",
+            "height",
+            "size",
+            "text_transform"
+          ],
+          "compatible_with": [
+            "cta.strong_statement",
+            "hero.product_stack_vertical",
+            "commerce-pattern.add_to_cart"
+          ],
+          "content_rules": {
+            "label_max_words": 4,
+            "one_action_per_group": true
+          },
+          "motion": "Color and border transition only; loading state preserves width.",
+          "tags": [
+            "button",
+            "primary",
+            "conversion"
+          ],
+          "visual_style": [
+            "clear control",
+            "hierarchy-led",
+            "tactile"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "direct",
+            "restrained",
+            "confident",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "button.underline_secondary",
+          "family": "button",
+          "variant": "underline_secondary",
+          "intent": "Offer a lower-emphasis path without adding another pill or card.",
+          "use_when": [
+            "editorial_secondary_action",
+            "luxury",
+            "minimal"
+          ],
+          "avoid_when": [
+            "low_contrast_background",
+            "critical_action"
+          ],
+          "slots": [
+            "label",
+            "trailing_icon"
+          ],
+          "layout": {
+            "desktop": "inline text link with 1px underline offset",
+            "alignment": "baseline"
+          },
+          "responsive": {
+            "mobile_behavior": "minimum 44px vertical target with underline retained"
+          },
+          "style_hooks": [
+            "content_color",
+            "underline_color",
+            "underline_offset",
+            "label_style"
+          ],
+          "compatible_with": [
+            "hero.editorial_masthead",
+            "brand-story.founder_note",
+            "cta.editorial_invite"
+          ],
+          "content_rules": {
+            "label_max_words": 5
+          },
+          "motion": "Underline expands from left to right on hover/focus.",
+          "tags": [
+            "button",
+            "secondary",
+            "editorial",
+            "link"
+          ],
+          "visual_style": [
+            "clear control",
+            "hierarchy-led",
+            "tactile",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "direct",
+            "restrained",
+            "confident",
+            "luxurious",
+            "editorial",
+            "minimal"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "button.outline_quiet",
+          "family": "button",
+          "variant": "outline_quiet",
+          "intent": "Provide a visible but restrained secondary control.",
+          "use_when": [
+            "secondary_action",
+            "dark_surface",
+            "product_card_quick_add"
+          ],
+          "avoid_when": [
+            "dense_control_group",
+            "tiny_mobile_space"
+          ],
+          "slots": [
+            "label",
+            "leading_icon",
+            "trailing_icon"
+          ],
+          "layout": {
+            "desktop": "outlined rectangular control with 1px border",
+            "alignment": "center"
+          },
+          "responsive": {
+            "mobile_behavior": "becomes full width in a stacked action group"
+          },
+          "style_hooks": [
+            "border_color",
+            "content_color",
+            "radius",
+            "height",
+            "surface"
+          ],
+          "compatible_with": [
+            "product-card.quick_add",
+            "promotion.inline_offer",
+            "trust.proof_strip"
+          ],
+          "content_rules": {
+            "label_max_words": 4
+          },
+          "motion": "Border and background transition only.",
+          "tags": [
+            "button",
+            "secondary",
+            "outline",
+            "utility"
+          ],
+          "visual_style": [
+            "clear control",
+            "hierarchy-led",
+            "tactile"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "direct",
+            "restrained",
+            "confident",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "product-card": {
+      "records": [
+        {
+          "id": "product-card.editorial_portrait",
+          "family": "product-card",
+          "variant": "editorial_portrait",
+          "intent": "Present products as a considered editorial collection with generous imagery.",
+          "use_when": [
+            "luxury",
+            "fashion",
+            "beauty",
+            "editorial",
+            "high_margin"
+          ],
+          "avoid_when": [
+            "large_sku_density",
+            "complex_variants"
+          ],
+          "slots": [
+            "image",
+            "alternate_image",
+            "badge",
+            "title",
+            "subtitle",
+            "price",
+            "compare_at_price",
+            "swatches",
+            "wishlist",
+            "quick_add"
+          ],
+          "layout": {
+            "desktop": "portrait media ratio between 3:4 and 4:5; quiet metadata below with aligned prices",
+            "alignment": "left metadata; image carries the visual weight"
+          },
+          "responsive": {
+            "mobile_behavior": "two-column grid remains possible; metadata tightens and quick add becomes always visible only when intentional"
+          },
+          "style_hooks": [
+            "media_ratio",
+            "metadata_density",
+            "surface",
+            "badge_style",
+            "swatch_style",
+            "radius"
+          ],
+          "compatible_with": [
+            "product-grid.luxury_gallery",
+            "hero.editorial_product_still_life",
+            "collection.lookbook_tiles"
+          ],
+          "content_rules": {
+            "title_max_words": 8,
+            "subtitle_max_words": 8,
+            "swatch_max": 5
+          },
+          "motion": "Swap to alternate image on hover if available; never hide title or price.",
+          "tags": [
+            "product-card",
+            "editorial",
+            "portrait",
+            "luxury"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware",
+            "luxurious",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.utility_dense",
+          "family": "product-card",
+          "variant": "utility_dense",
+          "intent": "Maximize catalog scanability and selection speed.",
+          "use_when": [
+            "large_catalog",
+            "search_results",
+            "price_comparison",
+            "repeat_purchase"
+          ],
+          "avoid_when": [
+            "art_direction_priority",
+            "few_products"
+          ],
+          "slots": [
+            "image",
+            "badge",
+            "title",
+            "rating",
+            "price",
+            "compare_at_price",
+            "variant_summary",
+            "quick_add",
+            "availability"
+          ],
+          "layout": {
+            "desktop": "consistent 4:5 media with compact metadata and visible utility actions",
+            "alignment": "left metadata; predictable row height"
+          },
+          "responsive": {
+            "mobile_behavior": "two-column grid with price and rating preserved; quick add becomes icon plus accessible label"
+          },
+          "style_hooks": [
+            "media_ratio",
+            "metadata_density",
+            "badge_style",
+            "action_mode",
+            "surface",
+            "border_mode"
+          ],
+          "compatible_with": [
+            "product-grid.utility_dense",
+            "navigation.filter_toolbar",
+            "collection.filter_sidebar"
+          ],
+          "content_rules": {
+            "title_max_words": 9,
+            "variant_summary_max_words": 7,
+            "rating_visibility": "show when meaningful"
+          },
+          "motion": "Quick add opens an inline variant selector; no layout-shifting hover panel.",
+          "tags": [
+            "product-card",
+            "dense",
+            "catalog",
+            "utility"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.bold_utility",
+          "family": "product-card",
+          "variant": "bold_utility",
+          "intent": "Combine strong campaign imagery with decisive labels and fast purchase controls.",
+          "use_when": [
+            "streetwear",
+            "sport",
+            "high_energy",
+            "drop",
+            "bold_brand"
+          ],
+          "avoid_when": [
+            "quiet_luxury",
+            "long_product_names"
+          ],
+          "slots": [
+            "image",
+            "drop_label",
+            "title",
+            "price",
+            "size_selector",
+            "quick_add",
+            "wishlist"
+          ],
+          "layout": {
+            "desktop": "large image with compressed label system, optional color block behind metadata",
+            "alignment": "left or intentionally offset metadata"
+          },
+          "responsive": {
+            "mobile_behavior": "image remains dominant; size or quick add is shown in a bottom action row"
+          },
+          "style_hooks": [
+            "display_type",
+            "label_transform",
+            "metadata_surface",
+            "media_ratio",
+            "accent_color",
+            "radius"
+          ],
+          "compatible_with": [
+            "product-grid.bold_rail",
+            "hero.asymmetric_offset_product",
+            "promotion.sticker_campaign"
+          ],
+          "content_rules": {
+            "title_max_words": 6,
+            "label_max_words": 3
+          },
+          "motion": "Size selector opens on tap; hover does not reveal essential controls.",
+          "tags": [
+            "product-card",
+            "bold",
+            "streetwear",
+            "drop"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious",
+            "high-contrast"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "streetwear",
+            "sport"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware",
+            "energetic",
+            "bold"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.bundle_stack",
+          "family": "product-card",
+          "variant": "bundle_stack",
+          "intent": "Merchandise a routine or set as an assembled value proposition.",
+          "use_when": [
+            "skincare_routine",
+            "food_bundle",
+            "gift_set",
+            "subscription",
+            "cross_sell"
+          ],
+          "avoid_when": [
+            "single_item_purchase",
+            "no_bundle_logic"
+          ],
+          "slots": [
+            "composite_image",
+            "bundle_label",
+            "title",
+            "included_items",
+            "price",
+            "savings",
+            "primary_cta",
+            "secondary_link"
+          ],
+          "layout": {
+            "desktop": "composite product image or layered items above compact bundle metadata",
+            "alignment": "centered image, left-aligned text"
+          },
+          "responsive": {
+            "mobile_behavior": "bundle image remains 1:1 or 4:5; included items collapse to a single expandable line"
+          },
+          "style_hooks": [
+            "image_layout",
+            "savings_emphasis",
+            "surface",
+            "radius",
+            "cta_style"
+          ],
+          "compatible_with": [
+            "product-grid.bundle_collection",
+            "featured-product.routine_builder",
+            "trust.proof_strip"
+          ],
+          "content_rules": {
+            "included_item_count": "2–5",
+            "title_max_words": 8,
+            "savings_required_if_promoted": true
+          },
+          "motion": "Included-item details expand on click; preserve card height where possible.",
+          "tags": [
+            "product-card",
+            "bundle",
+            "routine",
+            "value"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "skincare"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.review_led",
+          "family": "product-card",
+          "variant": "review_led",
+          "intent": "Use customer evidence as part of the purchase decision without making the card feel noisy.",
+          "use_when": [
+            "social_proof_priority",
+            "beauty",
+            "supplements",
+            "repeat_purchase"
+          ],
+          "avoid_when": [
+            "no_verified_reviews",
+            "editorial_minimalism"
+          ],
+          "slots": [
+            "image",
+            "title",
+            "rating",
+            "review_count",
+            "price",
+            "top_quote",
+            "primary_cta"
+          ],
+          "layout": {
+            "desktop": "image followed by a compact rating line and one short review excerpt",
+            "alignment": "left metadata"
+          },
+          "responsive": {
+            "mobile_behavior": "review excerpt becomes collapsible; rating remains visible"
+          },
+          "style_hooks": [
+            "rating_style",
+            "quote_style",
+            "metadata_density",
+            "surface",
+            "border_mode"
+          ],
+          "compatible_with": [
+            "product-grid.bestseller_focus",
+            "testimonials.rating_rail",
+            "trust.proof_strip"
+          ],
+          "content_rules": {
+            "quote_max_words": 12,
+            "rating_required": true,
+            "review_count_required": true
+          },
+          "motion": "No auto-rotating quotes inside a product card.",
+          "tags": [
+            "product-card",
+            "reviews",
+            "social_proof",
+            "conversion"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "supplements"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.quick_add",
+          "family": "product-card",
+          "variant": "quick_add",
+          "intent": "Reduce friction for straightforward products with low selection complexity.",
+          "use_when": [
+            "single_variant",
+            "low_variant_count",
+            "fast_purchase",
+            "repeat_purchase"
+          ],
+          "avoid_when": [
+            "complex_size_matrix",
+            "customization_required"
+          ],
+          "slots": [
+            "image",
+            "title",
+            "price",
+            "quick_add",
+            "wishlist"
+          ],
+          "layout": {
+            "desktop": "standard card with bottom-edge quick-add control",
+            "alignment": "metadata left, action right or full width"
+          },
+          "responsive": {
+            "mobile_behavior": "quick add is a visible button, not hover-only"
+          },
+          "style_hooks": [
+            "action_surface",
+            "card_radius",
+            "media_ratio",
+            "metadata_spacing"
+          ],
+          "compatible_with": [
+            "product-grid.utility_dense",
+            "collection.filter_toolbar",
+            "cta.urgency_panel"
+          ],
+          "content_rules": {
+            "quick_add_label": "Add",
+            "variant_limit": 1
+          },
+          "motion": "Inline add feedback replaces label briefly and returns without shifting layout.",
+          "tags": [
+            "product-card",
+            "quick_add",
+            "utility",
+            "fast_purchase"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-card.swatch_story",
+          "family": "product-card",
+          "variant": "swatch_story",
+          "intent": "Let color or shade variety become part of product discovery.",
+          "use_when": [
+            "beauty_shades",
+            "apparel_colorways",
+            "home_textiles",
+            "variant_discovery"
+          ],
+          "avoid_when": [
+            "no_visual_variant_difference",
+            "complex_option_sets"
+          ],
+          "slots": [
+            "image",
+            "title",
+            "price",
+            "swatches",
+            "selected_variant",
+            "primary_cta"
+          ],
+          "layout": {
+            "desktop": "large media with swatches directly below metadata and selected state clearly labeled",
+            "alignment": "left"
+          },
+          "responsive": {
+            "mobile_behavior": "swatches scroll horizontally or show first four plus count; selected swatch remains text-announced"
+          },
+          "style_hooks": [
+            "swatch_size",
+            "selected_ring",
+            "media_ratio",
+            "metadata_density",
+            "surface"
+          ],
+          "compatible_with": [
+            "product-grid.swatch_gallery",
+            "hero.collection_rail",
+            "category.icon_tiles"
+          ],
+          "content_rules": {
+            "swatch_max_visible": 6,
+            "selected_variant_required": true
+          },
+          "motion": "Image swaps on selection with a short fade; no auto-cycling.",
+          "tags": [
+            "product-card",
+            "swatches",
+            "variants",
+            "discovery"
+          ],
+          "visual_style": [
+            "merchandising-led",
+            "scannable",
+            "image-conscious"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "apparel"
+          ],
+          "brand_personalities": [
+            "practical",
+            "curated",
+            "conversion-aware",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "commerce-pattern": {
+      "records": [
+        {
+          "id": "commerce-pattern.add_to_cart",
+          "family": "commerce-pattern",
+          "variant": "add_to_cart",
+          "intent": "Offer a clear purchase action with appropriate variant handling.",
+          "use_when": [
+            "product_detail",
+            "product_card",
+            "featured_product"
+          ],
+          "avoid_when": [
+            "preorder_without_state",
+            "out_of_stock"
+          ],
+          "slots": [
+            "label",
+            "variant_selector",
+            "quantity",
+            "price",
+            "loading",
+            "success",
+            "error"
+          ],
+          "layout": {
+            "desktop": "action row with variant controls adjacent or above depending on complexity",
+            "alignment": "primary button dominant"
+          },
+          "responsive": {
+            "mobile_behavior": "sticky bottom action only on product detail when it does not obscure content"
+          },
+          "style_hooks": [
+            "button_variant",
+            "control_radius",
+            "sticky_mode",
+            "surface"
+          ],
+          "compatible_with": [
+            "featured-product.proof_led",
+            "product-card.quick_add",
+            "cta.urgency_panel"
+          ],
+          "content_rules": {
+            "must_expose_price": true,
+            "must_expose_availability": true
+          },
+          "motion": "Loading and success states are announced and do not create cumulative layout shift.",
+          "tags": [
+            "commerce",
+            "add_to_cart",
+            "purchase"
+          ],
+          "visual_style": [
+            "functional",
+            "state-aware",
+            "conversion-focused"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "clear",
+            "helpful",
+            "efficient"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "commerce-pattern.variant_selector",
+          "family": "commerce-pattern",
+          "variant": "variant_selector",
+          "intent": "Make size, color, or format selection understandable and low-friction.",
+          "use_when": [
+            "multiple_variants",
+            "apparel",
+            "beauty_shades",
+            "configurable_products"
+          ],
+          "avoid_when": [
+            "single_variant"
+          ],
+          "slots": [
+            "label",
+            "options",
+            "selected_option",
+            "availability",
+            "helper_text",
+            "clear_control"
+          ],
+          "layout": {
+            "desktop": "grouped field with explicit selected state and availability hint",
+            "alignment": "label above options"
+          },
+          "responsive": {
+            "mobile_behavior": "options remain touchable and do not require hover; long lists can open a sheet"
+          },
+          "style_hooks": [
+            "option_shape",
+            "selected_state",
+            "disabled_state",
+            "label_style",
+            "surface"
+          ],
+          "compatible_with": [
+            "commerce-pattern.add_to_cart",
+            "product-card.swatch_story",
+            "featured-product.routine_builder"
+          ],
+          "content_rules": {
+            "option_label_required": true,
+            "disabled_reason_required": true
+          },
+          "motion": "Selection updates price/image without surprise scroll.",
+          "tags": [
+            "commerce",
+            "variants",
+            "selection",
+            "accessibility"
+          ],
+          "visual_style": [
+            "functional",
+            "state-aware",
+            "conversion-focused"
+          ],
+          "industries": [
+            "all ecommerce",
+            "beauty",
+            "apparel"
+          ],
+          "brand_personalities": [
+            "clear",
+            "helpful",
+            "efficient"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "breakpoints": {
+    "compact": { "max_width": "639px", "name": "mobile" },
+    "medium": { "min_width": "640px", "max_width": "1023px", "name": "tablet" },
+    "wide": { "min_width": "1024px", "name": "desktop" }
+  },
+  "container": {
+    "wide_max": "90rem",
+    "standard_max": "80rem",
+    "narrow_max": "48rem",
+    "gutter": { "mobile": "1rem", "tablet": "2rem", "desktop": "clamp(2rem, 5vw, 5rem)" },
+    "bleed_rule": "Media may bleed to viewport edges while text and controls remain inside the gutter."
+  },
+  "layout_adaptations": {
+    "two_column": {
+      "desktop": "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)",
+      "tablet": "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)",
+      "mobile": "grid-template-columns: 1fr; stack according to content priority"
+    },
+    "three_column": {
+      "desktop": "grid-template-columns: repeat(3, minmax(0, 1fr))",
+      "tablet": "grid-template-columns: repeat(2, minmax(0, 1fr))",
+      "mobile": "grid-template-columns: 1fr"
+    },
+    "four_column": {
+      "desktop": "grid-template-columns: repeat(4, minmax(0, 1fr))",
+      "tablet": "grid-template-columns: repeat(2, minmax(0, 1fr))",
+      "mobile": "grid-template-columns: repeat(2, minmax(0, 1fr)) with reduced gap"
+    },
+    "horizontal_rail": {
+      "desktop": "show all items or use controlled overflow when item count exceeds 5",
+      "tablet": "horizontal scroll with snap points",
+      "mobile": "horizontal scroll with one-and-a-quarter cards visible; never hide the continuation cue"
+    },
+    "split_hero": {
+      "desktop": "preserve intentional split and product safe area",
+      "tablet": "reduce copy width and retain side-by-side when contrast is sufficient",
+      "mobile": "stack media above copy unless the variant explicitly prioritizes copy-first"
+    },
+    "asymmetric_hero": {
+      "desktop": "preserve offset grid and overlapping subject",
+      "tablet": "reduce offset by 50 percent",
+      "mobile": "collapse to a controlled vertical sequence; remove decorative overlap, keep product overlap only when readable"
+    }
+  },
+  "universal_rules": [
+    "No essential text may be baked into an image.",
+    "Maintain a visible keyboard focus state for every interactive element.",
+    "Respect prefers-reduced-motion by removing parallax and replacing transitions with opacity or instant state changes.",
+    "Touch targets should remain at least 44px in both dimensions.",
+    "Product imagery must not be cropped so aggressively that the product identity is lost.",
+    "On mobile, primary actions remain visible without requiring hover.",
+    "Do not use color alone to communicate sale, availability, error, or selection state.",
+    "Text measure should generally remain between 35rem and 48rem for long-form copy."
+  ],
+  "image_rules": {
+    "object_position_defaults": {
+      "portrait_product": "50% 42%",
+      "landscape_campaign": "50% 50%",
+      "editorial_subject": "50% 38%",
+      "flat_lay": "50% 50%"
+    },
+    "art_direction": {
+      "desktop": "Prefer 3:2 or 16:9 campaign crops when the composition needs horizontal context.",
+      "mobile": "Provide a dedicated 4:5 or 3:4 crop for product-led imagery rather than relying on a desktop crop.",
+      "text_safe_area": "Reserve at least 38 percent of the image plane for text when the component uses an overlay copy layer."
+    }
+  }
+}

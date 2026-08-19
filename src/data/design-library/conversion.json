@@ -1,0 +1,1503 @@
+{
+  "version": "1.0.0",
+  "families": {
+    "testimonials": {
+      "records": [
+        {
+          "id": "testimonials.quote_wall",
+          "family": "testimonials",
+          "variant": "quote_wall",
+          "intent": "Use a small set of strong customer statements as a calm trust-building section.",
+          "use_when": [
+            "premium",
+            "considered_purchase",
+            "brand_story",
+            "verified_reviews"
+          ],
+          "avoid_when": [
+            "no_real_reviews",
+            "high_urgency_page"
+          ],
+          "slots": [
+            "section_label",
+            "headline_optional",
+            "quotes",
+            "ratings_optional",
+            "attributions"
+          ],
+          "layout": {
+            "desktop": "one large featured quote with 2–3 smaller supporting quotes in an offset arrangement",
+            "alignment": "editorial with clear attribution"
+          },
+          "responsive": {
+            "mobile_behavior": "featured quote followed by stacked supporting quotes or a snap rail"
+          },
+          "style_hooks": [
+            "quote_scale",
+            "card_mode",
+            "surface_theme",
+            "attribution_style",
+            "divider_mode"
+          ],
+          "compatible_with": [
+            "brand-story.founder_note",
+            "featured-product.proof_led",
+            "cta.premium_invitation"
+          ],
+          "content_rules": {
+            "quote_count": "3–5",
+            "quote_max_words": 28,
+            "attribution_required": true
+          },
+          "motion": "No rotating quotes by default; pagination is manual if needed.",
+          "tags": [
+            "testimonials",
+            "quotes",
+            "social_proof",
+            "editorial"
+          ],
+          "visual_style": [
+            "social proof",
+            "customer-led",
+            "evidence-rich",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce with real customer evidence"
+          ],
+          "brand_personalities": [
+            "trusted",
+            "community-minded",
+            "assured",
+            "editorial",
+            "story-first"
+          ],
+          "incompatible_with": [
+            "testimonials.rating_rail",
+            "testimonials.ugc_rail"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "testimonials.rating_rail",
+          "family": "testimonials",
+          "variant": "rating_rail",
+          "intent": "Show concise product-specific review evidence beside or near merchandising.",
+          "use_when": [
+            "bestsellers",
+            "beauty",
+            "repeat_purchase",
+            "direct_response"
+          ],
+          "avoid_when": [
+            "no_review_volume",
+            "mission_story_first"
+          ],
+          "slots": [
+            "headline",
+            "rating_summary",
+            "review_items",
+            "product_refs",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "horizontal rail of 3–5 compact review cards with rating summary at start",
+            "alignment": "utility-led rail"
+          },
+          "responsive": {
+            "mobile_behavior": "one-and-a-quarter cards visible in a snap rail; summary remains above"
+          },
+          "style_hooks": [
+            "rating_style",
+            "card_surface",
+            "rail_gap",
+            "summary_scale",
+            "border_mode"
+          ],
+          "compatible_with": [
+            "product-grid.bestseller_focus",
+            "product-card.review_led",
+            "hero.collection_rail"
+          ],
+          "content_rules": {
+            "review_count": "3–8",
+            "rating_summary_required": true,
+            "verified_state_required_when_claimed": true
+          },
+          "motion": "User-controlled rail; no automated quote changes.",
+          "tags": [
+            "testimonials",
+            "ratings",
+            "rail",
+            "conversion"
+          ],
+          "visual_style": [
+            "social proof",
+            "customer-led",
+            "evidence-rich",
+            "horizontal rail"
+          ],
+          "industries": [
+            "all ecommerce with real customer evidence",
+            "beauty"
+          ],
+          "brand_personalities": [
+            "trusted",
+            "community-minded",
+            "assured",
+            "conversion-aware"
+          ],
+          "incompatible_with": [
+            "testimonials.quote_wall",
+            "testimonials.ugc_rail"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "testimonials.ugc_rail",
+          "family": "testimonials",
+          "variant": "ugc_rail",
+          "intent": "Make community imagery and short reactions part of the brand proof system.",
+          "use_when": [
+            "creator_brand",
+            "community_led",
+            "beauty",
+            "apparel",
+            "ugc_available"
+          ],
+          "avoid_when": [
+            "no_permission",
+            "formal_luxury_only"
+          ],
+          "slots": [
+            "headline",
+            "ugc_items",
+            "handles",
+            "short_reactions",
+            "shop_links"
+          ],
+          "layout": {
+            "desktop": "image-forward rail with short text labels beneath or beside each item",
+            "alignment": "community feed without mimicking a social app"
+          },
+          "responsive": {
+            "mobile_behavior": "snap rail with clear continuation and optional text drawer"
+          },
+          "style_hooks": [
+            "tile_ratio",
+            "label_style",
+            "rail_gap",
+            "surface_theme",
+            "border_mode"
+          ],
+          "compatible_with": [
+            "hero.ugc_collage",
+            "product-grid.bestseller_focus",
+            "cta.community_invite"
+          ],
+          "content_rules": {
+            "item_count": "4–8",
+            "permission_required": true,
+            "reaction_max_words": 14
+          },
+          "motion": "No auto-advancing feed; subtle hover scale only.",
+          "tags": [
+            "testimonials",
+            "ugc",
+            "community",
+            "social"
+          ],
+          "visual_style": [
+            "social proof",
+            "customer-led",
+            "evidence-rich",
+            "community-led"
+          ],
+          "industries": [
+            "all ecommerce with real customer evidence",
+            "beauty",
+            "apparel"
+          ],
+          "brand_personalities": [
+            "trusted",
+            "community-minded",
+            "assured",
+            "community-led"
+          ],
+          "incompatible_with": [
+            "testimonials.quote_wall",
+            "testimonials.rating_rail"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "trust": {
+      "records": [
+        {
+          "id": "trust.proof_strip",
+          "family": "trust",
+          "variant": "proof_strip",
+          "intent": "Reduce purchase anxiety with concise, verifiable service or product proof.",
+          "use_when": [
+            "checkout_proximity",
+            "new_customer",
+            "bestsellers",
+            "direct_response"
+          ],
+          "avoid_when": [
+            "too_many_claims",
+            "editorial_masthead"
+          ],
+          "slots": [
+            "proof_items",
+            "optional_link"
+          ],
+          "layout": {
+            "desktop": "3–5 horizontal proof items with small mark, label, and one line",
+            "alignment": "even utility row"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column grid or scroll rail depending on item length"
+          },
+          "style_hooks": [
+            "icon_style",
+            "column_count",
+            "surface_theme",
+            "divider_mode",
+            "density"
+          ],
+          "compatible_with": [
+            "hero.product_stack_vertical",
+            "product-grid.bestseller_focus",
+            "featured-product.proof_led",
+            "cta.urgency_panel"
+          ],
+          "content_rules": {
+            "proof_count": "3–5",
+            "body_max_words": 14,
+            "claims_must_be_verifiable": true
+          },
+          "motion": "Static by default.",
+          "tags": [
+            "trust",
+            "proof",
+            "service",
+            "utility"
+          ],
+          "visual_style": [
+            "proof-led",
+            "reassuring",
+            "utility-aware"
+          ],
+          "industries": [
+            "all ecommerce",
+            "regulated categories when sourced"
+          ],
+          "brand_personalities": [
+            "credible",
+            "transparent",
+            "service-minded",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "trust.certification_row",
+          "family": "trust",
+          "variant": "certification_row",
+          "intent": "Present relevant certifications, materials, or partner marks with context rather than logo clutter.",
+          "use_when": [
+            "regulated_category",
+            "ingredient_story",
+            "sustainability",
+            "quality_proof"
+          ],
+          "avoid_when": [
+            "unverified_badges",
+            "brand_without_marks"
+          ],
+          "slots": [
+            "headline_optional",
+            "marks",
+            "labels",
+            "disclosure_link"
+          ],
+          "layout": {
+            "desktop": "marks in a measured row or grid; labels and disclosure link provide meaning",
+            "alignment": "centered or left depending on brand voice"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column mark grid with labels below; disclosure remains visible"
+          },
+          "style_hooks": [
+            "mark_size",
+            "label_style",
+            "surface_theme",
+            "column_count",
+            "divider_mode"
+          ],
+          "compatible_with": [
+            "hero.ingredient_focus",
+            "featured-product.proof_led",
+            "editorial.longform_split"
+          ],
+          "content_rules": {
+            "mark_count": "2–6",
+            "disclosure_link_required_for_claims": true
+          },
+          "motion": "None.",
+          "tags": [
+            "trust",
+            "certifications",
+            "quality",
+            "disclosure"
+          ],
+          "visual_style": [
+            "proof-led",
+            "reassuring",
+            "utility-aware"
+          ],
+          "industries": [
+            "all ecommerce",
+            "regulated categories when sourced"
+          ],
+          "brand_personalities": [
+            "credible",
+            "transparent",
+            "service-minded",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "trust.social_count",
+          "family": "trust",
+          "variant": "social_count",
+          "intent": "Use a meaningful community or customer count as a focused proof signal.",
+          "use_when": [
+            "community_led",
+            "high_volume_reviews",
+            "creator_brand",
+            "repeat_purchase"
+          ],
+          "avoid_when": [
+            "unsubstantiated_count",
+            "small_new_brand_without_context"
+          ],
+          "slots": [
+            "count",
+            "label",
+            "supporting_note",
+            "source_link"
+          ],
+          "layout": {
+            "desktop": "large number or phrase paired with compact explanatory note",
+            "alignment": "centered statement or edge-aligned utility panel"
+          },
+          "responsive": {
+            "mobile_behavior": "stack number and explanation with no reduction in legibility"
+          },
+          "style_hooks": [
+            "number_scale",
+            "surface_theme",
+            "alignment",
+            "label_style"
+          ],
+          "compatible_with": [
+            "hero.dark_campaign_statement",
+            "testimonials.ugc_rail",
+            "cta.community_invite"
+          ],
+          "content_rules": {
+            "source_link_required": true,
+            "note_max_words": 20
+          },
+          "motion": "Number may count up once only when source data is available and reduced motion is respected.",
+          "tags": [
+            "trust",
+            "community",
+            "count",
+            "social_proof"
+          ],
+          "visual_style": [
+            "proof-led",
+            "reassuring",
+            "utility-aware",
+            "community-led"
+          ],
+          "industries": [
+            "all ecommerce",
+            "regulated categories when sourced"
+          ],
+          "brand_personalities": [
+            "credible",
+            "transparent",
+            "service-minded",
+            "community-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "promotion": {
+      "records": [
+        {
+          "id": "promotion.campaign_split",
+          "family": "promotion",
+          "variant": "campaign_split",
+          "intent": "Promote a seasonal or commercial story with image, offer, and direct action.",
+          "use_when": [
+            "seasonal",
+            "collection_launch",
+            "giftable",
+            "campaign"
+          ],
+          "avoid_when": [
+            "no_relevant_image",
+            "constant_discounting"
+          ],
+          "slots": [
+            "image",
+            "eyebrow",
+            "headline",
+            "body",
+            "offer",
+            "primary_cta",
+            "fine_print"
+          ],
+          "layout": {
+            "desktop": "image on one side, offer/copy on the other; no card-within-card treatment",
+            "alignment": "campaign-led split"
+          },
+          "responsive": {
+            "mobile_behavior": "image above offer; fine print remains readable and adjacent to offer"
+          },
+          "style_hooks": [
+            "split_ratio",
+            "offer_emphasis",
+            "surface_theme",
+            "image_ratio",
+            "button_variant"
+          ],
+          "compatible_with": [
+            "hero.fullbleed_copy_safe_area",
+            "product-grid.luxury_gallery",
+            "newsletter.editorial_capture"
+          ],
+          "content_rules": {
+            "headline_max_words": 8,
+            "offer_max_words": 12,
+            "fine_print_required_for_restrictions": true
+          },
+          "image_guidance": {
+            "image": "Show the actual collection or product context; the offer should not be the only visual subject.",
+            "prompt_frame": "campaign image for [actual collection/product], [seasonal context], premium commercial photography, space for HTML offer copy, no text"
+          },
+          "motion": "None required.",
+          "tags": [
+            "promotion",
+            "campaign",
+            "split",
+            "seasonal"
+          ],
+          "visual_style": [
+            "campaign interruption",
+            "offer-led",
+            "attention-controlled",
+            "split composition"
+          ],
+          "industries": [
+            "all ecommerce with a real offer"
+          ],
+          "brand_personalities": [
+            "decisive",
+            "seasonal",
+            "commercial",
+            "campaign-driven"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "promotion.sticker_campaign",
+          "family": "promotion",
+          "variant": "sticker_campaign",
+          "intent": "Create a high-energy promotional interruption with a strong label and compact offer.",
+          "use_when": [
+            "streetwear",
+            "drop",
+            "limited_offer",
+            "high_energy"
+          ],
+          "avoid_when": [
+            "quiet_luxury",
+            "dense_terms",
+            "no_real_urgency"
+          ],
+          "slots": [
+            "background_or_image",
+            "sticker_label",
+            "headline",
+            "offer",
+            "primary_cta",
+            "fine_print"
+          ],
+          "layout": {
+            "desktop": "wide campaign strip with one bold sticker/badge and large headline; product image may cross edge",
+            "alignment": "asymmetric and high contrast"
+          },
+          "responsive": {
+            "mobile_behavior": "sticker becomes a regular label; strip stacks image, offer, and action"
+          },
+          "style_hooks": [
+            "sticker_shape",
+            "contrast",
+            "display_type",
+            "product_overlap",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "hero.asymmetric_offset_product",
+            "hero.dark_campaign_statement",
+            "product-grid.bold_rail"
+          ],
+          "content_rules": {
+            "headline_max_words": 6,
+            "sticker_max_words": 3,
+            "fine_print_required_for_restrictions": true
+          },
+          "image_guidance": {
+            "image": "Use actual product or campaign context, not a generic promotional background.",
+            "prompt_frame": "high-energy campaign for [actual product], bold material detail, controlled contrast, premium ecommerce art direction, no text"
+          },
+          "motion": "Sticker may rotate a few degrees as a static art direction; never continuously wobble.",
+          "tags": [
+            "promotion",
+            "sticker",
+            "bold",
+            "drop"
+          ],
+          "visual_style": [
+            "campaign interruption",
+            "offer-led",
+            "attention-controlled",
+            "high-contrast"
+          ],
+          "industries": [
+            "all ecommerce with a real offer",
+            "streetwear"
+          ],
+          "brand_personalities": [
+            "decisive",
+            "seasonal",
+            "commercial",
+            "energetic",
+            "bold"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "promotion.inline_offer",
+          "family": "promotion",
+          "variant": "inline_offer",
+          "intent": "Deliver a restrained offer within a merchandising or editorial flow.",
+          "use_when": [
+            "shipping_threshold",
+            "bundle_value",
+            "limited_service_offer"
+          ],
+          "avoid_when": [
+            "major_campaign",
+            "complex_promotion"
+          ],
+          "slots": [
+            "label",
+            "message",
+            "link",
+            "fine_print"
+          ],
+          "layout": {
+            "desktop": "single horizontal row integrated between sections or beside product list",
+            "alignment": "utility-led"
+          },
+          "responsive": {
+            "mobile_behavior": "wraps into two lines with link preserved"
+          },
+          "style_hooks": [
+            "surface",
+            "border_mode",
+            "label_style",
+            "content_color",
+            "height"
+          ],
+          "compatible_with": [
+            "announcement.utility_single",
+            "product-grid.utility_dense",
+            "collection.filter_sidebar"
+          ],
+          "content_rules": {
+            "message_max_characters": 120,
+            "fine_print_optional": true
+          },
+          "motion": "None.",
+          "tags": [
+            "promotion",
+            "inline",
+            "utility",
+            "offer"
+          ],
+          "visual_style": [
+            "campaign interruption",
+            "offer-led",
+            "attention-controlled"
+          ],
+          "industries": [
+            "all ecommerce with a real offer"
+          ],
+          "brand_personalities": [
+            "decisive",
+            "seasonal",
+            "commercial",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "cta": {
+      "records": [
+        {
+          "id": "cta.premium_invitation",
+          "family": "cta",
+          "variant": "premium_invitation",
+          "intent": "Close a premium story with a calm, high-confidence invitation.",
+          "use_when": [
+            "luxury",
+            "editorial",
+            "brand_story",
+            "considered_purchase"
+          ],
+          "avoid_when": [
+            "urgent_drop",
+            "discount_led"
+          ],
+          "slots": [
+            "eyebrow",
+            "headline",
+            "body",
+            "primary_cta",
+            "secondary_cta",
+            "image_or_mark"
+          ],
+          "layout": {
+            "desktop": "wide calm surface with centered or left editorial copy and optional small visual mark",
+            "alignment": "centered or left, generous whitespace"
+          },
+          "responsive": {
+            "mobile_behavior": "stack actions and keep copy measure narrow"
+          },
+          "style_hooks": [
+            "surface_theme",
+            "type_scale",
+            "alignment",
+            "button_variant",
+            "image_visibility",
+            "section_spacing"
+          ],
+          "compatible_with": [
+            "brand-story.split_art-directed",
+            "gallery.editorial_masonry",
+            "testimonials.quote_wall"
+          ],
+          "content_rules": {
+            "headline_max_words": 8,
+            "body_max_words": 30,
+            "cta_count": "1 primary, optional 1 secondary"
+          },
+          "motion": "No motion required.",
+          "tags": [
+            "cta",
+            "premium",
+            "editorial",
+            "conversion"
+          ],
+          "visual_style": [
+            "conversion-led",
+            "closing statement",
+            "high clarity",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "confident",
+            "inviting",
+            "decisive",
+            "luxurious",
+            "editorial",
+            "conversion-aware",
+            "story-first"
+          ],
+          "incompatible_with": [
+            "cta.strong_statement"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "cta.strong_statement",
+          "family": "cta",
+          "variant": "strong_statement",
+          "intent": "End a high-energy page with a decisive statement and one clear next action.",
+          "use_when": [
+            "streetwear",
+            "campaign",
+            "drop",
+            "bold_brand"
+          ],
+          "avoid_when": [
+            "quiet_brand",
+            "multiple_actions"
+          ],
+          "slots": [
+            "background_or_color_plane",
+            "headline",
+            "supporting_line",
+            "primary_cta",
+            "secondary_cta",
+            "product_image_optional"
+          ],
+          "layout": {
+            "desktop": "full-width high-contrast band with oversized type and optional product overlap",
+            "alignment": "left or centered with decisive scale"
+          },
+          "responsive": {
+            "mobile_behavior": "type scales down, product overlap becomes a normal block, actions stack"
+          },
+          "style_hooks": [
+            "contrast",
+            "display_scale",
+            "product_overlap",
+            "surface_theme",
+            "button_variant",
+            "alignment"
+          ],
+          "compatible_with": [
+            "hero.asymmetric_offset_product",
+            "gallery.lookbook_grid",
+            "promotion.sticker_campaign"
+          ],
+          "content_rules": {
+            "headline_max_words": 6,
+            "supporting_line_max_words": 14,
+            "cta_count": "1 primary"
+          },
+          "motion": "One-time type reveal only.",
+          "tags": [
+            "cta",
+            "bold",
+            "statement",
+            "campaign"
+          ],
+          "visual_style": [
+            "conversion-led",
+            "closing statement",
+            "high clarity",
+            "high-contrast"
+          ],
+          "industries": [
+            "all ecommerce",
+            "streetwear"
+          ],
+          "brand_personalities": [
+            "confident",
+            "inviting",
+            "decisive",
+            "bold",
+            "campaign-driven"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "cta.community_invite",
+          "family": "cta",
+          "variant": "community_invite",
+          "intent": "Invite participation, sharing, or repeat engagement rather than only a purchase.",
+          "use_when": [
+            "community_led",
+            "ugc",
+            "creator_brand",
+            "loyalty",
+            "social_proof"
+          ],
+          "avoid_when": [
+            "no_community_program",
+            "single_transaction_page"
+          ],
+          "slots": [
+            "headline",
+            "body",
+            "community_proof",
+            "primary_cta",
+            "secondary_cta",
+            "social_links"
+          ],
+          "layout": {
+            "desktop": "contained split between message and community proof or image",
+            "alignment": "warm and direct"
+          },
+          "responsive": {
+            "mobile_behavior": "proof follows copy; actions stack with social links below"
+          },
+          "style_hooks": [
+            "surface_theme",
+            "proof_style",
+            "image_visibility",
+            "button_variant",
+            "alignment"
+          ],
+          "compatible_with": [
+            "hero.ugc_collage",
+            "testimonials.ugc_rail",
+            "trust.social_count"
+          ],
+          "content_rules": {
+            "headline_max_words": 8,
+            "body_max_words": 24,
+            "cta_count": "1 primary, optional 1 secondary"
+          },
+          "motion": "None beyond subtle reveal.",
+          "tags": [
+            "cta",
+            "community",
+            "retention",
+            "social"
+          ],
+          "visual_style": [
+            "conversion-led",
+            "closing statement",
+            "high clarity",
+            "community-led"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "confident",
+            "inviting",
+            "decisive",
+            "community-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "cta.urgency_panel",
+          "family": "cta",
+          "variant": "urgency_panel",
+          "intent": "Provide a clear final action for a time-bound or inventory-sensitive offer.",
+          "use_when": [
+            "limited_drop",
+            "preorder",
+            "low_stock",
+            "deadline",
+            "bundle_offer"
+          ],
+          "avoid_when": [
+            "evergreen_story",
+            "false_scarcity"
+          ],
+          "slots": [
+            "label",
+            "headline",
+            "body",
+            "countdown_or_availability",
+            "primary_cta",
+            "fine_print"
+          ],
+          "layout": {
+            "desktop": "contained panel with clear deadline or availability state and strong action",
+            "alignment": "left copy, right action or stacked on narrow view"
+          },
+          "responsive": {
+            "mobile_behavior": "stack status and action; fine print remains visible"
+          },
+          "style_hooks": [
+            "urgency_color",
+            "surface_theme",
+            "border_mode",
+            "button_variant",
+            "countdown_style"
+          ],
+          "compatible_with": [
+            "hero.launch_countdown",
+            "featured-product.routine_builder",
+            "promotion.inline_offer"
+          ],
+          "content_rules": {
+            "headline_max_words": 7,
+            "status_required": true,
+            "fine_print_required_for_restrictions": true
+          },
+          "motion": "Status updates only when data changes; no pulsing urgency.",
+          "tags": [
+            "cta",
+            "urgency",
+            "conversion",
+            "deadline"
+          ],
+          "visual_style": [
+            "conversion-led",
+            "closing statement",
+            "high clarity"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "confident",
+            "inviting",
+            "decisive",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "cta.editorial_invite",
+          "family": "cta",
+          "variant": "editorial_invite",
+          "intent": "Invite the visitor deeper into the journal, story, or brand world.",
+          "use_when": [
+            "editorial",
+            "heritage",
+            "design",
+            "education"
+          ],
+          "avoid_when": [
+            "checkout_proximity",
+            "rapid_purchase_page"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "body",
+            "image_optional",
+            "primary_cta",
+            "secondary_cta"
+          ],
+          "layout": {
+            "desktop": "quiet editorial block with a small image or crop and link-led actions",
+            "alignment": "left or centered"
+          },
+          "responsive": {
+            "mobile_behavior": "image may move above copy; actions remain text-led"
+          },
+          "style_hooks": [
+            "surface_theme",
+            "type_pairing",
+            "image_ratio",
+            "alignment",
+            "button_variant"
+          ],
+          "compatible_with": [
+            "editorial.quote_feature",
+            "brand-story.timeline",
+            "hero.editorial_masthead"
+          ],
+          "content_rules": {
+            "headline_max_words": 10,
+            "body_max_words": 32,
+            "cta_count": "1 primary, optional 1 secondary"
+          },
+          "motion": "None required.",
+          "tags": [
+            "cta",
+            "editorial",
+            "journal",
+            "retention"
+          ],
+          "visual_style": [
+            "conversion-led",
+            "closing statement",
+            "high clarity",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce",
+            "design goods"
+          ],
+          "brand_personalities": [
+            "confident",
+            "inviting",
+            "decisive",
+            "editorial",
+            "heritage-minded"
+          ],
+          "incompatible_with": [
+            "cta.strong_statement"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "newsletter": {
+      "records": [
+        {
+          "id": "newsletter.split_capture",
+          "family": "newsletter",
+          "variant": "split_capture",
+          "intent": "Capture email in a clear, visually balanced section with a specific value exchange.",
+          "use_when": [
+            "lead_capture",
+            "launch",
+            "editorial",
+            "new_customer"
+          ],
+          "avoid_when": [
+            "no_value_exchange",
+            "overloaded_page"
+          ],
+          "slots": [
+            "image_or_mark",
+            "eyebrow",
+            "headline",
+            "body",
+            "email_field",
+            "consent_text",
+            "submit",
+            "success_state"
+          ],
+          "layout": {
+            "desktop": "5/7 split with brand visual or product context opposite form",
+            "alignment": "form copy top-aligned"
+          },
+          "responsive": {
+            "mobile_behavior": "image optional above form; input and submit stack with visible consent"
+          },
+          "style_hooks": [
+            "split_ratio",
+            "surface_theme",
+            "input_style",
+            "button_variant",
+            "image_visibility",
+            "copy_measure"
+          ],
+          "compatible_with": [
+            "hero.split_context_product",
+            "category.icon_tiles",
+            "promotion.campaign_split"
+          ],
+          "content_rules": {
+            "headline_max_words": 8,
+            "body_max_words": 30,
+            "consent_required_when_applicable": true
+          },
+          "motion": "Success state replaces form without disorienting scroll.",
+          "tags": [
+            "newsletter",
+            "lead_capture",
+            "split",
+            "form"
+          ],
+          "visual_style": [
+            "editorial capture",
+            "quiet form",
+            "retention-led",
+            "split composition"
+          ],
+          "industries": [
+            "all ecommerce with a value exchange"
+          ],
+          "brand_personalities": [
+            "inviting",
+            "community-minded",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "newsletter.editorial_capture",
+          "family": "newsletter",
+          "variant": "editorial_capture",
+          "intent": "Make signup feel like an invitation into the brand world rather than a utility form.",
+          "use_when": [
+            "luxury",
+            "editorial",
+            "journal",
+            "community"
+          ],
+          "avoid_when": [
+            "urgent_discount_only",
+            "high_form_complexity"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "body",
+            "email_field",
+            "submit",
+            "consent_text",
+            "small_visual_detail"
+          ],
+          "layout": {
+            "desktop": "narrow centered editorial copy with one inline or stacked form",
+            "alignment": "centered and spacious"
+          },
+          "responsive": {
+            "mobile_behavior": "stack input and submit; preserve generous vertical padding"
+          },
+          "style_hooks": [
+            "surface_theme",
+            "type_pairing",
+            "input_style",
+            "button_variant",
+            "section_spacing",
+            "alignment"
+          ],
+          "compatible_with": [
+            "hero.editorial_masthead",
+            "gallery.editorial_masonry",
+            "cta.premium_invitation"
+          ],
+          "content_rules": {
+            "headline_max_words": 7,
+            "body_max_words": 24,
+            "consent_required_when_applicable": true
+          },
+          "motion": "None beyond success-state transition.",
+          "tags": [
+            "newsletter",
+            "editorial",
+            "lead_capture",
+            "community"
+          ],
+          "visual_style": [
+            "editorial capture",
+            "quiet form",
+            "retention-led",
+            "editorial",
+            "community-led"
+          ],
+          "industries": [
+            "all ecommerce with a value exchange"
+          ],
+          "brand_personalities": [
+            "inviting",
+            "community-minded",
+            "editorial",
+            "luxurious",
+            "community-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "newsletter.waitlist_capture",
+          "family": "newsletter",
+          "variant": "waitlist_capture",
+          "intent": "Collect high-intent leads for a future launch with status clarity.",
+          "use_when": [
+            "preorder",
+            "limited_drop",
+            "launch_countdown",
+            "out_of_stock_waitlist"
+          ],
+          "avoid_when": [
+            "evergreen_catalog",
+            "no_actual_launch_plan"
+          ],
+          "slots": [
+            "label",
+            "headline",
+            "body",
+            "email_field",
+            "optional_variant_field",
+            "submit",
+            "deadline_or_status",
+            "consent_text"
+          ],
+          "layout": {
+            "desktop": "high-contrast contained panel with status and form in one reading group",
+            "alignment": "left copy with prominent field"
+          },
+          "responsive": {
+            "mobile_behavior": "status, copy, and form stack; selected variant remains editable"
+          },
+          "style_hooks": [
+            "surface_theme",
+            "urgency_color",
+            "input_style",
+            "button_variant",
+            "status_style"
+          ],
+          "compatible_with": [
+            "hero.launch_countdown",
+            "cta.urgency_panel",
+            "promotion.sticker_campaign"
+          ],
+          "content_rules": {
+            "headline_max_words": 7,
+            "status_required": true,
+            "consent_required_when_applicable": true
+          },
+          "motion": "Submission confirms state inline and preserves entered context.",
+          "tags": [
+            "newsletter",
+            "waitlist",
+            "launch",
+            "lead_capture"
+          ],
+          "visual_style": [
+            "editorial capture",
+            "quiet form",
+            "retention-led"
+          ],
+          "industries": [
+            "all ecommerce with a value exchange"
+          ],
+          "brand_personalities": [
+            "inviting",
+            "community-minded",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "footer": {
+      "records": [
+        {
+          "id": "footer.editorial_columns",
+          "family": "footer",
+          "variant": "editorial_columns",
+          "intent": "Close a premium store with considered navigation, story links, and a restrained utility row.",
+          "use_when": [
+            "luxury",
+            "editorial",
+            "fashion",
+            "small_catalog"
+          ],
+          "avoid_when": [
+            "large_utility_catalog",
+            "many_service_links"
+          ],
+          "slots": [
+            "logo",
+            "brand_note",
+            "link_groups",
+            "newsletter_ref",
+            "social_links",
+            "legal_links",
+            "payment_marks"
+          ],
+          "layout": {
+            "desktop": "brand note column plus 3–4 link columns and compact legal row",
+            "alignment": "left and spacious"
+          },
+          "responsive": {
+            "mobile_behavior": "accordion link groups; brand note and newsletter remain visible without excessive nesting"
+          },
+          "style_hooks": [
+            "column_count",
+            "surface_theme",
+            "logo_scale",
+            "accordion_mode",
+            "divider_mode",
+            "type_system"
+          ],
+          "compatible_with": [
+            "header.wordmark_center",
+            "newsletter.editorial_capture",
+            "cta.editorial_invite"
+          ],
+          "content_rules": {
+            "link_groups": "3–5",
+            "brand_note_max_words": 40
+          },
+          "motion": "Accordion transitions only on user action.",
+          "tags": [
+            "footer",
+            "editorial",
+            "navigation",
+            "luxury"
+          ],
+          "visual_style": [
+            "utility close",
+            "navigation-rich",
+            "brand-signature",
+            "editorial"
+          ],
+          "industries": [
+            "all ecommerce",
+            "fashion"
+          ],
+          "brand_personalities": [
+            "organized",
+            "service-minded",
+            "distinctive",
+            "luxurious",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "footer.utility_rich",
+          "family": "footer",
+          "variant": "utility_rich",
+          "intent": "Make support, policies, shipping, and account paths easy to find in a broad catalog.",
+          "use_when": [
+            "large_catalog",
+            "marketplace",
+            "international",
+            "service_priority"
+          ],
+          "avoid_when": [
+            "minimal_editorial",
+            "few_links"
+          ],
+          "slots": [
+            "logo",
+            "link_groups",
+            "support_contact",
+            "shipping_note",
+            "newsletter_ref",
+            "social_links",
+            "legal_links",
+            "payment_marks",
+            "locale_selector"
+          ],
+          "layout": {
+            "desktop": "dense but structured 4–6 column utility footer with support block",
+            "alignment": "left utility hierarchy"
+          },
+          "responsive": {
+            "mobile_behavior": "accordion groups with support/contact block surfaced first; locale selector remains explicit"
+          },
+          "style_hooks": [
+            "column_count",
+            "surface_theme",
+            "density",
+            "accordion_mode",
+            "support_emphasis",
+            "divider_mode"
+          ],
+          "compatible_with": [
+            "header.utility_split",
+            "navigation.filter_toolbar",
+            "newsletter.split_capture"
+          ],
+          "content_rules": {
+            "link_groups": "4–7",
+            "support_contact_required": true
+          },
+          "motion": "Accordion only; no auto-expanding footer.",
+          "tags": [
+            "footer",
+            "utility",
+            "support",
+            "catalog"
+          ],
+          "visual_style": [
+            "utility close",
+            "navigation-rich",
+            "brand-signature"
+          ],
+          "industries": [
+            "all ecommerce"
+          ],
+          "brand_personalities": [
+            "organized",
+            "service-minded",
+            "distinctive",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "footer.community_ribbon",
+          "family": "footer",
+          "variant": "community_ribbon",
+          "intent": "End with community participation and social discovery before legal utility.",
+          "use_when": [
+            "creator_brand",
+            "ugc",
+            "streetwear",
+            "community_led"
+          ],
+          "avoid_when": [
+            "formal_luxury",
+            "no_community_assets"
+          ],
+          "slots": [
+            "social_heading",
+            "social_links",
+            "ugc_preview",
+            "newsletter_ref",
+            "link_groups",
+            "legal_links"
+          ],
+          "layout": {
+            "desktop": "community/social ribbon above a compact link footer",
+            "alignment": "image/social-led then utility"
+          },
+          "responsive": {
+            "mobile_behavior": "social links and one or two preview tiles above accordion link groups"
+          },
+          "style_hooks": [
+            "ribbon_height",
+            "tile_ratio",
+            "surface_theme",
+            "link_density",
+            "type_system"
+          ],
+          "compatible_with": [
+            "hero.ugc_collage",
+            "testimonials.ugc_rail",
+            "cta.community_invite"
+          ],
+          "content_rules": {
+            "ugc_preview_count": "3–6",
+            "permission_required": true
+          },
+          "motion": "Preview tiles can scroll manually; no autoplay feed.",
+          "tags": [
+            "footer",
+            "community",
+            "social",
+            "ugc"
+          ],
+          "visual_style": [
+            "utility close",
+            "navigation-rich",
+            "brand-signature",
+            "community-led"
+          ],
+          "industries": [
+            "all ecommerce",
+            "streetwear"
+          ],
+          "brand_personalities": [
+            "organized",
+            "service-minded",
+            "distinctive",
+            "community-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    }
+  }
+}

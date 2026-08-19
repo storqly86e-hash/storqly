@@ -1,0 +1,823 @@
+{
+  "version": "1.0.0",
+  "families": {
+    "brand-story": {
+      "records": [
+        {
+          "id": "brand-story.split_art-directed",
+          "family": "brand-story",
+          "variant": "split_art-directed",
+          "intent": "Explain the brand point of view through a strong image and a concise narrative.",
+          "use_when": [
+            "luxury",
+            "founder_led",
+            "heritage",
+            "editorial",
+            "mission_driven"
+          ],
+          "avoid_when": [
+            "no_story_asset",
+            "short_promo_page"
+          ],
+          "slots": [
+            "image",
+            "eyebrow",
+            "headline",
+            "body",
+            "proof_note",
+            "link",
+            "caption"
+          ],
+          "layout": {
+            "desktop": "asymmetric 5/7 split with image allowed to bleed and copy on a calm surface",
+            "alignment": "text-led vertical rhythm"
+          },
+          "responsive": {
+            "mobile_behavior": "image above copy; caption remains visible; body measure stays narrow"
+          },
+          "style_hooks": [
+            "split_ratio",
+            "image_ratio",
+            "surface_theme",
+            "type_pairing",
+            "copy_measure",
+            "caption_style"
+          ],
+          "compatible_with": [
+            "hero.editorial_product_still_life",
+            "product-grid.luxury_gallery",
+            "gallery.editorial_masonry",
+            "cta.premium_invitation"
+          ],
+          "content_rules": {
+            "headline_max_words": 10,
+            "body_max_words": 90,
+            "proof_note_max_words": 16
+          },
+          "image_guidance": {
+            "image": "Show the actual maker, material, use context, or product world. Favor tactile detail and a specific point of view over generic lifestyle imagery.",
+            "prompt_frame": "art-directed brand story for [brand/category], [maker/material/use context], tactile editorial commercial photography, [palette], natural light, no text"
+          },
+          "motion": "Image appears with a slow opacity reveal; no parallax by default.",
+          "tags": [
+            "brand-story",
+            "split",
+            "editorial",
+            "mission"
+          ],
+          "visual_style": [
+            "narrative",
+            "editorial",
+            "human",
+            "split composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "craft"
+          ],
+          "brand_personalities": [
+            "human",
+            "principled",
+            "heritage-minded",
+            "luxurious",
+            "editorial",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "brand-story.founder_note",
+          "family": "brand-story",
+          "variant": "founder_note",
+          "intent": "Build trust through a personal founder or maker note without turning the page into a biography.",
+          "use_when": [
+            "founder_led",
+            "craft",
+            "independent_brand",
+            "heritage",
+            "community"
+          ],
+          "avoid_when": [
+            "anonymous_mass_market",
+            "no_permission_or_asset"
+          ],
+          "slots": [
+            "portrait_or_signature",
+            "eyebrow",
+            "headline",
+            "note",
+            "founder_name",
+            "role",
+            "link"
+          ],
+          "layout": {
+            "desktop": "contained narrow text block with portrait/signature offset to one side",
+            "alignment": "quiet, personal, left or centered"
+          },
+          "responsive": {
+            "mobile_behavior": "portrait or signature precedes note; avoid tiny side-by-side typography"
+          },
+          "style_hooks": [
+            "portrait_ratio",
+            "signature_style",
+            "surface_theme",
+            "type_pairing",
+            "copy_measure"
+          ],
+          "compatible_with": [
+            "hero.collection_rail",
+            "category.icon_tiles",
+            "testimonials.quote_wall",
+            "cta.editorial_invite"
+          ],
+          "content_rules": {
+            "note_max_words": 120,
+            "headline_max_words": 9
+          },
+          "image_guidance": {
+            "portrait": "Use a permissioned, authentic founder or maker portrait in a relevant environment; if unavailable, use a signed mark or product-making detail instead.",
+            "prompt_frame": "Do not fabricate a founder portrait. Use supplied, permissioned imagery or a real product-making detail."
+          },
+          "motion": "None beyond a subtle reveal.",
+          "tags": [
+            "brand-story",
+            "founder",
+            "maker",
+            "trust"
+          ],
+          "visual_style": [
+            "narrative",
+            "editorial",
+            "human"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "craft",
+            "craft goods"
+          ],
+          "brand_personalities": [
+            "human",
+            "principled",
+            "heritage-minded",
+            "community-led",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "brand-story.timeline",
+          "family": "brand-story",
+          "variant": "timeline",
+          "intent": "Present a sequence of milestones, product evolution, or material choices in an editorial timeline.",
+          "use_when": [
+            "heritage",
+            "innovation",
+            "product_development",
+            "sustainability_story"
+          ],
+          "avoid_when": [
+            "few_facts",
+            "rapid_promo",
+            "claims_without_sources"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "timeline_items",
+            "supporting_image",
+            "cta"
+          ],
+          "layout": {
+            "desktop": "vertical timeline with alternating text and supporting image/detail blocks",
+            "alignment": "chronological progression"
+          },
+          "responsive": {
+            "mobile_behavior": "single-column timeline with a persistent line and clear year/step labels"
+          },
+          "style_hooks": [
+            "line_style",
+            "step_marker",
+            "alternation",
+            "surface_alternation",
+            "type_system"
+          ],
+          "compatible_with": [
+            "hero.editorial_masthead",
+            "collection.story_chapters",
+            "editorial.longform_split"
+          ],
+          "content_rules": {
+            "item_count": "3–7",
+            "item_body_max_words": 45,
+            "claim_review_required": true
+          },
+          "motion": "Timeline items reveal as they enter view; no forced scroll hijack.",
+          "tags": [
+            "brand-story",
+            "timeline",
+            "heritage",
+            "innovation"
+          ],
+          "visual_style": [
+            "narrative",
+            "editorial",
+            "human"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "craft"
+          ],
+          "brand_personalities": [
+            "human",
+            "principled",
+            "heritage-minded",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "editorial": {
+      "records": [
+        {
+          "id": "editorial.longform_split",
+          "family": "editorial",
+          "variant": "longform_split",
+          "intent": "Teach or deepen the brand story with an image/text split that supports reading.",
+          "use_when": [
+            "education",
+            "ingredient_story",
+            "design_story",
+            "journal",
+            "seo_content"
+          ],
+          "avoid_when": [
+            "short_promo",
+            "many_equal_messages"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "body",
+            "image",
+            "caption",
+            "pull_quote",
+            "link"
+          ],
+          "layout": {
+            "desktop": "narrow editorial text column opposite a large image; optional pull quote creates a second reading rhythm",
+            "alignment": "left text, generous measure"
+          },
+          "responsive": {
+            "mobile_behavior": "image first when it contextualizes, otherwise copy first; pull quote becomes a bordered inset"
+          },
+          "style_hooks": [
+            "split_ratio",
+            "text_measure",
+            "image_ratio",
+            "quote_style",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "brand-story.split_art-directed",
+            "feature-benefits.ingredient_index",
+            "hero.ingredient_focus",
+            "gallery.editorial_masonry"
+          ],
+          "content_rules": {
+            "body_max_words": 220,
+            "pull_quote_max_words": 18,
+            "headline_max_words": 12
+          },
+          "image_guidance": {
+            "image": "Use a specific product/material/use detail that directly supports the copy, not decorative filler.",
+            "prompt_frame": "editorial detail for [topic/category], actual material/product context, tactile close-up, restrained composition, no text"
+          },
+          "motion": "None required; reading clarity takes precedence.",
+          "tags": [
+            "editorial",
+            "longform",
+            "education",
+            "journal"
+          ],
+          "visual_style": [
+            "magazine-like",
+            "reading-led",
+            "spacious",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "design",
+            "design goods"
+          ],
+          "brand_personalities": [
+            "thoughtful",
+            "cultural",
+            "expert",
+            "editorial",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "editorial.quote_feature",
+          "family": "editorial",
+          "variant": "quote_feature",
+          "intent": "Create a high-impact statement page break that carries voice and brand distinction.",
+          "use_when": [
+            "strong_point_of_view",
+            "founder_led",
+            "campaign",
+            "brand_mission"
+          ],
+          "avoid_when": [
+            "generic_copy",
+            "multiple_long_quotes"
+          ],
+          "slots": [
+            "quote",
+            "attribution",
+            "context_label",
+            "image_or_surface",
+            "link"
+          ],
+          "layout": {
+            "desktop": "large quote on a calm surface with small supporting image or attribution detail",
+            "alignment": "centered or left editorial alignment"
+          },
+          "responsive": {
+            "mobile_behavior": "quote remains large but limited to a readable measure; attribution stays near it"
+          },
+          "style_hooks": [
+            "quote_scale",
+            "mark_style",
+            "surface_theme",
+            "alignment",
+            "image_visibility"
+          ],
+          "compatible_with": [
+            "hero.editorial_masthead",
+            "brand-story.founder_note",
+            "cta.editorial_invite"
+          ],
+          "content_rules": {
+            "quote_max_words": 28,
+            "attribution_required": true
+          },
+          "motion": "No motion required.",
+          "tags": [
+            "editorial",
+            "quote",
+            "voice",
+            "statement"
+          ],
+          "visual_style": [
+            "magazine-like",
+            "reading-led",
+            "spacious",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "design"
+          ],
+          "brand_personalities": [
+            "thoughtful",
+            "cultural",
+            "expert",
+            "editorial",
+            "campaign-driven"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "feature-benefits": {
+      "records": [
+        {
+          "id": "feature-benefits.ingredient_index",
+          "family": "feature-benefits",
+          "variant": "ingredient_index",
+          "intent": "Explain a product system through named benefits or ingredients with enough space for evidence.",
+          "use_when": [
+            "skincare",
+            "supplements",
+            "food",
+            "science_backed",
+            "material_story"
+          ],
+          "avoid_when": [
+            "unsubstantiated_claims",
+            "pure_image_campaign"
+          ],
+          "slots": [
+            "eyebrow",
+            "headline",
+            "intro",
+            "benefit_items",
+            "supporting_image",
+            "source_or_note"
+          ],
+          "layout": {
+            "desktop": "headline column plus numbered or indexed benefits in a 2-column list; image can anchor one side",
+            "alignment": "editorial index"
+          },
+          "responsive": {
+            "mobile_behavior": "benefits become accordion or stacked numbered list; image is optional after intro"
+          },
+          "style_hooks": [
+            "index_style",
+            "number_style",
+            "columns",
+            "surface_theme",
+            "divider_mode",
+            "image_visibility"
+          ],
+          "compatible_with": [
+            "hero.ingredient_focus",
+            "category.material_index",
+            "editorial.longform_split",
+            "featured-product.proof_led"
+          ],
+          "content_rules": {
+            "benefit_count": "3–6",
+            "benefit_body_max_words": 40,
+            "evidence_note_optional": true
+          },
+          "motion": "Rows expand on user action only when more detail exists.",
+          "tags": [
+            "features",
+            "benefits",
+            "ingredients",
+            "education"
+          ],
+          "visual_style": [
+            "explainer",
+            "structured",
+            "evidence-aware"
+          ],
+          "industries": [
+            "beauty",
+            "wellness",
+            "food",
+            "technology",
+            "home",
+            "skincare",
+            "supplements"
+          ],
+          "brand_personalities": [
+            "precise",
+            "helpful",
+            "credible",
+            "evidence-led",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "feature-benefits.icon_row",
+          "family": "feature-benefits",
+          "variant": "icon_row",
+          "intent": "Communicate three to five concise service or product benefits at a glance.",
+          "use_when": [
+            "shipping",
+            "quality",
+            "routine",
+            "bestseller",
+            "direct_response"
+          ],
+          "avoid_when": [
+            "complex_explanation",
+            "many_claims"
+          ],
+          "slots": [
+            "headline_optional",
+            "benefit_items",
+            "link_optional"
+          ],
+          "layout": {
+            "desktop": "3–5 equal columns with small line icon or product cue, label, and one sentence",
+            "alignment": "centered or left depending on brand"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column grid or snap rail; no tiny icon-only tiles"
+          },
+          "style_hooks": [
+            "column_count",
+            "icon_style",
+            "alignment",
+            "surface_theme",
+            "divider_mode",
+            "density"
+          ],
+          "compatible_with": [
+            "hero.product_stack_vertical",
+            "product-grid.bestseller_focus",
+            "trust.proof_strip",
+            "cta.urgency_panel"
+          ],
+          "content_rules": {
+            "benefit_count": "3–5",
+            "body_max_words": 18,
+            "icon_must_support_label": true
+          },
+          "motion": "No icon animation unless it clarifies state.",
+          "tags": [
+            "features",
+            "benefits",
+            "utility",
+            "scan"
+          ],
+          "visual_style": [
+            "explainer",
+            "structured",
+            "evidence-aware"
+          ],
+          "industries": [
+            "beauty",
+            "wellness",
+            "food",
+            "technology",
+            "home"
+          ],
+          "brand_personalities": [
+            "precise",
+            "helpful",
+            "credible",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "feature-benefits.numbered_columns",
+          "family": "feature-benefits",
+          "variant": "numbered_columns",
+          "intent": "Explain a method, routine, or buying logic in a memorable sequence.",
+          "use_when": [
+            "how_it_works",
+            "routine",
+            "process",
+            "education",
+            "subscription"
+          ],
+          "avoid_when": [
+            "unordered_benefits",
+            "very_short_page"
+          ],
+          "slots": [
+            "eyebrow",
+            "headline",
+            "intro",
+            "steps",
+            "supporting_image",
+            "cta"
+          ],
+          "layout": {
+            "desktop": "3–4 numbered columns with strong numeral, heading, and concise body; optional image anchors the row",
+            "alignment": "left-aligned sequence"
+          },
+          "responsive": {
+            "mobile_behavior": "stack steps with a vertical connector; image moves after explanation or before CTA"
+          },
+          "style_hooks": [
+            "number_scale",
+            "connector_style",
+            "column_count",
+            "surface_theme",
+            "image_visibility"
+          ],
+          "compatible_with": [
+            "hero.split_context_product",
+            "featured-product.routine_builder",
+            "editorial.longform_split"
+          ],
+          "content_rules": {
+            "step_count": "3–4",
+            "body_max_words": 28,
+            "step_order_required": true
+          },
+          "motion": "Connector may draw once on entry; no scroll hijack.",
+          "tags": [
+            "features",
+            "steps",
+            "process",
+            "education"
+          ],
+          "visual_style": [
+            "explainer",
+            "structured",
+            "evidence-aware"
+          ],
+          "industries": [
+            "beauty",
+            "wellness",
+            "food",
+            "technology",
+            "home"
+          ],
+          "brand_personalities": [
+            "precise",
+            "helpful",
+            "credible"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "gallery": {
+      "records": [
+        {
+          "id": "gallery.editorial_masonry",
+          "family": "gallery",
+          "variant": "editorial_masonry",
+          "intent": "Create a varied image rhythm for a brand world, collection, or editorial story.",
+          "use_when": [
+            "fashion",
+            "beauty",
+            "home",
+            "campaign",
+            "editorial"
+          ],
+          "avoid_when": [
+            "only_one_image",
+            "utility_catalog_page"
+          ],
+          "slots": [
+            "section_label",
+            "headline_optional",
+            "gallery_items",
+            "captions_optional",
+            "lightbox"
+          ],
+          "layout": {
+            "desktop": "masonry-like 3-column composition with controlled aspect ratios and one larger anchor image",
+            "alignment": "asymmetric but balanced"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column collage or vertical sequence depending on image detail; captions remain accessible"
+          },
+          "style_hooks": [
+            "masonry_pattern",
+            "anchor_size",
+            "gap",
+            "caption_style",
+            "surface_theme",
+            "lightbox_mode"
+          ],
+          "compatible_with": [
+            "brand-story.split_art-directed",
+            "hero.editorial_masthead",
+            "editorial.longform_split",
+            "cta.premium_invitation"
+          ],
+          "content_rules": {
+            "image_count": "5–12",
+            "captions_optional": true,
+            "lightbox_required_for_detail": true
+          },
+          "image_guidance": {
+            "gallery": "Use a coherent art direction with varied scenes or crops; every image should add product, process, or brand-world information.",
+            "prompt_frame": "editorial image set for [brand/category], showing [specific product/material/use scenes], coherent palette and lighting, no text"
+          },
+          "motion": "Lightbox opens with focus management; images do not auto-play.",
+          "tags": [
+            "gallery",
+            "masonry",
+            "editorial",
+            "campaign"
+          ],
+          "visual_style": [
+            "image-led",
+            "art-directed",
+            "varied rhythm",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "design"
+          ],
+          "brand_personalities": [
+            "expressive",
+            "editorial",
+            "visual",
+            "campaign-driven"
+          ],
+          "incompatible_with": [
+            "gallery.lookbook_grid"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "gallery.lookbook_grid",
+          "family": "gallery",
+          "variant": "lookbook_grid",
+          "intent": "Show products in use through a campaign lookbook with direct product links.",
+          "use_when": [
+            "fashion",
+            "streetwear",
+            "home",
+            "outfit_or_room_story",
+            "ugc_or_campaign"
+          ],
+          "avoid_when": [
+            "no_contextual_images",
+            "technical_product_page"
+          ],
+          "slots": [
+            "headline",
+            "intro",
+            "lookbook_items",
+            "hotspots",
+            "product_links",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "full-width image grid with a few deliberately oversized frames and optional hotspots",
+            "alignment": "image-first with concise labels"
+          },
+          "responsive": {
+            "mobile_behavior": "vertical image sequence; hotspots become product list beneath each image rather than tiny pins"
+          },
+          "style_hooks": [
+            "grid_pattern",
+            "hotspot_style",
+            "image_ratio",
+            "caption_style",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "hero.asymmetric_offset_product",
+            "product-grid.bold_rail",
+            "collection.lookbook_tiles",
+            "cta.strong_statement"
+          ],
+          "content_rules": {
+            "image_count": "4–10",
+            "hotspot_count_per_image": "0–4",
+            "hotspots_need_text_fallback": true
+          },
+          "image_guidance": {
+            "lookbook": "Use real product-in-context imagery; hotspots must map to visible products and should not cover critical details.",
+            "prompt_frame": "lookbook campaign for [brand/category], actual products worn/used in [specific setting], cohesive editorial lighting, no text or UI pins"
+          },
+          "motion": "Hotspots appear on tap or focus; no random pulsing.",
+          "tags": [
+            "gallery",
+            "lookbook",
+            "shoppable",
+            "context"
+          ],
+          "visual_style": [
+            "image-led",
+            "art-directed",
+            "varied rhythm"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "design",
+            "streetwear"
+          ],
+          "brand_personalities": [
+            "expressive",
+            "editorial",
+            "visual",
+            "campaign-driven",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "token_system": "storqly-semantic-v1",
+  "description": "Neutral primitives plus semantic roles so brand customization does not alter component structure.",
+  "primitives": {
+    "colors": {
+      "ink.950": "#171614",
+      "ink.800": "#2C2926",
+      "ink.600": "#68615A",
+      "ink.400": "#9A928A",
+      "ink.200": "#D8D1C9",
+      "ink.100": "#EAE5DF",
+      "ink.050": "#F7F4F0",
+      "paper.000": "#FFFFFF",
+      "paper.025": "#FCFBF9",
+      "paper.050": "#F5F1EA",
+      "paper.100": "#EDE5DA",
+      "accent.coral": "#C8624B",
+      "accent.cobalt": "#3159A4",
+      "accent.moss": "#65735A",
+      "accent.plum": "#633D55",
+      "accent.gold": "#B48A4C",
+      "signal.success": "#3D7B58",
+      "signal.warning": "#B37B31",
+      "signal.error": "#B94A4A"
+    },
+    "type_scale": {
+      "display.2xl": { "font_size": "clamp(3.5rem, 8vw, 8.75rem)", "line_height": 0.92, "letter_spacing": "-0.065em", "weight": 500 },
+      "display.xl": { "font_size": "clamp(3rem, 6.5vw, 6.5rem)", "line_height": 0.94, "letter_spacing": "-0.055em", "weight": 500 },
+      "display.lg": { "font_size": "clamp(2.5rem, 5vw, 5rem)", "line_height": 0.98, "letter_spacing": "-0.045em", "weight": 500 },
+      "heading.xl": { "font_size": "clamp(2rem, 3.6vw, 3.75rem)", "line_height": 1.02, "letter_spacing": "-0.035em", "weight": 600 },
+      "heading.lg": { "font_size": "clamp(1.75rem, 2.8vw, 2.75rem)", "line_height": 1.08, "letter_spacing": "-0.025em", "weight": 600 },
+      "heading.md": { "font_size": "clamp(1.35rem, 2vw, 2rem)", "line_height": 1.15, "letter_spacing": "-0.018em", "weight": 600 },
+      "heading.sm": { "font_size": "1.25rem", "line_height": 1.2, "letter_spacing": "-0.01em", "weight": 600 },
+      "body.lg": { "font_size": "1.125rem", "line_height": 1.55, "letter_spacing": "0em", "weight": 400 },
+      "body.md": { "font_size": "1rem", "line_height": 1.5, "letter_spacing": "0em", "weight": 400 },
+      "body.sm": { "font_size": "0.875rem", "line_height": 1.45, "letter_spacing": "0em", "weight": 400 },
+      "label.md": { "font_size": "0.75rem", "line_height": 1.2, "letter_spacing": "0.08em", "weight": 600, "transform": "uppercase" },
+      "label.sm": { "font_size": "0.6875rem", "line_height": 1.2, "letter_spacing": "0.1em", "weight": 600, "transform": "uppercase" }
+    },
+    "spacing": {
+      "0": "0px", "1": "0.25rem", "2": "0.5rem", "3": "0.75rem", "4": "1rem", "5": "1.25rem", "6": "1.5rem", "8": "2rem", "10": "2.5rem", "12": "3rem", "16": "4rem", "20": "5rem", "24": "6rem", "32": "8rem", "40": "10rem"
+    },
+    "radii": {
+      "none": "0px", "xs": "2px", "sm": "4px", "md": "8px", "lg": "16px", "pill": "999px"
+    },
+    "elevation": {
+      "none": "none",
+      "subtle": "0 1px 3px rgb(23 22 20 / 0.08)",
+      "raised": "0 10px 30px rgb(23 22 20 / 0.12)",
+      "floating": "0 20px 50px rgb(23 22 20 / 0.16)"
+    },
+    "motion": {
+      "instant": "0ms",
+      "fast": "160ms",
+      "base": "280ms",
+      "slow": "520ms",
+      "ease_out": "cubic-bezier(0.22, 1, 0.36, 1)",
+      "ease_in_out": "cubic-bezier(0.65, 0, 0.35, 1)"
+    }
+  },
+  "semantic_roles": {
+    "surfaces": {
+      "page": "{paper.000}",
+      "subtle": "{paper.025}",
+      "muted": "{paper.050}",
+      "inverse": "{ink.950}",
+      "accent": "{accent.coral}",
+      "accent_soft": "{paper.100}"
+    },
+    "content": {
+      "primary": "{ink.950}",
+      "secondary": "{ink.600}",
+      "muted": "{ink.400}",
+      "inverse": "{paper.000}",
+      "accent": "{accent.coral}",
+      "on_accent": "{paper.000}"
+    },
+    "border": {
+      "subtle": "{ink.100}",
+      "default": "{ink.200}",
+      "strong": "{ink.600}",
+      "inverse": "rgb(255 255 255 / 0.34)"
+    },
+    "actions": {
+      "primary_bg": "{ink.950}",
+      "primary_fg": "{paper.000}",
+      "secondary_bg": "transparent",
+      "secondary_fg": "{ink.950}",
+      "focus_ring": "{accent.cobalt}",
+      "destructive": "{signal.error}"
+    }
+  },
+  "typography_systems": {
+    "editorial_serif_sans": {
+      "display": "Canela, Iowan Old Style, Georgia, serif",
+      "body": "Suisse Intl, Inter, system-ui, sans-serif",
+      "label": "Suisse Intl, Inter, system-ui, sans-serif",
+      "use_when": ["luxury", "editorial", "beauty", "fashion", "heritage"]
+    },
+    "modern_grotesk": {
+      "display": "Neue Montreal, Inter, system-ui, sans-serif",
+      "body": "Inter, system-ui, sans-serif",
+      "label": "Inter, system-ui, sans-serif",
+      "use_when": ["modern", "minimal", "technology", "wellness", "direct_to_consumer"]
+    },
+    "compressed_utility": {
+      "display": "Archivo Black, Impact, system-ui, sans-serif",
+      "body": "IBM Plex Sans, Arial, sans-serif",
+      "label": "IBM Plex Mono, monospace",
+      "use_when": ["streetwear", "sport", "youth", "high_energy", "industrial"]
+    },
+    "soft_humanist": {
+      "display": "Recoleta, Georgia, serif",
+      "body": "DM Sans, system-ui, sans-serif",
+      "label": "DM Sans, system-ui, sans-serif",
+      "use_when": ["food", "home", "family", "craft", "approachable_premium"]
+    }
+  },
+  "density_presets": {
+    "airy": { "section_y": "clamp(5rem, 11vw, 10rem)", "grid_gap": "clamp(1rem, 2vw, 2rem)", "content_max": "76rem" },
+    "balanced": { "section_y": "clamp(4rem, 8vw, 7rem)", "grid_gap": "clamp(0.75rem, 1.5vw, 1.5rem)", "content_max": "80rem" },
+    "compact": { "section_y": "clamp(3rem, 6vw, 5rem)", "grid_gap": "clamp(0.5rem, 1vw, 1rem)", "content_max": "88rem" }
+  }
+}

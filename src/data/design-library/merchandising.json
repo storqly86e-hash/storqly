@@ -1,0 +1,1034 @@
+{
+  "version": "1.0.0",
+  "families": {
+    "product-grid": {
+      "records": [
+        {
+          "id": "product-grid.luxury_gallery",
+          "family": "product-grid",
+          "variant": "luxury_gallery",
+          "intent": "Turn product discovery into a spacious gallery with strong visual hierarchy.",
+          "use_when": [
+            "luxury",
+            "editorial",
+            "beauty",
+            "fashion",
+            "small_curated_range"
+          ],
+          "avoid_when": [
+            "large_catalog",
+            "utility_first",
+            "many_filters"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "intro",
+            "products",
+            "view_all_link",
+            "optional_featured_card"
+          ],
+          "layout": {
+            "desktop": "2–4 columns with alternating media ratios or a larger featured first item; text remains outside cards",
+            "alignment": "section heading left, grid below"
+          },
+          "responsive": {
+            "mobile_behavior": "2 columns for small products or 1 column for large image-led products; preserve image ratio"
+          },
+          "style_hooks": [
+            "column_count",
+            "card_variant",
+            "featured_pattern",
+            "section_spacing",
+            "heading_alignment",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "product-card.editorial_portrait",
+            "hero.editorial_product_still_life",
+            "brand-story.split_art-directed",
+            "cta.premium_invitation"
+          ],
+          "content_rules": {
+            "visible_items": "4–8",
+            "intro_max_words": 28,
+            "featured_item_optional": true
+          },
+          "motion": "Cards reveal as a restrained group; hover swaps image when available.",
+          "tags": [
+            "product-grid",
+            "luxury",
+            "gallery",
+            "curated"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented",
+            "luxurious",
+            "editorial"
+          ],
+          "incompatible_with": [
+            "product-grid.utility_dense",
+            "product-grid.bold_rail",
+            "product-grid.bestseller_focus",
+            "product-grid.swatch_gallery",
+            "product-grid.bundle_collection"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-grid.utility_dense",
+          "family": "product-grid",
+          "variant": "utility_dense",
+          "intent": "Support fast catalog scanning, filtering, and comparison.",
+          "use_when": [
+            "large_catalog",
+            "collection_page",
+            "search_results",
+            "price_sensitive"
+          ],
+          "avoid_when": [
+            "editorial_story_first",
+            "very_small_catalog"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "result_count",
+            "products",
+            "filter_toolbar",
+            "pagination_or_load_more"
+          ],
+          "layout": {
+            "desktop": "4-column consistent grid below utility toolbar; cards share row rhythm",
+            "alignment": "left metadata and predictable gutters"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column grid, compact metadata, filters in drawer, load more preserves context"
+          },
+          "style_hooks": [
+            "column_count",
+            "card_variant",
+            "density",
+            "toolbar_sticky",
+            "section_spacing",
+            "border_mode"
+          ],
+          "compatible_with": [
+            "product-card.utility_dense",
+            "navigation.filter_toolbar",
+            "collection.filter_sidebar",
+            "newsletter.utility_capture"
+          ],
+          "content_rules": {
+            "items_per_page": "12–24",
+            "result_count_required": true,
+            "filter_toolbar_required": true
+          },
+          "motion": "Loading placeholders match final card geometry; no layout jumps.",
+          "tags": [
+            "product-grid",
+            "catalog",
+            "dense",
+            "filterable"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [
+            "product-grid.luxury_gallery",
+            "product-grid.bold_rail",
+            "product-grid.bestseller_focus",
+            "product-grid.swatch_gallery",
+            "product-grid.bundle_collection"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-grid.bold_rail",
+          "family": "product-grid",
+          "variant": "bold_rail",
+          "intent": "Create a campaign-like horizontal product moment with energetic card labels.",
+          "use_when": [
+            "streetwear",
+            "limited_drop",
+            "high_energy",
+            "seasonal_campaign"
+          ],
+          "avoid_when": [
+            "quiet_luxury",
+            "large_filterable_catalog"
+          ],
+          "slots": [
+            "campaign_label",
+            "headline",
+            "products",
+            "view_all_link",
+            "rail_controls"
+          ],
+          "layout": {
+            "desktop": "3–5 cards in a wide rail; one card may be oversized or offset; background may use one controlled color plane",
+            "alignment": "left title and horizontal movement"
+          },
+          "responsive": {
+            "mobile_behavior": "snap rail with first card 78vw wide; controls are accessible and not decorative only"
+          },
+          "style_hooks": [
+            "rail_density",
+            "card_variant",
+            "accent_plane",
+            "item_overlap",
+            "heading_scale"
+          ],
+          "compatible_with": [
+            "product-card.bold_utility",
+            "hero.asymmetric_offset_product",
+            "promotion.sticker_campaign",
+            "gallery.lookbook_grid"
+          ],
+          "content_rules": {
+            "item_count": "4–8",
+            "headline_max_words": 7
+          },
+          "motion": "User-controlled horizontal scroll; no auto-advancing product rail.",
+          "tags": [
+            "product-grid",
+            "rail",
+            "bold",
+            "campaign"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition",
+            "high-contrast",
+            "horizontal rail"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "streetwear"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented",
+            "energetic",
+            "bold",
+            "campaign-driven"
+          ],
+          "incompatible_with": [
+            "product-grid.luxury_gallery",
+            "product-grid.utility_dense",
+            "product-grid.bestseller_focus",
+            "product-grid.swatch_gallery",
+            "product-grid.bundle_collection"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-grid.bestseller_focus",
+          "family": "product-grid",
+          "variant": "bestseller_focus",
+          "intent": "Use social proof and hierarchy to focus attention on a small set of proven products.",
+          "use_when": [
+            "bestsellers",
+            "repeat_purchase",
+            "new_customer_onboarding",
+            "social_proof_priority"
+          ],
+          "avoid_when": [
+            "new_unproven_collection",
+            "no_reviews"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "supporting_copy",
+            "featured_product",
+            "supporting_products",
+            "review_summary",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "one large featured product paired with 3 supporting cards in a staggered column",
+            "alignment": "featured item carries visual priority"
+          },
+          "responsive": {
+            "mobile_behavior": "featured product first, then a 2-column supporting grid; review summary remains near featured item"
+          },
+          "style_hooks": [
+            "featured_ratio",
+            "supporting_column_count",
+            "card_variant",
+            "proof_visibility",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "product-card.review_led",
+            "hero.product_stack_vertical",
+            "testimonials.rating_rail",
+            "trust.proof_strip"
+          ],
+          "content_rules": {
+            "featured_count": 1,
+            "supporting_count": "3–4",
+            "review_summary_required": true
+          },
+          "motion": "Featured card may reveal supporting quote on interaction, not automatically.",
+          "tags": [
+            "product-grid",
+            "bestseller",
+            "social_proof",
+            "hierarchy"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [
+            "product-grid.luxury_gallery",
+            "product-grid.utility_dense",
+            "product-grid.bold_rail",
+            "product-grid.swatch_gallery",
+            "product-grid.bundle_collection"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-grid.swatch_gallery",
+          "family": "product-grid",
+          "variant": "swatch_gallery",
+          "intent": "Make color, finish, or shade range visible at the collection level.",
+          "use_when": [
+            "beauty_shades",
+            "apparel_colorways",
+            "home_textiles",
+            "variant_discovery"
+          ],
+          "avoid_when": [
+            "few_variants",
+            "technical_spec_comparison"
+          ],
+          "slots": [
+            "headline",
+            "intro",
+            "products",
+            "swatch_legend",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "3–4 columns with visible swatches and occasional larger colorway card",
+            "alignment": "consistent card rhythm with swatch row as a visual signature"
+          },
+          "responsive": {
+            "mobile_behavior": "2-column grid with horizontally scrollable swatches when needed"
+          },
+          "style_hooks": [
+            "column_count",
+            "swatch_style",
+            "card_variant",
+            "colorway_emphasis",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "product-card.swatch_story",
+            "hero.collection_rail",
+            "category.icon_tiles"
+          ],
+          "content_rules": {
+            "swatches_visible": true,
+            "items_per_section": "4–12"
+          },
+          "motion": "Selected shade swaps the image without auto-cycling.",
+          "tags": [
+            "product-grid",
+            "swatches",
+            "colorway",
+            "discovery"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "apparel"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [
+            "product-grid.luxury_gallery",
+            "product-grid.utility_dense",
+            "product-grid.bold_rail",
+            "product-grid.bestseller_focus",
+            "product-grid.bundle_collection"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "product-grid.bundle_collection",
+          "family": "product-grid",
+          "variant": "bundle_collection",
+          "intent": "Merchandise routines, sets, or giftable combinations as a coherent system.",
+          "use_when": [
+            "bundles",
+            "gifting",
+            "routine",
+            "subscription",
+            "cross_sell"
+          ],
+          "avoid_when": [
+            "single_item_catalog",
+            "no_bundle_logic"
+          ],
+          "slots": [
+            "headline",
+            "intro",
+            "bundle_products",
+            "savings_note",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "3-column bundle cards with included items or routine step labels beneath each image",
+            "alignment": "centered image, left metadata"
+          },
+          "responsive": {
+            "mobile_behavior": "one-column cards or snap rail depending on count; included items stay readable"
+          },
+          "style_hooks": [
+            "card_variant",
+            "bundle_label_style",
+            "savings_emphasis",
+            "column_count",
+            "surface_theme"
+          ],
+          "compatible_with": [
+            "product-card.bundle_stack",
+            "featured-product.routine_builder",
+            "hero.ingredient_focus",
+            "cta.urgency_panel"
+          ],
+          "content_rules": {
+            "bundle_count": "3–6",
+            "included_items_required": true
+          },
+          "motion": "Routine details expand on tap; no distracting card choreography.",
+          "tags": [
+            "product-grid",
+            "bundles",
+            "routines",
+            "gifting"
+          ],
+          "visual_style": [
+            "merchandising rhythm",
+            "catalog composition"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "efficient",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [
+            "product-grid.luxury_gallery",
+            "product-grid.utility_dense",
+            "product-grid.bold_rail",
+            "product-grid.bestseller_focus",
+            "product-grid.swatch_gallery"
+          ],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "collection": {
+      "records": [
+        {
+          "id": "collection.lookbook_tiles",
+          "family": "collection",
+          "variant": "lookbook_tiles",
+          "intent": "Let customers enter collections through image-led worlds rather than a plain category list.",
+          "use_when": [
+            "fashion",
+            "home",
+            "seasonal",
+            "editorial",
+            "multiple_collections"
+          ],
+          "avoid_when": [
+            "tiny_catalog",
+            "no_collection_imagery"
+          ],
+          "slots": [
+            "section_label",
+            "headline",
+            "intro",
+            "collection_tiles",
+            "view_all_link"
+          ],
+          "layout": {
+            "desktop": "2 large tiles plus 2 smaller offset tiles, each with HTML label and action",
+            "alignment": "asymmetric editorial matrix"
+          },
+          "responsive": {
+            "mobile_behavior": "vertical sequence with alternating image ratios or snap rail",
+            "tile_count": "3–6"
+          },
+          "style_hooks": [
+            "matrix_pattern",
+            "tile_ratios",
+            "label_position",
+            "surface_theme",
+            "image_treatment"
+          ],
+          "compatible_with": [
+            "hero.fullbleed_copy_safe_area",
+            "product-grid.bold_rail",
+            "gallery.lookbook_grid"
+          ],
+          "content_rules": {
+            "tile_count": "3–6",
+            "label_max_words": 4
+          },
+          "motion": "Image scale on interaction; labels remain stable.",
+          "tags": [
+            "collection",
+            "lookbook",
+            "editorial",
+            "discovery"
+          ],
+          "visual_style": [
+            "category-led",
+            "editorial merchandising",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "seasonal",
+            "discovery-oriented",
+            "editorial"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "collection.filter_sidebar",
+          "family": "collection",
+          "variant": "filter_sidebar",
+          "intent": "Provide a classic, clear collection shopping structure for broad assortments.",
+          "use_when": [
+            "large_catalog",
+            "many_facets",
+            "collection_page",
+            "utility_priority"
+          ],
+          "avoid_when": [
+            "campaign_landing",
+            "small_curated_range"
+          ],
+          "slots": [
+            "collection_title",
+            "description",
+            "hero_image_optional",
+            "filter_groups",
+            "sort",
+            "products",
+            "pagination"
+          ],
+          "layout": {
+            "desktop": "sidebar filter column with flexible product grid; optional collection intro spans above both",
+            "alignment": "utility-led"
+          },
+          "responsive": {
+            "mobile_behavior": "sidebar becomes drawer; filter summary and sort stay visible above grid"
+          },
+          "style_hooks": [
+            "sidebar_width",
+            "grid_columns",
+            "toolbar_variant",
+            "card_variant",
+            "border_mode",
+            "density"
+          ],
+          "compatible_with": [
+            "navigation.filter_toolbar",
+            "product-card.utility_dense",
+            "product-grid.utility_dense"
+          ],
+          "content_rules": {
+            "filter_group_count": "3–8",
+            "result_count_required": true
+          },
+          "motion": "Drawer opens with focus management and preserves query state.",
+          "tags": [
+            "collection",
+            "filter",
+            "catalog",
+            "utility"
+          ],
+          "visual_style": [
+            "category-led",
+            "editorial merchandising"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "curated",
+            "seasonal",
+            "discovery-oriented",
+            "practical"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "collection.story_chapters",
+          "family": "collection",
+          "variant": "story_chapters",
+          "intent": "Blend a collection narrative with product chapters for brands that sell through a point of view.",
+          "use_when": [
+            "heritage",
+            "design",
+            "beauty_routine",
+            "story_first",
+            "seasonal"
+          ],
+          "avoid_when": [
+            "rapid_search",
+            "simple_catalog"
+          ],
+          "slots": [
+            "collection_intro",
+            "chapters",
+            "chapter_products",
+            "chapter_ctas",
+            "collection_proof"
+          ],
+          "layout": {
+            "desktop": "alternating media/text chapters; each chapter may surface 2–4 relevant products",
+            "alignment": "alternating left/right narrative rhythm"
+          },
+          "responsive": {
+            "mobile_behavior": "stack chapters consistently with image first and product rail beneath each"
+          },
+          "style_hooks": [
+            "chapter_order",
+            "media_ratio",
+            "text_measure",
+            "card_variant",
+            "surface_alternation"
+          ],
+          "compatible_with": [
+            "brand-story.timeline",
+            "feature-benefits.ingredient_index",
+            "product-card.editorial_portrait"
+          ],
+          "content_rules": {
+            "chapter_count": "2–4",
+            "products_per_chapter": "2–4"
+          },
+          "motion": "Chapter images reveal when entering viewport; no pinned scroll by default.",
+          "tags": [
+            "collection",
+            "story",
+            "chapters",
+            "editorial"
+          ],
+          "visual_style": [
+            "category-led",
+            "editorial merchandising",
+            "editorial"
+          ],
+          "industries": [
+            "fashion",
+            "beauty",
+            "home",
+            "general retail",
+            "design goods"
+          ],
+          "brand_personalities": [
+            "curated",
+            "seasonal",
+            "discovery-oriented",
+            "editorial",
+            "heritage-minded",
+            "story-first"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "category": {
+      "records": [
+        {
+          "id": "category.icon_tiles",
+          "family": "category",
+          "variant": "icon_tiles",
+          "intent": "Orient users with concise category tiles when imagery is secondary to navigation.",
+          "use_when": [
+            "beauty",
+            "food",
+            "home",
+            "multi_category",
+            "taxonomy_priority"
+          ],
+          "avoid_when": [
+            "campaign_story",
+            "image_led_brand"
+          ],
+          "slots": [
+            "headline",
+            "category_items",
+            "optional_intro"
+          ],
+          "layout": {
+            "desktop": "4–8 compact tiles using product cue, icon, or small image with clear label",
+            "alignment": "even row or wrapped grid"
+          },
+          "responsive": {
+            "mobile_behavior": "horizontal rail or 2-column tile grid; labels remain visible"
+          },
+          "style_hooks": [
+            "tile_shape",
+            "icon_style",
+            "media_ratio",
+            "border_mode",
+            "surface_theme",
+            "column_count"
+          ],
+          "compatible_with": [
+            "hero.category_portal",
+            "product-grid.swatch_gallery",
+            "header.utility_split"
+          ],
+          "content_rules": {
+            "category_count": "4–8",
+            "label_max_words": 3
+          },
+          "motion": "Subtle background or border shift on focus; no icon bounce.",
+          "tags": [
+            "category",
+            "taxonomy",
+            "navigation",
+            "compact"
+          ],
+          "visual_style": [
+            "taxonomy-led",
+            "orienting"
+          ],
+          "industries": [
+            "beauty",
+            "home",
+            "food",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "organized",
+            "helpful",
+            "discovery-oriented"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "category.material_index",
+          "family": "category",
+          "variant": "material_index",
+          "intent": "Turn ingredients, materials, or product qualities into a navigable index.",
+          "use_when": [
+            "skincare",
+            "food",
+            "home_materials",
+            "science_backed",
+            "craft"
+          ],
+          "avoid_when": [
+            "category_not_differentiated_by_material",
+            "limited_product_facts"
+          ],
+          "slots": [
+            "headline",
+            "intro",
+            "index_items",
+            "related_products",
+            "learn_more_links"
+          ],
+          "layout": {
+            "desktop": "text-rich index with numbered rows or columns, each revealing related products",
+            "alignment": "editorial left alignment"
+          },
+          "responsive": {
+            "mobile_behavior": "accordion rows with related products in a small rail"
+          },
+          "style_hooks": [
+            "row_dividers",
+            "number_style",
+            "index_density",
+            "surface_theme",
+            "accent_color"
+          ],
+          "compatible_with": [
+            "hero.ingredient_focus",
+            "feature-benefits.ingredient_index",
+            "editorial.longform_split"
+          ],
+          "content_rules": {
+            "index_items": "3–8",
+            "claim_review_required": true
+          },
+          "motion": "Rows reveal supporting details on interaction; no automatic cycling.",
+          "tags": [
+            "category",
+            "materials",
+            "index",
+            "education"
+          ],
+          "visual_style": [
+            "taxonomy-led",
+            "orienting"
+          ],
+          "industries": [
+            "beauty",
+            "home",
+            "food",
+            "general retail",
+            "skincare",
+            "craft goods"
+          ],
+          "brand_personalities": [
+            "organized",
+            "helpful",
+            "discovery-oriented",
+            "evidence-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    },
+    "featured-product": {
+      "records": [
+        {
+          "id": "featured-product.proof_led",
+          "family": "featured-product",
+          "variant": "proof_led",
+          "intent": "Use one featured product to combine benefits, evidence, and a purchase path.",
+          "use_when": [
+            "hero_product",
+            "bestseller",
+            "science_backed",
+            "education_priority"
+          ],
+          "avoid_when": [
+            "many_equal_products",
+            "no_proof_assets"
+          ],
+          "slots": [
+            "product_image",
+            "eyebrow",
+            "title",
+            "description",
+            "benefit_list",
+            "rating",
+            "review_quote",
+            "price",
+            "variant_selector",
+            "primary_cta"
+          ],
+          "layout": {
+            "desktop": "product media left, proof and purchase stack right; optional proof marks between description and action",
+            "alignment": "copy top-aligned"
+          },
+          "responsive": {
+            "mobile_behavior": "product first, then title/proof, then purchase; sticky action optional on product detail only"
+          },
+          "style_hooks": [
+            "media_ratio",
+            "proof_density",
+            "surface_theme",
+            "button_variant",
+            "divider_mode",
+            "type_system"
+          ],
+          "compatible_with": [
+            "hero.ingredient_focus",
+            "trust.certification_row",
+            "testimonials.quote_wall",
+            "commerce-pattern.add_to_cart"
+          ],
+          "content_rules": {
+            "benefit_count": "3–5",
+            "review_quote_max_words": 22,
+            "primary_cta_required": true
+          },
+          "motion": "Accordion details are user-controlled; no automatic scroll.",
+          "tags": [
+            "featured-product",
+            "proof",
+            "conversion",
+            "product_detail"
+          ],
+          "visual_style": [
+            "product-authority",
+            "proof-led"
+          ],
+          "industries": [
+            "beauty",
+            "wellness",
+            "food",
+            "home",
+            "general retail"
+          ],
+          "brand_personalities": [
+            "assured",
+            "helpful",
+            "conversion-aware",
+            "evidence-led"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        },
+        {
+          "id": "featured-product.routine_builder",
+          "family": "featured-product",
+          "variant": "routine_builder",
+          "intent": "Help customers assemble a routine or set through guided product steps.",
+          "use_when": [
+            "skincare",
+            "supplements",
+            "haircare",
+            "meal_plan",
+            "bundle_logic"
+          ],
+          "avoid_when": [
+            "single_step_product",
+            "simple_catalog"
+          ],
+          "slots": [
+            "routine_title",
+            "steps",
+            "step_products",
+            "selected_state",
+            "routine_price",
+            "savings",
+            "primary_cta",
+            "progress_label"
+          ],
+          "layout": {
+            "desktop": "step navigation and product selection on left, live routine summary on right",
+            "alignment": "guided flow"
+          },
+          "responsive": {
+            "mobile_behavior": "one step per viewport with persistent summary bar; allow back navigation"
+          },
+          "style_hooks": [
+            "step_indicator",
+            "summary_surface",
+            "product_card_variant",
+            "progress_style",
+            "accent_color"
+          ],
+          "compatible_with": [
+            "product-card.bundle_stack",
+            "product-grid.bundle_collection",
+            "hero.product_stack_vertical"
+          ],
+          "content_rules": {
+            "step_count": "2–5",
+            "show_savings_when_bundle": true
+          },
+          "motion": "Step changes use short horizontal transition; preserve focus and announce updates.",
+          "tags": [
+            "featured-product",
+            "routine",
+            "guided",
+            "bundle"
+          ],
+          "visual_style": [
+            "product-authority",
+            "proof-led"
+          ],
+          "industries": [
+            "beauty",
+            "wellness",
+            "food",
+            "home",
+            "general retail",
+            "skincare",
+            "supplements"
+          ],
+          "brand_personalities": [
+            "assured",
+            "helpful",
+            "conversion-aware"
+          ],
+          "incompatible_with": [],
+          "conflict_scope": "avoid_adjacent_or_same_primary_role"
+        }
+      ]
+    }
+  }
+}

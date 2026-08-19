@@ -1,0 +1,78 @@
+{
+  "version": "1.0.0",
+  "selection_pipeline": [
+    { "step": 1, "name": "normalize_brand_prompt", "output": "brand_profile", "rule": "Extract category, audience, positioning, mood, visual energy, asset availability, price tier, and conversion priority. Keep uncertain values as low-confidence rather than inventing facts." },
+    { "step": 2, "name": "select_theme", "output": "theme_and_token_overrides", "rule": "Choose a typography and density system from the brand profile, then customize semantic colors. Do not use palette changes as a substitute for structural differentiation." },
+    { "step": 3, "name": "select_roles", "output": "required_roles", "rule": "Map the page goal to roles such as orient, merchandise, educate, differentiate, reassure, engage, convert, and retain. Omit roles that have no credible content or asset support." },
+    { "step": 4, "name": "rank_components", "output": "candidate_components", "rule": "Score components by signal match, asset fit, conversion fit, visual energy, responsive safety, and adjacency compatibility." },
+    { "step": 5, "name": "compose_rhythm", "output": "page_graph", "rule": "Alternate geometry, density, and image/text emphasis. Avoid adjacent same-family or same-geometry sections unless the page goal explicitly requires repetition." },
+    { "step": 6, "name": "art_direct_media", "output": "image_briefs", "rule": "Generate a product- and brand-specific image brief for every image slot. Keep all headline, subheadline, badge, and CTA copy as HTML/content slots." },
+    { "step": 7, "name": "responsive_review", "output": "responsive_overrides", "rule": "Review the mobile order, crop, interaction, and action visibility for every node before publishing." },
+    { "step": 8, "name": "quality_gate", "output": "approved_page_graph", "rule": "Reject generic imagery, unsupported claims, repetitive structure, inaccessible controls, and components with missing required slots." }
+  ],
+  "scoring": {
+    "formula": "0.28*signal_match + 0.18*asset_fit + 0.16*goal_fit + 0.14*visual_energy_fit + 0.12*responsive_fit + 0.12*adjacency_fit - penalties",
+    "scale": "Each positive score is 0–1; penalties are 0–0.25.",
+    "penalties": [
+      { "name": "same_geometry_adjacent", "amount": 0.18 },
+      { "name": "same_family_adjacent", "amount": 0.16 },
+      { "name": "missing_required_asset", "amount": 0.25 },
+      { "name": "unsupported_claim", "amount": 0.25 },
+      { "name": "mobile_action_hidden", "amount": 0.18 },
+      { "name": "generic_image_brief", "amount": 0.2 }
+    ]
+  },
+  "selection_signals": {
+    "luxury_editorial": ["hero.editorial_product_still_life", "hero.editorial_masthead", "product-grid.luxury_gallery", "brand-story.split_art-directed", "cta.premium_invitation"],
+    "high_energy_streetwear": ["hero.asymmetric_offset_product", "hero.dark_campaign_statement", "product-grid.bold_rail", "promotion.sticker_campaign", "gallery.lookbook_grid", "cta.strong_statement"],
+    "science_backed_beauty": ["hero.ingredient_focus", "hero.product_stack_vertical", "feature-benefits.ingredient_index", "featured-product.proof_led", "trust.certification_row"],
+    "large_catalog": ["hero.category_portal", "header.utility_split", "navigation.filter_toolbar", "collection.filter_sidebar", "product-grid.utility_dense", "footer.utility_rich"],
+    "community_led": ["hero.ugc_collage", "testimonials.ugc_rail", "trust.social_count", "cta.community_invite", "footer.community_ribbon"],
+    "story_first": ["hero.editorial_masthead", "editorial.longform_split", "gallery.editorial_masonry", "brand-story.timeline", "cta.editorial_invite"]
+  },
+  "composition_rules": [
+    "Use one clear primary hero; a second hero-like full-bleed section must earn its place through a different job and geometry.",
+    "Do not place more than two dense sections consecutively.",
+    "Do not place more than two dark/high-contrast sections consecutively.",
+    "After a full-bleed image, prefer a contained or text-led section to reset reading rhythm.",
+    "Place proof near the first meaningful purchase decision, not only at the bottom.",
+    "Use a product grid after the hero when merchandising is a primary goal; otherwise earn the product grid through story or category orientation.",
+    "Do not use a testimonial component when there are no real reviews or permissioned customer statements.",
+    "When no product image is available, use a category-relevant contextual scene and label the component intent accordingly; never invent a packshot.",
+    "For regulated, scientific, or sustainability claims, require a source/disclosure slot before rendering the claim as factual.",
+    "Keep CTA language editable and separate from generated media."
+  ],
+  "image_art_direction": {
+    "required_prompt_fields": ["product_or_category", "brand_world", "audience_or_use_context", "composition", "lighting", "palette", "negative_space_or_safe_area", "crop", "exclusions"],
+    "base_prompt": "Premium ecommerce art direction for [product/category] by a [brand positioning] brand. Show [specific product, material, or use context] for [audience]. Compose [subject placement and safe area] with [lighting], [palette], and [surface/material cues]. Use [crop/aspect ratio]. The image must communicate the actual product world, preserve product identity, and contain no marketing copy, logos added by generation, UI, badges, or decorative text.",
+    "avoid_phrases": ["abstract colorful background", "random luxury background", "generic lifestyle image", "floating product with no context", "text in image", "fake customer review", "unverifiable before and after", "unrelated decorative scene"],
+    "slot_guidance": {
+      "context_background": "Make the context legible: environment, material, ingredient, ritual, garment, room, or cultural cue must connect to the product.",
+      "product_image": "Prefer supplied real product assets. If generation is used, preserve truthful shape, packaging logic, and category cues; never imply the generated image is a supplied packshot.",
+      "campaign_image": "Use one dominant subject and leave a deliberately composed HTML text safe area.",
+      "ugc": "Use supplied, permissioned assets only; generation may create a campaign alternative, never a fabricated customer artifact."
+    }
+  },
+  "quality_guardrails": {
+    "reject_if": [
+      "text is baked into the hero image",
+      "hero background is unrelated to product or brand context",
+      "more than three consecutive card-based sections appear without a layout reset",
+      "the same section geometry is repeated solely with a new color",
+      "primary CTA is not visible or understandable on mobile",
+      "the component uses hover to expose an essential action",
+      "trust claims have no source, disclosure, or real customer asset",
+      "animation is continuous, decorative, or incompatible with reduced motion",
+      "rounded containers, gradients, or glass effects are applied without a brand-specific rationale",
+      "an image crop removes product identity or makes the focal subject ambiguous"
+    ],
+    "approval_questions": [
+      "What job does this section perform in the page narrative?",
+      "Why is this geometry a fit for the brand rather than a generic default?",
+      "What actual product or brand context does each image communicate?",
+      "Can the copy be edited without regenerating imagery?",
+      "Does the page still make sense at mobile width and with reduced motion?",
+      "Is the next action clear without adding visual clutter?"
+    ]
+  }
+}

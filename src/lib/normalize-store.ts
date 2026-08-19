@@ -512,8 +512,10 @@ function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): Stor
  *
  *  @param maxProducts - If provided, cap products to this number. If undefined, don't cap products.
  */
-function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>, maxProducts?: number): void {
-  const MAX_SECTIONS = 4;
+function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>, maxProducts?: number, maxSections?: number): void {
+  // Default section cap: high enough for design library recipes (up to 12 nodes)
+  // while still protecting against unreasonable AI output.
+  const MAX_SECTIONS = maxSections ?? 14;
 
   // ── Cap products (only if maxProducts is specified) ──
   if (maxProducts !== undefined && store.products.length > maxProducts) {

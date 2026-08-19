@@ -1,0 +1,1409 @@
+{
+  "family": "hero",
+  "version": "1.0.0",
+  "records": [
+    {
+      "id": "hero.editorial_product_still_life",
+      "family": "hero",
+      "variant": "editorial_product_still_life",
+      "intent": "Establish premium mood while making one hero product the visual authority.",
+      "use_when": [
+        "luxury",
+        "beauty",
+        "fragrance",
+        "heritage",
+        "editorial",
+        "low_visual_energy"
+      ],
+      "avoid_when": [
+        "large_catalog_first",
+        "high_energy_streetwear",
+        "multiple_equal_priority_products"
+      ],
+      "slots": [
+        "context_background",
+        "product_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "badge",
+        "primary_cta",
+        "secondary_cta",
+        "fine_print"
+      ],
+      "layout": {
+        "desktop": "12-column grid; copy spans 4 columns left; product spans 5 columns right; contextual image bleeds behind both",
+        "alignment": "baseline-led with large top offset",
+        "layer_order": [
+          "context_background",
+          "vignette",
+          "product_image",
+          "text",
+          "badge",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "background becomes a dedicated media block above copy; product remains foreground; badge moves below headline",
+        "text_width": "mobile full width with 2rem inset",
+        "tablet_behavior": "Retain the 12-column relationship with a narrower copy measure and product reduced to roughly 80 percent scale; keep the contextual background behind both and stack only below the mobile breakpoint."
+      },
+      "style_hooks": [
+        "typography_system",
+        "surface_theme",
+        "content_alignment",
+        "product_scale",
+        "media_crop",
+        "vignette_strength",
+        "section_height",
+        "density"
+      ],
+      "compatible_with": [
+        "product-grid.luxury_gallery",
+        "brand-story.split_art-directed",
+        "feature-benefits.ingredient_index",
+        "gallery.editorial_masonry",
+        "cta.premium_invitation"
+      ],
+      "content_rules": {
+        "headline_max_words": 7,
+        "subheadline_max_words": 24,
+        "cta_count": "1 primary, optional 1 secondary",
+        "badge_max_words": 4
+      },
+      "image_guidance": {
+        "background": "A contextual, brand-specific still life that includes the actual product category cues, surface, light, and material language; no generic abstract gradient.",
+        "product": "High-resolution packshot or hero object with clean silhouette and enough negative space for the copy plane.",
+        "prompt_frame": "[brand category] product hero still life, [material cues], [lighting], [palette], art-directed negative space on the [left/right], premium ecommerce campaign photography"
+      },
+      "motion": "Slow 4px product reveal on entry; no continuous animation.",
+      "tags": [
+        "hero",
+        "editorial",
+        "product_led",
+        "luxury",
+        "still_life"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "editorial",
+        "product-led"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "luxurious",
+        "editorial",
+        "heritage-minded"
+      ],
+      "incompatible_with": [
+        "hero.dark_campaign_statement",
+        "hero.asymmetric_offset_product"
+      ],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "12-column editorial still life",
+        "text_placement": "left copy plane with controlled measure",
+        "product_placement": "foreground product in right-side visual plane",
+        "background_requirements": "contextual material/still-life world tied to the product category",
+        "cta_placement": "below subheadline in the HTML copy plane",
+        "overlay_behavior": "soft vignette or directional tonal layer only where needed for copy contrast",
+        "typography_behavior": "display-led hierarchy with restrained label and generous whitespace",
+        "breakpoints": {
+          "desktop": "12-column grid; copy spans 4 columns left; product spans 5 columns right; contextual image bleeds behind both",
+          "tablet": "Retain the 12-column relationship with a narrower copy measure and product reduced to roughly 80 percent scale; keep the contextual background behind both and stack only below the mobile breakpoint.",
+          "mobile": "background becomes a dedicated media block above copy; product remains foreground; badge moves below headline"
+        }
+      }
+    },
+    {
+      "id": "hero.split_context_product",
+      "family": "hero",
+      "variant": "split_context_product",
+      "intent": "Pair a contextual lifestyle scene with a clearly merchandised product column.",
+      "use_when": [
+        "product_plus_context",
+        "wellness",
+        "home",
+        "apparel",
+        "education_oriented"
+      ],
+      "avoid_when": [
+        "single_image_campaign",
+        "very_short_headline",
+        "limited_product_assets"
+      ],
+      "slots": [
+        "context_image",
+        "product_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "primary_cta",
+        "secondary_cta"
+      ],
+      "layout": {
+        "desktop": "50/50 split; left visual is edge-to-edge; right copy is vertically centered inside narrow content measure",
+        "alignment": "copy-first vertical center",
+        "layer_order": [
+          "context_image",
+          "product_image",
+          "text",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "context image first, then copy, then product image as a compact card or inline object",
+        "mobile_order": [
+          "context_image",
+          "text",
+          "product_image"
+        ],
+        "tablet_behavior": "Keep the 50/50 split through tablet when contrast is reliable; reduce media and copy gutters, then move the product image below the copy before mobile if the text measure becomes cramped."
+      },
+      "style_hooks": [
+        "split_ratio",
+        "copy_alignment",
+        "media_treatment",
+        "product_scale",
+        "surface_theme",
+        "section_min_height"
+      ],
+      "compatible_with": [
+        "product-grid.editorial_rail",
+        "feature-benefits.numbered_columns",
+        "testimonials.quote_wall",
+        "newsletter.split_capture"
+      ],
+      "content_rules": {
+        "headline_max_words": 9,
+        "subheadline_max_words": 28,
+        "cta_count": "1 primary, optional 1 secondary"
+      },
+      "image_guidance": {
+        "context": "Show the product in use or in a recognizable environment tied to the category and audience.",
+        "product": "Use a clean product image with a crop that preserves packaging or silhouette.",
+        "prompt_frame": "[actual product category] in [specific environment], [audience cue], natural directional light, premium campaign photography, clear focal subject"
+      },
+      "motion": "Crossfade between context and product on scroll only if the media is not required to understand the copy.",
+      "tags": [
+        "hero",
+        "split",
+        "contextual",
+        "product_led",
+        "conversion"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "split composition",
+        "product-led"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "apparel"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "conversion-aware"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "50/50 contextual image and product/copy split",
+        "text_placement": "vertically centered copy in the non-media column",
+        "product_placement": "product in a compact foreground or inline object adjacent to copy",
+        "background_requirements": "recognizable product-in-use environment or category context",
+        "cta_placement": "below subheadline in copy column",
+        "overlay_behavior": "none by default; local tonal correction only on image",
+        "typography_behavior": "clear heading/body hierarchy with moderate measure",
+        "breakpoints": {
+          "desktop": "50/50 split; left visual is edge-to-edge; right copy is vertically centered inside narrow content measure",
+          "tablet": "Keep the 50/50 split through tablet when contrast is reliable; reduce media and copy gutters, then move the product image below the copy before mobile if the text measure becomes cramped.",
+          "mobile": "context image first, then copy, then product image as a compact card or inline object"
+        }
+      }
+    },
+    {
+      "id": "hero.fullbleed_copy_safe_area",
+      "family": "hero",
+      "variant": "fullbleed_copy_safe_area",
+      "intent": "Create immediate campaign impact with one full-bleed contextual image and a protected text zone.",
+      "use_when": [
+        "campaign_launch",
+        "fashion",
+        "travel",
+        "food",
+        "strong_photography"
+      ],
+      "avoid_when": [
+        "busy_image_without_safe_area",
+        "low_contrast_brand",
+        "complex_product_comparison"
+      ],
+      "slots": [
+        "campaign_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "badge",
+        "primary_cta",
+        "overlay"
+      ],
+      "layout": {
+        "desktop": "100vw media plane with copy pinned to a 4-column safe area; image uses an art-directed crop",
+        "alignment": "left or right edge based on detected negative space",
+        "layer_order": [
+          "campaign_image",
+          "directional_overlay",
+          "text",
+          "badge",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "use dedicated portrait crop; move copy into a solid or translucent block when contrast is not reliable",
+        "safe_area": "copy occupies at most 58 percent of mobile image height",
+        "tablet_behavior": "Keep the full-bleed crop and choose the safest negative-space side dynamically; reduce copy width and strengthen only the directional overlay needed for legibility."
+      },
+      "style_hooks": [
+        "safe_area_side",
+        "overlay_type",
+        "overlay_strength",
+        "text_color",
+        "media_crop",
+        "hero_height",
+        "content_alignment"
+      ],
+      "compatible_with": [
+        "collection.lookbook_tiles",
+        "promotion.campaign_strip",
+        "gallery.lookbook_grid",
+        "cta.fullbleed_statement"
+      ],
+      "content_rules": {
+        "headline_max_words": 6,
+        "subheadline_max_words": 18,
+        "cta_count": "1 primary",
+        "badge_max_words": 3
+      },
+      "image_guidance": {
+        "campaign": "The actual product or its use context must be a recognizable subject. Compose negative space on the chosen copy side; do not add illegible text to the image.",
+        "prompt_frame": "premium [category] campaign, [actual product/use context], subject weighted to [opposite side], [palette], [lighting], tactile editorial commercial photography, no text"
+      },
+      "motion": "Image remains still; use a 1.02 scale transition on entry only.",
+      "tags": [
+        "hero",
+        "full_bleed",
+        "campaign",
+        "image_led",
+        "editorial"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "editorial",
+        "full-bleed"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "travel goods"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "editorial",
+        "campaign-driven"
+      ],
+      "incompatible_with": [
+        "hero.dark_campaign_statement",
+        "hero.asymmetric_offset_product"
+      ],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "full-bleed campaign image with protected text safe area",
+        "text_placement": "left or right edge chosen from detected negative space",
+        "product_placement": "dominant subject/product placed opposite the copy safe area",
+        "background_requirements": "actual product or use context with deliberate negative space",
+        "cta_placement": "directly below text in safe area",
+        "overlay_behavior": "directional gradient/vignette permitted only as a legibility correction",
+        "typography_behavior": "short headline with high contrast and limited supporting copy",
+        "breakpoints": {
+          "desktop": "100vw media plane with copy pinned to a 4-column safe area; image uses an art-directed crop",
+          "tablet": "Keep the full-bleed crop and choose the safest negative-space side dynamically; reduce copy width and strengthen only the directional overlay needed for legibility.",
+          "mobile": "use dedicated portrait crop; move copy into a solid or translucent block when contrast is not reliable"
+        }
+      }
+    },
+    {
+      "id": "hero.asymmetric_offset_product",
+      "family": "hero",
+      "variant": "asymmetric_offset_product",
+      "intent": "Signal energy and confidence through an offset composition with a product breaking the grid.",
+      "use_when": [
+        "streetwear",
+        "youth",
+        "high_visual_energy",
+        "limited_drop",
+        "bold_typography"
+      ],
+      "avoid_when": [
+        "quiet_luxury",
+        "highly traditional brands",
+        "small_or_delicate_product"
+      ],
+      "slots": [
+        "solid_or_context_background",
+        "product_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "badge",
+        "primary_cta",
+        "secondary_cta",
+        "graphic_accent"
+      ],
+      "layout": {
+        "desktop": "12-column offset grid; oversized type spans 7 columns, product overlaps columns 7–12, accent marks may escape container",
+        "alignment": "left copy with deliberate vertical offset",
+        "layer_order": [
+          "background",
+          "graphic_accent",
+          "headline",
+          "product_image",
+          "supporting_text",
+          "actions",
+          "badge"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "type scales down first; product becomes full-width after headline; remove nonessential accents",
+        "mobile_order": [
+          "eyebrow",
+          "headline",
+          "product_image",
+          "subheadline",
+          "actions"
+        ],
+        "tablet_behavior": "Preserve the offset grid with approximately half the desktop offset; reduce type scale and product overlap, then collapse decorative accents before the mobile breakpoint."
+      },
+      "style_hooks": [
+        "offset_amount",
+        "display_scale",
+        "product_angle",
+        "background_contrast",
+        "accent_visibility",
+        "surface_theme",
+        "text_transform"
+      ],
+      "compatible_with": [
+        "product-grid.bold_rail",
+        "promotion.sticker_campaign",
+        "gallery.lookbook_grid",
+        "cta.strong_statement"
+      ],
+      "content_rules": {
+        "headline_max_words": 5,
+        "subheadline_max_words": 16,
+        "cta_count": "1 primary, optional 1 secondary",
+        "badge_max_words": 3
+      },
+      "image_guidance": {
+        "product": "Use a product image with a dynamic but truthful angle; preserve logos and product identity.",
+        "background": "Use a category-relevant environment, surface, or campaign texture, never a random abstract backdrop.",
+        "prompt_frame": "high-energy [category] campaign, actual product prominent, [material/environment], hard directional light, high contrast, bold negative space, no text"
+      },
+      "motion": "Product enters from a 12px offset; accents do not loop.",
+      "tags": [
+        "hero",
+        "asymmetric",
+        "high_energy",
+        "streetwear",
+        "bold"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "high-contrast"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "streetwear"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "energetic",
+        "bold"
+      ],
+      "incompatible_with": [
+        "hero.editorial_product_still_life",
+        "hero.editorial_masthead"
+      ],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "offset 12-column grid with controlled overlap",
+        "text_placement": "left, offset, oversized HTML display type",
+        "product_placement": "foreground product breaking the right-side grid boundary",
+        "background_requirements": "category-relevant surface, scene, or campaign environment",
+        "cta_placement": "below supporting text, aligned to copy edge",
+        "overlay_behavior": "solid or tonal surface preferred; graphic accents are optional and nonessential",
+        "typography_behavior": "compressed or oversized display with short copy and strong label contrast",
+        "breakpoints": {
+          "desktop": "12-column offset grid; oversized type spans 7 columns, product overlaps columns 7–12, accent marks may escape container",
+          "tablet": "Preserve the offset grid with approximately half the desktop offset; reduce type scale and product overlap, then collapse decorative accents before the mobile breakpoint.",
+          "mobile": "type scales down first; product becomes full-width after headline; remove nonessential accents"
+        }
+      }
+    },
+    {
+      "id": "hero.product_stack_vertical",
+      "family": "hero",
+      "variant": "product_stack_vertical",
+      "intent": "Make the product and its proof points the first readable story for a direct-response launch.",
+      "use_when": [
+        "new_product",
+        "supplements",
+        "skincare",
+        "single_sku",
+        "benefit_led"
+      ],
+      "avoid_when": [
+        "brand_awareness_campaign",
+        "multi_category_catalog",
+        "editorial_heritage"
+      ],
+      "slots": [
+        "product_image",
+        "badge",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "benefit_row",
+        "primary_cta",
+        "secondary_cta",
+        "microproof"
+      ],
+      "layout": {
+        "desktop": "Contained two-column composition; left column stacks copy and benefit row, right column centers product with controlled shadow or surface",
+        "alignment": "copy top-aligned, product optically centered",
+        "layer_order": [
+          "surface",
+          "product_image",
+          "badge",
+          "text",
+          "benefit_row",
+          "actions",
+          "microproof"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "product first with copy below; benefit row becomes a horizontal scroll or two-by-two grid",
+        "mobile_order": [
+          "product_image",
+          "badge",
+          "eyebrow",
+          "headline",
+          "subheadline",
+          "benefit_row",
+          "actions"
+        ],
+        "tablet_behavior": "Retain a two-column product/copy relationship with a smaller product plane and a compact benefit row; stack in the mobile layout."
+      },
+      "style_hooks": [
+        "product_scale",
+        "surface_color",
+        "shadow_style",
+        "benefit_layout",
+        "copy_width",
+        "badge_style"
+      ],
+      "compatible_with": [
+        "feature-benefits.icon_row",
+        "product-grid.bestseller_focus",
+        "trust.proof_strip",
+        "cta.urgency_panel"
+      ],
+      "content_rules": {
+        "headline_max_words": 8,
+        "subheadline_max_words": 25,
+        "benefit_count": "3 maximum",
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "product": "True-to-color packshot or cutout with enough resolution to inspect the product at large scale.",
+        "prompt_frame": "premium ecommerce product photography of [actual product], [surface/material], controlled soft shadow, clean silhouette, accurate packaging, no text overlay"
+      },
+      "motion": "Product image may subtly sharpen or rise on entry; benefits appear as a short stagger.",
+      "tags": [
+        "hero",
+        "product_focused",
+        "direct_response",
+        "benefit_led",
+        "single_sku"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "product-led"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "skincare",
+        "supplements"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "contained two-column product-first stack",
+        "text_placement": "left copy stack above benefits and action",
+        "product_placement": "large centered product plane on the right",
+        "background_requirements": "truthful packshot/cutout on a considered product surface",
+        "cta_placement": "after benefits, below subheadline",
+        "overlay_behavior": "controlled shadow or surface treatment; no decorative overlay needed",
+        "typography_behavior": "benefit-led hierarchy with concise headline and scannable proof",
+        "breakpoints": {
+          "desktop": "Contained two-column composition; left column stacks copy and benefit row, right column centers product with controlled shadow or surface",
+          "tablet": "Retain a two-column product/copy relationship with a smaller product plane and a compact benefit row; stack in the mobile layout.",
+          "mobile": "product first with copy below; benefit row becomes a horizontal scroll or two-by-two grid"
+        }
+      }
+    },
+    {
+      "id": "hero.collection_rail",
+      "family": "hero",
+      "variant": "collection_rail",
+      "intent": "Introduce a collection through a visual rail of multiple products without defaulting to a generic grid.",
+      "use_when": [
+        "collection_launch",
+        "fashion",
+        "beauty_shades",
+        "seasonal_drop",
+        "catalog_discovery"
+      ],
+      "avoid_when": [
+        "one_hero_product",
+        "minimal_asset_library",
+        "long_form_brand_story"
+      ],
+      "slots": [
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "collection_items",
+        "primary_cta",
+        "secondary_cta",
+        "campaign_background"
+      ],
+      "layout": {
+        "desktop": "Text occupies upper-left band; product rail crosses lower half with 4–6 varied card crops; optional background anchors the palette",
+        "alignment": "left text, horizontal product rhythm",
+        "layer_order": [
+          "campaign_background",
+          "text",
+          "collection_items",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "copy remains above a snap-scrolling rail; first card is 78vw wide and shows continuation",
+        "mobile_item_count": "4–8 items, loaded progressively",
+        "tablet_behavior": "Keep the horizontal rail with three visible items and snap points; retain the text band above the rail and reduce overlap before mobile."
+      },
+      "style_hooks": [
+        "rail_alignment",
+        "card_ratio",
+        "item_overlap",
+        "background_treatment",
+        "copy_width",
+        "show_prices"
+      ],
+      "compatible_with": [
+        "category.icon_tiles",
+        "brand-story.founder_note",
+        "testimonials.rating_rail",
+        "newsletter.editorial_capture"
+      ],
+      "content_rules": {
+        "headline_max_words": 8,
+        "subheadline_max_words": 20,
+        "item_count": "4–8",
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "items": "Use a coherent image system across products, varying crops or colors only when the collection itself supports it.",
+        "background": "Keep background contextual to the collection season or material world.",
+        "prompt_frame": "[collection theme] campaign environment, [product category] products coherently styled, premium ecommerce art direction, open text space, no text"
+      },
+      "motion": "Rail scrolls only by user gesture; card hover may lift by 2px.",
+      "tags": [
+        "hero",
+        "collection",
+        "rail",
+        "merchandising",
+        "discovery"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "horizontal rail"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "discovery-oriented"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "headline band over a horizontal product rail",
+        "text_placement": "upper-left or upper-center HTML band",
+        "product_placement": "multiple products in a lower visual rail",
+        "background_requirements": "collection-season or material-world context when used",
+        "cta_placement": "within the text band before or beside the rail",
+        "overlay_behavior": "background tonal treatment only; cards remain readable",
+        "typography_behavior": "collection label plus concise headline and supporting line",
+        "breakpoints": {
+          "desktop": "Text occupies upper-left band; product rail crosses lower half with 4–6 varied card crops; optional background anchors the palette",
+          "tablet": "Keep the horizontal rail with three visible items and snap points; retain the text band above the rail and reduce overlap before mobile.",
+          "mobile": "copy remains above a snap-scrolling rail; first card is 78vw wide and shows continuation"
+        }
+      }
+    },
+    {
+      "id": "hero.editorial_masthead",
+      "family": "hero",
+      "variant": "editorial_masthead",
+      "intent": "Lead with a magazine-like visual statement for brands where worldview is as important as product.",
+      "use_when": [
+        "fashion_editorial",
+        "culture",
+        "design",
+        "premium_home",
+        "story_first"
+      ],
+      "avoid_when": [
+        "urgent_sale",
+        "dense_catalog",
+        "technical_comparison"
+      ],
+      "slots": [
+        "masthead_image",
+        "section_label",
+        "headline",
+        "dek",
+        "byline_or_proof",
+        "primary_cta",
+        "secondary_cta"
+      ],
+      "layout": {
+        "desktop": "Large media sits above a narrow editorial headline block; title may overlap the lower media edge by one baseline",
+        "alignment": "centered or left editorial alignment",
+        "layer_order": [
+          "masthead_image",
+          "headline",
+          "dek",
+          "byline_or_proof",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "remove overlap; media precedes title with fixed crop and controlled text measure",
+        "mobile_type": "heading.lg maximum",
+        "tablet_behavior": "Keep media above the editorial title with a reduced overlap depth; use a narrower text measure and remove overlap before mobile."
+      },
+      "style_hooks": [
+        "headline_alignment",
+        "overlap_depth",
+        "image_ratio",
+        "type_pairing",
+        "caption_visibility",
+        "surface_theme"
+      ],
+      "compatible_with": [
+        "editorial.longform_split",
+        "gallery.editorial_masonry",
+        "brand-story.timeline",
+        "cta.editorial_invite"
+      ],
+      "content_rules": {
+        "headline_max_words": 10,
+        "dek_max_words": 35,
+        "cta_count": "optional 1"
+      },
+      "image_guidance": {
+        "masthead": "Use a real campaign or contextual scene with strong composition and editorial restraint. The product should be present or logically implied by the scene.",
+        "prompt_frame": "editorial magazine masthead for [brand category], [actual product or use context], refined composition, tactile materials, controlled palette, no typography"
+      },
+      "motion": "No parallax by default; use a restrained fade-in for caption and actions.",
+      "tags": [
+        "hero",
+        "editorial",
+        "masthead",
+        "story_first",
+        "premium"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "editorial"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "design goods"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "editorial",
+        "story-first"
+      ],
+      "incompatible_with": [
+        "hero.dark_campaign_statement",
+        "hero.asymmetric_offset_product"
+      ],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "large masthead image followed by editorial title block",
+        "text_placement": "below or lightly overlapping media edge on desktop",
+        "product_placement": "product present in scene or logically implied by the real campaign context",
+        "background_requirements": "real campaign/editorial image with strong visual point of view",
+        "cta_placement": "after dek/byline when a CTA is needed",
+        "overlay_behavior": "no overlay by default; preserve image integrity",
+        "typography_behavior": "magazine-like title scale with narrow dek measure",
+        "breakpoints": {
+          "desktop": "Large media sits above a narrow editorial headline block; title may overlap the lower media edge by one baseline",
+          "tablet": "Keep media above the editorial title with a reduced overlap depth; use a narrower text measure and remove overlap before mobile.",
+          "mobile": "remove overlap; media precedes title with fixed crop and controlled text measure"
+        }
+      }
+    },
+    {
+      "id": "hero.dark_campaign_statement",
+      "family": "hero",
+      "variant": "dark_campaign_statement",
+      "intent": "Deliver a high-contrast campaign moment with decisive type and a single action.",
+      "use_when": [
+        "streetwear",
+        "nightlife",
+        "sport",
+        "limited_drop",
+        "dark_brand_system"
+      ],
+      "avoid_when": [
+        "soft_pastel_brand",
+        "accessibility_constrained_low_contrast_assets",
+        "quiet_wellness"
+      ],
+      "slots": [
+        "campaign_image",
+        "headline",
+        "subheadline",
+        "drop_label",
+        "primary_cta",
+        "secondary_cta",
+        "grain_overlay"
+      ],
+      "layout": {
+        "desktop": "Dark full-bleed visual with oversized type anchored to one edge; product or model crosses the opposing third",
+        "alignment": "edge-aligned, high contrast",
+        "layer_order": [
+          "campaign_image",
+          "dark_overlay",
+          "grain_overlay",
+          "headline",
+          "supporting_text",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "switch to portrait crop and copy-first stack if the subject competes with type; keep contrast at all times",
+        "mobile_copy": "solid dark panel or gradient only as needed for legibility",
+        "tablet_behavior": "Retain the high-contrast campaign field and edge-aligned type; reduce headline scale, preserve the product/model focal third, and strengthen the safe-area overlay only when required."
+      },
+      "style_hooks": [
+        "contrast",
+        "type_scale",
+        "grain_strength",
+        "subject_side",
+        "overlay_strength",
+        "cta_style"
+      ],
+      "compatible_with": [
+        "product-grid.dark_utility",
+        "promotion.sticker_campaign",
+        "gallery.lookbook_grid",
+        "trust.social_count"
+      ],
+      "content_rules": {
+        "headline_max_words": 5,
+        "subheadline_max_words": 15,
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "campaign": "Use actual product, model, or relevant environment with directional lighting and visible material detail; never a generic black texture.",
+        "prompt_frame": "dark high-contrast [category] campaign, actual [product/model/use context], directional flash or hard light, deep shadows, premium editorial energy, no text"
+      },
+      "motion": "One-time type reveal and subtle grain opacity; never loop a noisy effect.",
+      "tags": [
+        "hero",
+        "dark",
+        "campaign",
+        "high_contrast",
+        "drop"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "dark-surface capable"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "streetwear",
+        "sport"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "campaign-driven"
+      ],
+      "incompatible_with": [
+        "hero.editorial_product_still_life",
+        "hero.editorial_masthead"
+      ],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "dark full-bleed campaign field with opposing subject and type",
+        "text_placement": "edge-aligned HTML type in protected contrast zone",
+        "product_placement": "product/model in opposing focal third",
+        "background_requirements": "actual product, model, or relevant night/campaign context",
+        "cta_placement": "under short supporting line in copy zone",
+        "overlay_behavior": "dark tonal overlay and optional restrained grain for legibility, never a decorative glass panel",
+        "typography_behavior": "compressed bold type, short line count, high contrast",
+        "breakpoints": {
+          "desktop": "Dark full-bleed visual with oversized type anchored to one edge; product or model crosses the opposing third",
+          "tablet": "Retain the high-contrast campaign field and edge-aligned type; reduce headline scale, preserve the product/model focal third, and strengthen the safe-area overlay only when required.",
+          "mobile": "switch to portrait crop and copy-first stack if the subject competes with type; keep contrast at all times"
+        }
+      }
+    },
+    {
+      "id": "hero.ingredient_focus",
+      "family": "hero",
+      "variant": "ingredient_focus",
+      "intent": "Make a distinctive ingredient, material, or technical mechanism the lead visual and message.",
+      "use_when": [
+        "skincare",
+        "food",
+        "supplements",
+        "material_innovation",
+        "science_backed"
+      ],
+      "avoid_when": [
+        "pure_fashion",
+        "brand_without_differentiating_fact",
+        "campaign_only"
+      ],
+      "slots": [
+        "ingredient_image",
+        "product_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "proof_note",
+        "primary_cta"
+      ],
+      "layout": {
+        "desktop": "Three-zone composition: ingredient/context image, centered product, and copy in a narrow column; lines or labels may connect zones",
+        "alignment": "asymmetric educational composition",
+        "layer_order": [
+          "context_image",
+          "product_image",
+          "connector_graphic",
+          "text",
+          "proof_note",
+          "action"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "context and product become stacked images with connector graphic removed; proof note follows copy",
+        "mobile_order": [
+          "ingredient_image",
+          "product_image",
+          "text",
+          "proof_note",
+          "action"
+        ],
+        "tablet_behavior": "Keep the contextual image, product, and copy as a three-zone composition when readable; collapse the connector graphic and reduce to two zones before mobile."
+      },
+      "style_hooks": [
+        "diagram_visibility",
+        "product_scale",
+        "media_ratio",
+        "copy_alignment",
+        "surface_theme",
+        "accent_color"
+      ],
+      "compatible_with": [
+        "feature-benefits.ingredient_index",
+        "featured-product.proof_led",
+        "trust.certification_row",
+        "editorial.longform_split"
+      ],
+      "content_rules": {
+        "headline_max_words": 8,
+        "subheadline_max_words": 30,
+        "proof_note_max_words": 12,
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "ingredient": "Show the actual ingredient/material or a credible contextual representation tied to the product; avoid microscopic fantasy imagery unless scientifically accurate and useful.",
+        "product": "Use a clean, truthful product image with consistent light direction.",
+        "prompt_frame": "art-directed [ingredient/material] and [actual product] composition, tactile macro detail, [brand palette], premium scientific editorial photography, no text"
+      },
+      "motion": "Connector line draws once only when it improves comprehension; respect reduced motion.",
+      "tags": [
+        "hero",
+        "ingredient",
+        "science",
+        "education",
+        "product_plus_context"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail",
+        "skincare",
+        "supplements"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "evidence-led"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "three-zone ingredient/context, product, and copy composition",
+        "text_placement": "narrow copy column connected to the visual system",
+        "product_placement": "center or foreground product with truthful silhouette",
+        "background_requirements": "actual ingredient/material or credible category context tied to the product",
+        "cta_placement": "after proof note in copy column",
+        "overlay_behavior": "connector lines or labels remain HTML/graphics, not baked into imagery",
+        "typography_behavior": "educational hierarchy with numbered or labeled proof",
+        "breakpoints": {
+          "desktop": "Three-zone composition: ingredient/context image, centered product, and copy in a narrow column; lines or labels may connect zones",
+          "tablet": "Keep the contextual image, product, and copy as a three-zone composition when readable; collapse the connector graphic and reduce to two zones before mobile.",
+          "mobile": "context and product become stacked images with connector graphic removed; proof note follows copy"
+        }
+      }
+    },
+    {
+      "id": "hero.ugc_collage",
+      "family": "hero",
+      "variant": "ugc_collage",
+      "intent": "Lead with lived-in social evidence for brands whose credibility comes from community and use.",
+      "use_when": [
+        "community_led",
+        "beauty",
+        "food",
+        "creator_brand",
+        "ugc_available"
+      ],
+      "avoid_when": [
+        "heritage_luxury",
+        "no_ugc_assets",
+        "regulated_claims_without_review_moderation"
+      ],
+      "slots": [
+        "ugc_tiles",
+        "product_image",
+        "eyebrow",
+        "headline",
+        "subheadline",
+        "review_count",
+        "primary_cta"
+      ],
+      "layout": {
+        "desktop": "Copy occupies a stable column while 3–5 UGC tiles form a collage around a product or review pull quote",
+        "alignment": "copy left, collage right",
+        "layer_order": [
+          "ugc_tiles",
+          "product_image",
+          "text",
+          "review_count",
+          "action"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "show one lead UGC tile plus a horizontal rail of supporting tiles; copy remains a separate HTML block",
+        "privacy": "include creator permissions and fallback crop behavior",
+        "tablet_behavior": "Reduce the collage to two lead tiles plus a controlled rail; keep the HTML copy column separate and preserve permission/state labels."
+      },
+      "style_hooks": [
+        "tile_rotation",
+        "border_treatment",
+        "collage_density",
+        "copy_width",
+        "product_visibility",
+        "surface_theme"
+      ],
+      "compatible_with": [
+        "testimonials.ugc_rail",
+        "product-grid.bestseller_focus",
+        "trust.proof_strip",
+        "cta.community_invite"
+      ],
+      "content_rules": {
+        "headline_max_words": 8,
+        "subheadline_max_words": 22,
+        "tile_count": "3–6",
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "ugc": "Use authentic, permissioned customer imagery with varied but coherent lighting; do not fabricate testimonials or imply unverified outcomes.",
+        "prompt_frame": "Not for generated UGC: use supplied, permissioned customer assets. If unavailable, substitute a product-in-use campaign scene and label it accurately."
+      },
+      "motion": "Tiles can settle into place on entry; no random rotation after load.",
+      "tags": [
+        "hero",
+        "ugc",
+        "community",
+        "social_proof",
+        "collage"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware",
+        "community-led"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "community-led"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "copy column plus permissioned UGC collage and product cue",
+        "text_placement": "stable HTML copy column separate from UGC tiles",
+        "product_placement": "product appears as a clear anchor among or beside UGC",
+        "background_requirements": "permissioned real customer imagery or truthful campaign fallback",
+        "cta_placement": "below social proof/review count",
+        "overlay_behavior": "labels may sit over tiles only when accessible text fallback remains",
+        "typography_behavior": "short direct headline with community proof line",
+        "breakpoints": {
+          "desktop": "Copy occupies a stable column while 3–5 UGC tiles form a collage around a product or review pull quote",
+          "tablet": "Reduce the collage to two lead tiles plus a controlled rail; keep the HTML copy column separate and preserve permission/state labels.",
+          "mobile": "show one lead UGC tile plus a horizontal rail of supporting tiles; copy remains a separate HTML block"
+        }
+      }
+    },
+    {
+      "id": "hero.category_portal",
+      "family": "hero",
+      "variant": "category_portal",
+      "intent": "Orient visitors into a multi-category store through distinct visual entry points.",
+      "use_when": [
+        "multi_category",
+        "home",
+        "fashion",
+        "marketplace",
+        "discovery_priority"
+      ],
+      "avoid_when": [
+        "single_sku",
+        "focused_collection_launch",
+        "short_campaign_landing_page"
+      ],
+      "slots": [
+        "headline",
+        "subheadline",
+        "category_tiles",
+        "primary_cta",
+        "secondary_cta"
+      ],
+      "layout": {
+        "desktop": "Editorial title block above 2–4 large category portals with distinct crop and label treatment",
+        "alignment": "title centered or left; portals form an image-led matrix",
+        "layer_order": [
+          "category_images",
+          "tints_if_needed",
+          "labels",
+          "title",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "category portals become a vertical list or snap rail; label remains HTML and always readable",
+        "item_count": "2–4 primary categories",
+        "tablet_behavior": "Use a two-column portal matrix with readable HTML labels; keep the title above the matrix and move to a rail or stack on mobile."
+      },
+      "style_hooks": [
+        "portal_ratios",
+        "label_position",
+        "matrix_pattern",
+        "surface_theme",
+        "image_treatment",
+        "type_system"
+      ],
+      "compatible_with": [
+        "product-grid.editorial_rail",
+        "collection.lookbook_tiles",
+        "brand-story.founder_note",
+        "newsletter.split_capture"
+      ],
+      "content_rules": {
+        "headline_max_words": 8,
+        "subheadline_max_words": 24,
+        "category_count": "2–4",
+        "cta_count": "optional 1"
+      },
+      "image_guidance": {
+        "category_images": "Each category image should show the category's actual products or a recognizable use context; vary scenes, not just color filters.",
+        "prompt_frame": "editorial [category] scene for [brand], actual product class visible, distinct context from sibling categories, premium commercial photography, no text"
+      },
+      "motion": "Portal image scale on hover only; labels do not move independently.",
+      "tags": [
+        "hero",
+        "category",
+        "portal",
+        "discovery",
+        "multi_category"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "discovery-oriented"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "title block above a category portal matrix",
+        "text_placement": "HTML title and intro above portal tiles",
+        "product_placement": "category products or recognizable category scenes inside each tile",
+        "background_requirements": "distinct category-specific product/use context for each portal",
+        "cta_placement": "optional view-all action in heading band",
+        "overlay_behavior": "light tonal correction for labels only; labels remain HTML",
+        "typography_behavior": "clear category labels with restrained headline",
+        "breakpoints": {
+          "desktop": "Editorial title block above 2–4 large category portals with distinct crop and label treatment",
+          "tablet": "Use a two-column portal matrix with readable HTML labels; keep the title above the matrix and move to a rail or stack on mobile.",
+          "mobile": "category portals become a vertical list or snap rail; label remains HTML and always readable"
+        }
+      }
+    },
+    {
+      "id": "hero.launch_countdown",
+      "family": "hero",
+      "variant": "launch_countdown",
+      "intent": "Focus attention on a time-bound launch while preserving product and brand clarity.",
+      "use_when": [
+        "limited_drop",
+        "preorder",
+        "seasonal_launch",
+        "event_based",
+        "urgency"
+      ],
+      "avoid_when": [
+        "evergreen_brand_home",
+        "quiet_editorial",
+        "no_real_deadline"
+      ],
+      "slots": [
+        "campaign_image",
+        "drop_label",
+        "headline",
+        "subheadline",
+        "countdown",
+        "product_image",
+        "primary_cta",
+        "secondary_cta"
+      ],
+      "layout": {
+        "desktop": "Campaign image and product compose a strong field; countdown is a contained utility row below the headline",
+        "alignment": "copy-led with measurable urgency",
+        "layer_order": [
+          "campaign_image",
+          "product_image",
+          "text",
+          "countdown",
+          "actions"
+        ]
+      },
+      "responsive": {
+        "mobile_behavior": "countdown becomes a full-width row under headline; deadline is rendered as accessible text, not color alone",
+        "fallback": "When deadline expires, replace countdown with availability or waitlist state",
+        "tablet_behavior": "Retain the campaign/product relationship and place the countdown directly beneath the copy; keep deadline state and primary action visible without pulsing."
+      },
+      "style_hooks": [
+        "urgency_level",
+        "countdown_style",
+        "product_scale",
+        "image_crop",
+        "surface_theme",
+        "cta_style"
+      ],
+      "compatible_with": [
+        "promotion.sticker_campaign",
+        "product-grid.drop_focus",
+        "trust.proof_strip",
+        "newsletter.waitlist_capture"
+      ],
+      "content_rules": {
+        "headline_max_words": 7,
+        "subheadline_max_words": 20,
+        "countdown_required": true,
+        "cta_count": "1 primary"
+      },
+      "image_guidance": {
+        "campaign": "Use the actual launch product or credible campaign context; do not use a generic clock, abstract gradient, or false scarcity visual.",
+        "prompt_frame": "launch campaign for [actual product], [season/event context], premium ecommerce photography, clear product silhouette, intentional space for copy, no text"
+      },
+      "motion": "Countdown updates as data; no attention-seeking pulsing. Use a single state change when the deadline passes.",
+      "tags": [
+        "hero",
+        "launch",
+        "urgency",
+        "countdown",
+        "conversion"
+      ],
+      "visual_style": [
+        "campaign-led",
+        "high-hierarchy",
+        "product-aware"
+      ],
+      "industries": [
+        "fashion",
+        "beauty",
+        "home",
+        "food",
+        "wellness",
+        "general retail"
+      ],
+      "brand_personalities": [
+        "confident",
+        "distinctive",
+        "focused",
+        "conversion-aware"
+      ],
+      "incompatible_with": [],
+      "conflict_scope": "avoid_adjacent_or_same_primary_role",
+      "hero_architecture": {
+        "structure": "campaign/product hero with utility countdown row",
+        "text_placement": "copy-led zone adjacent to campaign/product visual",
+        "product_placement": "actual launch product or truthful campaign subject",
+        "background_requirements": "real launch context tied to the actual product and deadline",
+        "cta_placement": "after countdown/status, before fine print",
+        "overlay_behavior": "tonal correction only; never use pulsing or decorative urgency overlays",
+        "typography_behavior": "short launch headline with explicit status hierarchy",
+        "breakpoints": {
+          "desktop": "Campaign image and product compose a strong field; countdown is a contained utility row below the headline",
+          "tablet": "Retain the campaign/product relationship and place the countdown directly beneath the copy; keep deadline state and primary action visible without pulsing.",
+          "mobile": "countdown becomes a full-width row under headline; deadline is rendered as accessible text, not color alone"
+        }
+      }
+    }
+  ]
+}

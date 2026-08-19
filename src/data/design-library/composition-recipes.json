@@ -1,0 +1,185 @@
+{
+  "version": "1.0.0",
+  "selection_note": "Recipes are weighted starting points and test cases, not immutable templates. The planner may replace any node when brand signals, asset availability, page goal, or repetition constraints require it.",
+  "recipes": [
+    {
+      "id": "recipe.luxury_editorial_launch",
+      "intent": "Luxury, calm, image-led collection launch with premium product authority.",
+      "signals": ["luxury", "editorial", "beauty", "heritage", "low_visual_energy", "product_plus_context", "watch", "watches", "timepiece", "jewelry", "craftsmanship"],
+      "recommended_theme": "editorial_serif_sans",
+      "nodes": [
+        { "role": "orient", "component_id": "announcement.utility_single" },
+        { "role": "orient", "component_id": "header.wordmark_center" },
+        { "role": "orient", "component_id": "hero.editorial_product_still_life" },
+        { "role": "merchandise", "component_id": "product-grid.luxury_gallery" },
+        { "role": "differentiate", "component_id": "brand-story.split_art-directed" },
+        { "role": "educate", "component_id": "feature-benefits.ingredient_index" },
+        { "role": "engage", "component_id": "gallery.editorial_masonry" },
+        { "role": "reassure", "component_id": "testimonials.quote_wall" },
+        { "role": "convert", "component_id": "cta.premium_invitation" },
+        { "role": "retain", "component_id": "newsletter.editorial_capture" },
+        { "role": "retain", "component_id": "footer.editorial_columns" }
+      ],
+      "rhythm": ["full_bleed", "contained_grid", "split", "indexed_list", "masonry", "quote_wall", "calm_cta"],
+      "substitutions": { "hero": ["hero.split_context_product", "hero.editorial_masthead", "hero.ingredient_focus"], "product_grid": ["product-grid.bestseller_focus", "product-grid.swatch_gallery"], "trust": ["trust.certification_row", "trust.proof_strip"] },
+      "avoid": ["hero.dark_campaign_statement", "promotion.sticker_campaign", "three_dense_grids_in_sequence"]
+    },
+    {
+      "id": "recipe.gen_z_drop_energy",
+      "intent": "Dark, high-energy launch with bold type, product utility, community, and urgency.",
+      "signals": ["streetwear", "high_visual_energy", "dark_brand_system", "limited_drop", "community_led"],
+      "recommended_theme": "compressed_utility",
+      "nodes": [
+        { "role": "orient", "component_id": "announcement.rail_rotating" },
+        { "role": "orient", "component_id": "header.utility_split" },
+        { "role": "orient", "component_id": "hero.asymmetric_offset_product" },
+        { "role": "merchandise", "component_id": "product-grid.bold_rail" },
+        { "role": "engage", "component_id": "promotion.sticker_campaign" },
+        { "role": "engage", "component_id": "gallery.lookbook_grid" },
+        { "role": "reassure", "component_id": "trust.social_count" },
+        { "role": "reassure", "component_id": "testimonials.ugc_rail" },
+        { "role": "convert", "component_id": "cta.strong_statement" },
+        { "role": "retain", "component_id": "footer.community_ribbon" }
+      ],
+      "rhythm": ["dark_full_bleed", "horizontal_rail", "high_contrast_strip", "lookbook", "community_proof", "strong_statement"],
+      "substitutions": { "hero": ["hero.dark_campaign_statement", "hero.fullbleed_copy_safe_area", "hero.launch_countdown"], "product_grid": ["product-grid.bestseller_focus"], "social_proof": ["testimonials.rating_rail", "hero.ugc_collage"] },
+      "avoid": ["hero.editorial_product_still_life", "airy_serif_body_copy", "long_unbroken_text_sections"]
+    },
+    {
+      "id": "recipe.science_backed_skincare",
+      "intent": "Product-first skincare page balancing proof, ingredient education, and routine conversion.",
+      "signals": ["science_backed", "skincare", "benefit_led", "women_20_40", "premium"],
+      "recommended_theme": "modern_grotesk",
+      "nodes": [
+        { "role": "orient", "component_id": "header.wordmark_center" },
+        { "role": "orient", "component_id": "hero.ingredient_focus" },
+        { "role": "reassure", "component_id": "trust.certification_row" },
+        { "role": "merchandise", "component_id": "product-grid.bestseller_focus" },
+        { "role": "educate", "component_id": "feature-benefits.ingredient_index" },
+        { "role": "educate", "component_id": "featured-product.routine_builder" },
+        { "role": "engage", "component_id": "editorial.longform_split" },
+        { "role": "reassure", "component_id": "testimonials.rating_rail" },
+        { "role": "convert", "component_id": "cta.urgency_panel" },
+        { "role": "retain", "component_id": "newsletter.split_capture" },
+        { "role": "retain", "component_id": "footer.utility_rich" }
+      ],
+      "rhythm": ["ingredient_visual", "proof_row", "featured_grid", "indexed_education", "guided_routine", "longform", "ratings", "urgency"],
+      "substitutions": { "hero": ["hero.product_stack_vertical", "hero.editorial_product_still_life", "hero.split_context_product"], "education": ["category.material_index", "feature-benefits.numbered_columns"], "trust": ["trust.proof_strip", "testimonials.quote_wall"] },
+      "avoid": ["unverified claims", "generic laboratory imagery", "stacking more than two dense educational sections"]
+    },
+    {
+      "id": "recipe.approachable_home_craft",
+      "intent": "Warm, tactile home or craft store balancing discovery, maker story, and practical reassurance.",
+      "signals": ["home", "craft", "approachable_premium", "material_story", "medium_visual_energy"],
+      "recommended_theme": "soft_humanist",
+      "nodes": [
+        { "role": "orient", "component_id": "announcement.utility_single" },
+        { "role": "orient", "component_id": "header.utility_split" },
+        { "role": "orient", "component_id": "hero.split_context_product" },
+        { "role": "merchandise", "component_id": "category.material_index" },
+        { "role": "merchandise", "component_id": "product-grid.luxury_gallery" },
+        { "role": "differentiate", "component_id": "brand-story.founder_note" },
+        { "role": "educate", "component_id": "feature-benefits.numbered_columns" },
+        { "role": "engage", "component_id": "gallery.editorial_masonry" },
+        { "role": "reassure", "component_id": "trust.proof_strip" },
+        { "role": "convert", "component_id": "cta.premium_invitation" },
+        { "role": "retain", "component_id": "newsletter.editorial_capture" },
+        { "role": "retain", "component_id": "footer.utility_rich" }
+      ],
+      "rhythm": ["split_context", "index", "gallery", "maker_note", "steps", "masonry", "proof", "invitation"],
+      "substitutions": { "hero": ["hero.category_portal", "hero.editorial_masthead"], "grid": ["product-grid.bundle_collection", "collection.lookbook_tiles"], "trust": ["trust.certification_row", "testimonials.quote_wall"] },
+      "avoid": ["dark high-energy campaign treatment", "excessive pill controls", "generic stock lifestyle imagery"]
+    },
+    {
+      "id": "recipe.fast_catalog_discovery",
+      "intent": "High-utility catalog home or collection flow optimized for search, filtering, and quick purchase.",
+      "signals": ["large_catalog", "multi_category", "search_priority", "repeat_purchase", "utility_first"],
+      "recommended_theme": "modern_grotesk",
+      "nodes": [
+        { "role": "orient", "component_id": "announcement.utility_single" },
+        { "role": "orient", "component_id": "header.utility_split" },
+        { "role": "orient", "component_id": "hero.category_portal" },
+        { "role": "merchandise", "component_id": "category.icon_tiles" },
+        { "role": "merchandise", "component_id": "product-grid.utility_dense" },
+        { "role": "reassure", "component_id": "trust.proof_strip" },
+        { "role": "engage", "component_id": "promotion.inline_offer" },
+        { "role": "convert", "component_id": "cta.urgency_panel" },
+        { "role": "retain", "component_id": "newsletter.split_capture" },
+        { "role": "retain", "component_id": "footer.utility_rich" }
+      ],
+      "rhythm": ["portal", "compact_taxonomy", "dense_grid", "proof", "inline_offer", "urgency"],
+      "substitutions": { "hero": ["hero.collection_rail", "hero.product_stack_vertical"], "grid": ["product-grid.swatch_gallery", "product-grid.bestseller_focus"], "cta": ["cta.community_invite", "cta.premium_invitation"] },
+      "avoid": ["three separate filter systems", "large decorative collage before products", "hidden search access"]
+    },
+    {
+      "id": "recipe.community_beauty",
+      "intent": "Community-led beauty or wellness page that pairs UGC with product discovery and repeat engagement.",
+      "signals": ["community_led", "ugc_available", "beauty", "creator_brand", "social_proof"],
+      "recommended_theme": "modern_grotesk",
+      "nodes": [
+        { "role": "orient", "component_id": "header.wordmark_center" },
+        { "role": "orient", "component_id": "hero.ugc_collage" },
+        { "role": "reassure", "component_id": "testimonials.rating_rail" },
+        { "role": "merchandise", "component_id": "product-grid.bestseller_focus" },
+        { "role": "engage", "component_id": "gallery.lookbook_grid" },
+        { "role": "differentiate", "component_id": "brand-story.founder_note" },
+        { "role": "reassure", "component_id": "trust.social_count" },
+        { "role": "engage", "component_id": "testimonials.ugc_rail" },
+        { "role": "convert", "component_id": "cta.community_invite" },
+        { "role": "retain", "component_id": "newsletter.editorial_capture" },
+        { "role": "retain", "component_id": "footer.community_ribbon" }
+      ],
+      "rhythm": ["ugc_collage", "ratings", "featured_merchandising", "shoppable_lookbook", "founder_note", "community_count", "ugc_rail", "community_cta"],
+      "substitutions": { "hero": ["hero.split_context_product", "hero.collection_rail"], "proof": ["testimonials.quote_wall", "trust.proof_strip"], "cta": ["cta.premium_invitation", "newsletter.split_capture"] },
+      "avoid": ["fabricated UGC", "unverified outcome claims", "auto-rotating social feed"]
+    },
+    {
+      "id": "recipe.single_product_conversion",
+      "intent": "Single-product or focused landing page with clear proof, purchase, and post-purchase retention.",
+      "signals": ["single_sku", "new_product", "direct_response", "benefit_led", "launch"],
+      "recommended_theme": "modern_grotesk",
+      "nodes": [
+        { "role": "orient", "component_id": "announcement.utility_single" },
+        { "role": "orient", "component_id": "header.wordmark_center" },
+        { "role": "orient", "component_id": "hero.product_stack_vertical" },
+        { "role": "reassure", "component_id": "trust.proof_strip" },
+        { "role": "educate", "component_id": "feature-benefits.numbered_columns" },
+        { "role": "educate", "component_id": "featured-product.proof_led" },
+        { "role": "engage", "component_id": "editorial.longform_split" },
+        { "role": "reassure", "component_id": "testimonials.quote_wall" },
+        { "role": "convert", "component_id": "cta.urgency_panel" },
+        { "role": "retain", "component_id": "newsletter.waitlist_capture" },
+        { "role": "retain", "component_id": "footer.utility_rich" }
+      ],
+      "rhythm": ["product_stack", "proof", "steps", "featured_detail", "longform", "quotes", "urgency", "waitlist"],
+      "substitutions": { "hero": ["hero.ingredient_focus", "hero.split_context_product", "hero.launch_countdown"], "education": ["feature-benefits.ingredient_index", "editorial.longform_split"], "trust": ["trust.certification_row", "testimonials.rating_rail"] },
+      "avoid": ["burying purchase action below long copy", "false scarcity", "generic decorative imagery"]
+    },
+    {
+      "id": "recipe.editorial_campaign",
+      "intent": "Image-led campaign or journal landing page that converts through story and selective merchandising.",
+      "signals": ["campaign", "editorial", "fashion", "design", "story_first"],
+      "recommended_theme": "editorial_serif_sans",
+      "nodes": [
+        { "role": "orient", "component_id": "header.wordmark_center" },
+        { "role": "orient", "component_id": "hero.editorial_masthead" },
+        { "role": "differentiate", "component_id": "editorial.longform_split" },
+        { "role": "engage", "component_id": "gallery.editorial_masonry" },
+        { "role": "merchandise", "component_id": "collection.lookbook_tiles" },
+        { "role": "reassure", "component_id": "testimonials.quote_wall" },
+        { "role": "differentiate", "component_id": "brand-story.timeline" },
+        { "role": "convert", "component_id": "cta.editorial_invite" },
+        { "role": "retain", "component_id": "newsletter.editorial_capture" },
+        { "role": "retain", "component_id": "footer.editorial_columns" }
+      ],
+      "rhythm": ["masthead", "longform", "masonry", "lookbook", "quotes", "timeline", "editorial_invite"],
+      "substitutions": { "hero": ["hero.fullbleed_copy_safe_area", "hero.editorial_product_still_life"], "merchandising": ["product-grid.luxury_gallery", "product-grid.bold_rail"], "closing": ["cta.premium_invitation", "cta.strong_statement"] },
+      "avoid": ["dense catalog utility before story", "repetitive full-bleed images", "long text with no visual interruption"]
+    }
+  ],
+  "shared_primitives": {
+    "primary_actions": ["button.solid_primary", "button.outline_quiet", "button.underline_secondary"],
+    "commerce_controls": ["commerce-pattern.variant_selector"],
+    "catalog_navigation": ["navigation.mega_menu_editorial"]
+  }
+}
