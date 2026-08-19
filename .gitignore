@@ -59,3 +59,4 @@ server.log
 
 # Skills directory
 /skills/tool-results/
+test-*.png\ntest-results/\nvlm-result.json\n.zscripts/dev.pid
