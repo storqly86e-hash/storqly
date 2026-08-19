@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The image shows a **plain white background** with a single **dark gray or black square icon** centered in the middle. \n\nInside the square is a **light gray or white stylized letter \"Z\"**. The icon has **rounded corners**, and the \"Z\" appears to be in a bold, sans-serif font style.\n\nThat's the complete visual content - a minimalist logo or icon featuring a Z inside a rounded square, displayed against a solid white/blank background.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787147516,
+  "id": "20260819215155e6d3bfaebe664892",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260819215155e6d3bfaebe664892",
+  "usage": {
+    "completion_tokens": 98,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 899,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 997
+  }
+}
