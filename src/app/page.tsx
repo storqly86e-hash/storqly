@@ -558,12 +558,13 @@ function LandingPage() {
                 if (data._isFallback) {
                   // Differentiate "all providers down" from other fallback reasons
                   const reason = data._fallbackReason || 'AI generation failed'
+                  console.error('[Storqly] Generation returned fallback. Reason:', reason)
                   const isProviderFailure = reason.includes('All') || reason.includes('429') || reason.includes('403') || reason.includes('404') || reason.includes('providers failed')
                   toast.warning(
                     isProviderFailure
                       ? 'All AI providers are currently unavailable. You are viewing a starter template. Try again later.'
-                      : 'AI service returned invalid data — showing starter template. Try again.',
-                    { duration: 8000 }
+                      : `AI generation failed: ${reason.substring(0, 120)}`,
+                    { duration: 10000 }
                   )
                   setStoreWithFallback(data.store, true, reason)
                 } else {
@@ -1195,7 +1196,7 @@ function FallbackBanner() {
   } else if (isProviderDown) {
     bannerMessage = 'All AI providers are currently unavailable — you are viewing a starter template.'
   } else {
-    bannerMessage = 'AI couldn\'t generate a custom store — you\'re viewing a starter template.'
+    bannerMessage = `AI couldn\'t generate a custom store — you\'re viewing a starter template. Reason: ${fallbackReason}`
   }
 
   return (

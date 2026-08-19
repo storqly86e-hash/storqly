@@ -148,6 +148,9 @@ interface StoreEditorState {
   removeCustomPage: (pageId: string) => void;
   renameCustomPage: (pageId: string, name: string) => void;
 
+  // Set store with fallback flag (used when generation fails)
+  setStoreWithFallback: (store: Store, isFallback: boolean, reason: string) => void;
+
   // Whether the current store is a fallback (not AI-generated)
   isFallbackStore: boolean;
   fallbackReason: string;
