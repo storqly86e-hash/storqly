@@ -12,6 +12,7 @@
 
 import { NextRequest } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
+import { getProviders } from '@/lib/ai-providers';
 import { normalizeStore, normalizeProducts } from '@/lib/normalize-store';
 import { sanitizePrompt, extractProductCount } from '@/lib/sanitize-prompt';
 import type { Store, StoreProduct } from '@/lib/store-schema';
@@ -471,6 +472,10 @@ export async function POST(req: NextRequest) {
         // ═══════════════════════════════════════════════════════════
         // PHASE 1: Store Structure + First Batch of Products
         // ═══════════════════════════════════════════════════════════
+        // Log provider chain for diagnostics (visible in Render logs)
+        const providerChain = getProviders();
+        log(`[Store Generate] Provider chain: ${providerChain.map(p => p.name).join(' → ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
+
         send('progress', { stage: 'generating', message: 'Generating your store...' });
         log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
 
@@ -490,12 +495,15 @@ export async function POST(req: NextRequest) {
 
         const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
 
+        const systemPrompt = libraryCtx
+          ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
+          : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
+        log(`[Store Generate] System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
+
         const phase1Result = await executeAI('store-generation', [
           { role: 'user', content: userMessage },
         ], {
-          systemPrompt: libraryCtx
-            ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
-            : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt),
+          systemPrompt,
           temperature: 0.6,
           timeout: 40_000,
           maxRetries: 3,

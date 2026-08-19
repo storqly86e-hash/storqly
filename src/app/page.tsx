@@ -548,15 +548,13 @@ function LandingPage() {
                 resolved = true
 
                 if (data._isFallback) {
-                  // Differentiate "all providers down" from other fallback reasons
+                  // Always show the ACTUAL error reason — never hide it behind a generic message.
+                  // The exact error (429/401/timeout/model-not-found) is needed for diagnosis.
                   const reason = data._fallbackReason || 'AI generation failed'
                   console.error('[Storqly] Generation returned fallback. Reason:', reason)
-                  const isProviderFailure = reason.includes('All') || reason.includes('429') || reason.includes('403') || reason.includes('404') || reason.includes('providers failed')
                   toast.warning(
-                    isProviderFailure
-                      ? 'All AI providers are currently unavailable. You are viewing a starter template. Try again later.'
-                      : `AI generation failed: ${reason.substring(0, 120)}`,
-                    { duration: 10000 }
+                    `AI generation failed: ${reason.substring(0, 200)}`,
+                    { duration: 15000 }
                   )
                   setStoreWithFallback(data.store, true, reason)
                 } else {
