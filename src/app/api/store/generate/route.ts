@@ -35,7 +35,129 @@ const TOTAL_TIME_BUDGET_MS = 300_000; // 5 min total
 const MIN_REMAINING_MS = 20_000;      // Abort remaining batches if < 20s left
 
 // ─── Phase 1 System Prompt (full store + first batch of products) ─────
-function buildPhase1SystemPrompt(productCount: number): string {
+// CRITICAL: heroImages MUST use REAL Unsplash URLs from the curated set below.
+// The LLM cannot generate valid Unsplash photo IDs. Providing real URLs is essential.
+// Each category has 3+ URLs — the LLM picks the best ones for the store theme.
+
+const REAL_UNSPLASH_HERO_URLS = {
+  'skincare/beauty/spa': [
+    'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=1400',
+    'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1400',
+    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=1400',
+    'https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=1400',
+    'https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=1400',
+    'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=1400',
+  ],
+  'fashion/clothing/apparel': [
+    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1400',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1400',
+    'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1400',
+    'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=1400',
+    'https://images.unsplash.com/photo-1558171813-4c088753af8f?w=1400',
+  ],
+  'jewelry/watches/accessories': [
+    'https://images.unsplash.com/photo-1515562141589-67f0d569b6c3?w=1400',
+    'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=1400',
+    'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=1400',
+    'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=1400',
+  ],
+  'food/coffee/bakery': [
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
+    'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=1400',
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
+    'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=1400',
+  ],
+  'furniture/home/decor': [
+    'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1400',
+    'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1400',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1400',
+  ],
+  'electronics/tech/gadgets': [
+    'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=1400',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400',
+    'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1400',
+  ],
+  'fitness/sports/outdoor': [
+    'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=1400',
+    'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=1400',
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1400',
+  ],
+  'general/lifestyle': [
+    'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1400',
+    'https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?w=1400',
+    'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1400',
+  ],
+};
+
+const REAL_UNSPLASH_PRODUCT_URLS = {
+  'skincare/beauty': [
+    'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=600',
+    'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600',
+    'https://images.unsplash.com/photo-1612817288484-6f916006741a?w=600',
+    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=600',
+    'https://images.unsplash.com/photo-1608248543803-ba4f8c70ae0b?w=600',
+    'https://images.unsplash.com/photo-1611930022073-b7a4ba5fcccd?w=600',
+  ],
+  'fashion/clothing': [
+    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600',
+    'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=600',
+    'https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=600',
+    'https://images.unsplash.com/photo-1434389677669-e08b4cda3a01?w=600',
+  ],
+  'jewelry/accessories': [
+    'https://images.unsplash.com/photo-1515562141589-67f0d569b6c3?w=600',
+    'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=600',
+    'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=600',
+    'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=600',
+  ],
+  'food/coffee': [
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
+    'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=600',
+    'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=600',
+  ],
+  'furniture/home': [
+    'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=600',
+    'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600',
+  ],
+  'electronics/tech': [
+    'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?w=600',
+    'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=600',
+  ],
+  'fitness/sports': [
+    'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?w=600',
+    'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600',
+    'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600',
+  ],
+  'general': [
+    'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600',
+    'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',
+    'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
+  ],
+};
+
+function pickCategory(keys: string[]): string {
+  const lower = keys.join(' ').toLowerCase();
+  for (const [cat, ] of Object.entries(REAL_UNSPLASH_HERO_URLS)) {
+    const catParts = cat.split('/');
+    if (catParts.some(p => lower.includes(p))) return cat;
+  }
+  return 'general/lifestyle';
+}
+
+function formatUrlsForPrompt(urls: string[]): string {
+  return urls.map((u, i) => `  URL ${i+1}: ${u}`).join('\n');
+}
+
+function buildPhase1SystemPrompt(productCount: number, userPrompt: string): string {
+  // Detect store category from user prompt for curated URLs
+  const promptWords = userPrompt.toLowerCase();
+  const category = pickCategory([promptWords]);
+  const heroUrls = REAL_UNSPLASH_HERO_URLS[category] || REAL_UNSPLASH_HERO_URLS['general/lifestyle'];
+  const productUrls = REAL_UNSPLASH_PRODUCT_URLS[category] || REAL_UNSPLASH_PRODUCT_URLS['general'];
+
   return `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
 
 FORMAT RULES:
@@ -47,49 +169,62 @@ FORMAT RULES:
 SCHEMA (compact):
 {"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","announcementText":"<short promo like Free shipping on orders over $50 or New drops every Friday>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
 
-SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md","paddingX":"md","maxWidth":"lg","borderRadius":"none"},"visible":true}
-HERO STYLE: For the hero section ONLY, add "backgroundImage":"https://images.unsplash.com/photo-<lifestyle-id>?w=1400","overlay":true to style. Use a real Unsplash photo ID that matches the store theme (lifestyle/setting photo, NOT a product photo).
+SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"lg","paddingX":"md","maxWidth":"xl","borderRadius":"none"},"visible":true}
 
-SECTION CONTENTS (use ONLY these 4):
-- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>", layout: "<one of: split-left, split-right, product-first, text-first, minimal>", visualPriority: "<product or headline or balanced>", backgroundTreatment: "<soft or editorial or dramatic>", vignette: true, heroImages: [{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"},{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"},{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"}], carouselEnabled: true, carouselInterval: 5}
+═══ IMAGE URLS — USE THESE EXACT URLS ═══
+You MUST use these real, working image URLs. Do NOT invent or guess photo IDs.
+Pick the 3 most relevant URLs from the appropriate category for heroImages.
+For products, pick 1 URL per product from the product list, cycling through them.
 
-HERO LAYOUT RULES (choose the BEST layout for the store type):
+HERO BACKGROUND IMAGES (pick 3 for heroImages, use 1st also as style.backgroundImage):
+${formatUrlsForPrompt(heroUrls)}
+
+PRODUCT IMAGES (cycle through these for each product):
+${formatUrlsForPrompt(productUrls)}
+
+HERO SECTION CONTENT:
+headline, subheadline, ctaText, ctaLink, alignment (left/center/right), height (sm/md/lg/xl), badge (short uppercase label), secondaryCtaText (optional), layout (split-left/split-right/product-first/text-first/minimal), visualPriority (product/headline/balanced), backgroundTreatment (soft/editorial/dramatic), vignette: true, heroImages (array of 3 objects with src and alt — USE THE REAL URLS ABOVE), carouselEnabled: true, carouselInterval: 5
+
+HERO LAYOUT RULES:
 - split-left: DEFAULT for most stores. Text left 50%, product image right 50%.
-- split-right: Product image left 50%, text right 50%. Good for right-to-left brands.
-- product-first: Product 60% dominant + text 40%. Use for: cosmetics, electronics, shoes, accessories, jewelry, watches, sneakers, packaged products — anything with a visually strong product.
-- text-first: Text 60% dominant + product 40%. Use for: fashion campaigns, seasonal collections, brand launches, announcements.
-- minimal: No product image. Premium centered layout with generous whitespace. Use for: luxury brands, high-end fashion, minimalist aesthetics, spa/wellness, fine art.
-
-HERO visualPriority RULES:
-- "product" when layout is product-first
-- "headline" when layout is text-first or minimal
-- "balanced" when layout is split-left or split-right
-
-HERO backgroundTreatment RULES:
-- "soft": slightly darkened background, gentle contrast. DEFAULT for most stores.
-- "editorial": subtle blur effect, magazine-quality feel. Use for: fashion, beauty, lifestyle brands.
-- "dramatic": strong contrast, deep shadows, moody atmosphere. Use for: luxury, nightlife, premium alcohol,高端 brands.
+- split-right: Product image left 50%, text right 50%.
+- product-first: Product 60% dominant + text 40%. Best for cosmetics, electronics, accessories, jewelry, packaged products.
+- text-first: Text 60% dominant + product 40%. Best for fashion campaigns, brand launches.
+- minimal: No product image. Premium centered. Best for luxury, spa/wellness, fine art.
 
 HERO RULES:
-- The hero section must include style.backgroundImage (a lifestyle/setting photo URL from Unsplash) and style.overlay:true.
-- Always set vignette:true in the hero content.
-- Choose layout based on what will look most professional for this specific store type.
-- Do NOT use "centered" layout — use "minimal" instead for text-only hero banners.
-- featured-products: {headline, subtitle, productIds: ["<ids>"], columns: 3, showPrice: true, showAddToCart: true}
-- testimonials: {headline, items: [{id, quote, author, role, rating: 5}]}
-- newsletter: {headline, subtitle, placeholderText: "Enter your email", buttonText: "Subscribe"}
+- heroImages MUST contain exactly 3 objects using the REAL URLs provided above.
+- style.backgroundImage must use the 1st hero image URL.
+- style.overlay must be true.
+- vignette must be true.
+- carouselEnabled must be true, carouselInterval must be 5.
+- Do NOT use "centered" layout — use "minimal" instead.
 
-PRODUCT (NO variants field — omit it entirely):
-{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
+AVAILABLE SECTION TYPES (create the sections the user requests, or pick appropriate ones):
+- hero: {headline, subheadline, ctaText, ctaLink, alignment, height, badge, secondaryCtaText, layout, visualPriority, backgroundTreatment, vignette, heroImages, carouselEnabled, carouselInterval}
+- featured-products: {headline, subtitle, productIds, columns, showPrice, showAddToCart}
+- product-grid: {headline, columns, showPrice, showAddToCart}
+- text-banner: {headline, body, alignment, size}
+- cta: {headline, body, ctaText, ctaLink, style}
+- testimonials: {headline, items: [{id, quote, author, role, rating}]}
+- newsletter: {headline, subtitle, placeholderText, buttonText}
+- image-gallery: {images, columns, gap}
+- categories: {headline, items: [{id, name, image, slug}], columns}
+- faq: {headline, items: [{id, question, answer}]}
+- brand-statement: {headline, body, backgroundImage, alignment}
+
+PRODUCT (NO variants field):
+{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["<one of the REAL product URLs above>"], description: "<max 8 words>", category: "<category>", featured: false, inStock: true}
 
 GENERATION RULES:
-- Generate EXACTLY ${productCount} products total. Mark 1 as featured. Descriptions max 8 words.
-- MAX 4 sections per page, ONLY these types in this order: hero, featured-products, testimonials (1 item only), newsletter.
-- NO header, footer, cta, faq, gallery, categories, or any other section types.
+- Generate EXACTLY ${productCount} products. Mark 1 as featured. Descriptions max 8 words.
+- Use REAL image URLs from the lists above. Do NOT make up photo IDs.
+- Create sections that match what the user requested. If the user specifies particular sections, create those. Otherwise create a professional set: hero, featured-products, and 1-2 more appropriate sections.
+- Do NOT add header, footer, spacer, or divider sections.
 - NO variants field on products.
-- Theme colors must match the brand.
-- The hero section must include style.backgroundImage (a lifestyle/setting photo URL from Unsplash) and style.overlay:true.
-- Include a relevant announcementText (short promo, shipping offer, or tagline).`;
+- Theme colors MUST match the brand aesthetic described in the prompt.
+- If the user specifies exact colors, use those. If the user specifies a visual style (minimal, luxury, editorial, etc.), match it.
+- Include a relevant announcementText.`;
 }
 
 // ─── Phase 2 System Prompt (products only) ────────────────────────
@@ -288,7 +423,7 @@ export async function POST(req: NextRequest) {
         const phase1Result = await executeAI('store-generation', [
           { role: 'user', content: userMessage },
         ], {
-          systemPrompt: buildPhase1SystemPrompt(phase1Count),
+          systemPrompt: buildPhase1SystemPrompt(phase1Count, sanitizedPrompt),
           temperature: 0.6,
           timeout: 40_000,
           maxRetries: 3,

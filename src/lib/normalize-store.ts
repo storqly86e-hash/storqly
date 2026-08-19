@@ -179,9 +179,9 @@ function normalizeSectionStyle(raw: unknown, log: ReturnType<typeof createLogger
   if (typeof s.backgroundImage === 'string' && s.backgroundImage) style.backgroundImage = s.backgroundImage;
   if (typeof s.overlay === 'boolean') style.overlay = s.overlay;
 
-  style.paddingY = enumVal(s.paddingY, VALID_PADDING_Y, 'md') as SectionStyle['paddingY'];
+  style.paddingY = enumVal(s.paddingY, VALID_PADDING_Y, 'lg') as SectionStyle['paddingY'];
   style.paddingX = enumVal(s.paddingX, VALID_PADDING_X, 'md') as SectionStyle['paddingX'];
-  style.maxWidth = enumVal(s.maxWidth, VALID_MAX_WIDTH, 'lg') as SectionStyle['maxWidth'];
+  style.maxWidth = enumVal(s.maxWidth, VALID_MAX_WIDTH, 'xl') as SectionStyle['maxWidth'];
   style.borderRadius = enumVal(s.borderRadius, VALID_BORDER_RADIUS, 'none') as SectionStyle['borderRadius'];
 
   return style;

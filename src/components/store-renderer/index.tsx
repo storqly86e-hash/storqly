@@ -17,7 +17,7 @@ import {
 } from '@/lib/section-meta';
 
 // Visible build ID for sync debugging — matches the one in page.tsx footer
-const BUILD_ID = 'build:2026-08-18T060045Z-3700f92';
+const BUILD_ID = 'dev';
 
 // ─── Props ──────────────────────────────────────────────────────────────
 

@@ -5,9 +5,7 @@
 //
 // Called by the client AFTER store generation completes.
 // Enriches product images sequentially with rate limiting.
-// Returns updated image URLs as they complete.
-//
-// Also supports enriching section background images.
+// Also enriches section background images and heroImages.
 //
 // This keeps store generation at 1 API call. Image enrichment
 // happens in the background without blocking the user.
@@ -26,10 +24,11 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { products, storeName, sectionBackgrounds } = body as {
+    const { products, storeName, sectionBackgrounds, heroImageQueries } = body as {
       products: { id: string; name: string; images: string[]; category?: string; description?: string }[];
       storeName: string;
       sectionBackgrounds?: { sectionId: string; query: string; currentUrl: string }[];
+      heroImageQueries?: { index: number; query: string; currentSrc: string }[];
     };
 
     if (!products || !Array.isArray(products) || products.length === 0) {
@@ -62,11 +61,28 @@ export async function POST(req: NextRequest) {
           if (enrichedUrl) {
             enrichedSectionBackgrounds.push({ sectionId: sb.sectionId, url: enrichedUrl });
           } else {
-            // Keep the current URL if enrichment failed
             enrichedSectionBackgrounds.push({ sectionId: sb.sectionId, url: sb.currentUrl });
           }
         } catch {
           enrichedSectionBackgrounds.push({ sectionId: sb.sectionId, url: sb.currentUrl });
+        }
+      }
+    }
+
+    // Enrich hero images (content.heroImages)
+    const enrichedHeroImages: { index: number; src: string }[] = [];
+    if (heroImageQueries && Array.isArray(heroImageQueries) && heroImageQueries.length > 0) {
+      console.log(`[Enrich Images] Enriching ${heroImageQueries.length} hero images...`);
+      for (const hi of heroImageQueries) {
+        try {
+          const enrichedUrl = await fetchImage(hi.query);
+          if (enrichedUrl) {
+            enrichedHeroImages.push({ index: hi.index, src: enrichedUrl });
+          } else {
+            enrichedHeroImages.push({ index: hi.index, src: hi.currentSrc });
+          }
+        } catch {
+          enrichedHeroImages.push({ index: hi.index, src: hi.currentSrc });
         }
       }
     }
@@ -78,6 +94,7 @@ export async function POST(req: NextRequest) {
       latencyMs: result.latencyMs,
       products: updatedProducts,
       sectionBackgrounds: enrichedSectionBackgrounds,
+      heroImages: enrichedHeroImages,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);

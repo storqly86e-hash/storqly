@@ -14,6 +14,9 @@ const ChatPanel = dynamic(() => import('@/components/chat-panel'), { ssr: false,
 const VisualEditor = dynamic(() => import('@/components/visual-editor'), { ssr: false, loading: () => <PanelSkeleton label="Sections" /> })
 const MarketingKit = dynamic(() => import('@/components/marketing-kit'), { ssr: false })
 
+// Build hash — computed once at module load, suppressHydrationWarning on the element
+const BUILD_HASH = `build:${new Date().toISOString().replace(/[.:]/g, '-').slice(0, -5)}-${Math.random().toString(36).slice(2, 9)}`
+
 // Inline skeleton components for lazy-loaded panels
 function PanelSkeleton({ label }: { label: string }) {
   return (
@@ -114,24 +117,38 @@ function triggerBackgroundImageEnrichment(store: Store) {
     p.images.length > 0 && p.images[0].includes('unsplash.com/photo-')
   )
 
-  // Scan homepage sections for backgroundImage URLs that need enrichment
+  // Scan homepage sections for backgroundImage URLs and heroImages that need enrichment
   const homepage = store.pages.find(p => p.isHomepage)
   const sectionBackgrounds: { sectionId: string; query: string; currentUrl: string }[] = []
+  const heroImageQueries: { index: number; query: string; currentSrc: string }[] = []
   if (homepage) {
     for (const section of homepage.sections) {
       const bgUrl = section.style?.backgroundImage
       if (bgUrl && bgUrl.includes('unsplash.com/photo-')) {
-        // Build a query from the section type and store name
         const query = `${store.name} ${section.type} lifestyle setting photo`
         sectionBackgrounds.push({ sectionId: section.id, query, currentUrl: bgUrl })
+      }
+      // Enrich heroImages (content.heroImages array)
+      if (section.type === 'hero') {
+        const heroImages = section.content?.heroImages as Array<{ src: string; alt?: string }> | undefined
+        if (heroImages && Array.isArray(heroImages)) {
+          for (let i = 0; i < heroImages.length; i++) {
+            const src = heroImages[i]?.src
+            if (src && src.includes('unsplash.com/photo-')) {
+              const alt = heroImages[i].alt || ''
+              const query = `${store.name} ${alt || 'hero campaign'} visual ${i + 1}`
+              heroImageQueries.push({ index: i, query, currentSrc: src })
+            }
+          }
+        }
       }
     }
   }
 
   // Skip if nothing needs enrichment
-  if (needsEnrichment.length === 0 && sectionBackgrounds.length === 0) return
+  if (needsEnrichment.length === 0 && sectionBackgrounds.length === 0 && heroImageQueries.length === 0) return
 
-  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products, ${sectionBackgrounds.length} section backgrounds`)
+  console.log(`[Storqly] Background image enrichment: ${needsEnrichment.length}/${store.products.length} products, ${sectionBackgrounds.length} section backgrounds, ${heroImageQueries.length} hero images`)
 
   fetch('/api/store/enrich-images', {
     method: 'POST',
@@ -146,17 +163,17 @@ function triggerBackgroundImageEnrichment(store: Store) {
       })),
       storeName: store.name,
       sectionBackgrounds: sectionBackgrounds.length > 0 ? sectionBackgrounds : undefined,
+      heroImageQueries: heroImageQueries.length > 0 ? heroImageQueries : undefined,
     }),
   })
     .then(res => res.json())
     .then(data => {
-      // Update product images in the store via the Zustand store
       const hasProductEnrichment = data.enriched > 0
       const hasSectionEnrichment = data.sectionBackgrounds && data.sectionBackgrounds.length > 0
+      const hasHeroEnrichment = data.heroImages && data.heroImages.length > 0
 
-      if (hasProductEnrichment || hasSectionEnrichment) {
+      if (hasProductEnrichment || hasSectionEnrichment || hasHeroEnrichment) {
         console.log(`[Storqly] Background enrichment complete: ${data.enriched} enriched, ${data.kept} kept, ${data.failed} failed in ${data.latencyMs}ms`)
-        // Dynamic import to avoid circular dependency
         import('@/lib/store').then(({ useStoreEditor }) => {
           const currentStore = useStoreEditor.getState().store
           if (currentStore) {
@@ -188,13 +205,35 @@ function triggerBackgroundImageEnrichment(store: Store) {
               }))
             }
 
+            // Update hero images in hero sections
+            if (hasHeroEnrichment) {
+              const heroMap = new Map(data.heroImages.map((hi: { index: number; src: string }) => [hi.index, hi.src]))
+              updatedPages = updatedPages.map(page => ({
+                ...page,
+                sections: page.sections.map(section => {
+                  if (section.type !== 'hero') return section
+                  const currentHeroImages = section.content?.heroImages as Array<{ src: string; alt?: string }> | undefined
+                  if (!currentHeroImages || !Array.isArray(currentHeroImages) || heroMap.size === 0) return section
+                  let changed = false
+                  const newHeroImages = currentHeroImages.map((img, idx) => {
+                    const newSrc = heroMap.get(idx)
+                    if (newSrc && newSrc !== img.src) {
+                      changed = true
+                      return { ...img, src: newSrc }
+                    }
+                    return img
+                  })
+                  return changed ? { ...section, content: { ...section.content, heroImages: newHeroImages } } : section
+                }),
+              }))
+            }
+
             useStoreEditor.getState().setStore({ ...currentStore, products: updatedProducts, pages: updatedPages })
           }
         })
       }
     })
     .catch(err => {
-      // Non-fatal — products still show AI placeholder images
       console.warn('[Storqly] Background enrichment failed (non-fatal):', err)
     })
 }
@@ -1605,7 +1644,7 @@ export default function Home() {
               <p className="text-xs text-zinc-700">
                 Build, customize, and launch — powered by AI.
               </p>
-              <p className="text-xs text-zinc-800 font-mono" id="build-id">build:2026-08-18T060045Z-3700f92</p>
+              <p className="text-xs text-zinc-800 font-mono" id="build-id" suppressHydrationWarning>{BUILD_HASH}</p>
             </div>
           </footer>
         )}
