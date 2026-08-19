@@ -158,7 +158,14 @@ function buildPhase1SystemPrompt(productCount: number, userPrompt: string): stri
   const heroUrls = REAL_UNSPLASH_HERO_URLS[category] || REAL_UNSPLASH_HERO_URLS['general/lifestyle'];
   const productUrls = REAL_UNSPLASH_PRODUCT_URLS[category] || REAL_UNSPLASH_PRODUCT_URLS['general'];
 
-  return `You are an e-commerce store builder. Return a SINGLE JSON object — no markdown, no explanation.
+  return `You are an e-commerce store builder. Your job is to faithfully translate the user's design specification into a structured store.
+
+CRITICAL PRINCIPLE — USER INTENT IS LAW:
+- The user prompt is the DESIGN SPECIFICATION. Every explicit requirement MUST appear in the output.
+- AI fills in unspecified details intelligently. AI does NOT replace explicit requirements with generic defaults.
+- If the user says "premium editorial hero with 3 campaign images", the hero MUST have 3 heroImages with editorial backgroundTreatment.
+- If the user says "only hero and products, no testimonials", do NOT add testimonials or newsletter.
+- If the user specifies a layout (split-left, minimal, etc.), use THAT layout, not a default.
 
 FORMAT RULES:
 1. Raw JSON ONLY. No markdown fences.
@@ -182,25 +189,45 @@ ${formatUrlsForPrompt(heroUrls)}
 PRODUCT IMAGES (cycle through these for each product):
 ${formatUrlsForPrompt(productUrls)}
 
-HERO SECTION CONTENT:
-headline, subheadline, ctaText, ctaLink, alignment (left/center/right), height (sm/md/lg/xl), badge (short uppercase label), secondaryCtaText (optional), layout (split-left/split-right/product-first/text-first/minimal), visualPriority (product/headline/balanced), backgroundTreatment (soft/editorial/dramatic), vignette: true, heroImages (array of 3 objects with src and alt — USE THE REAL URLS ABOVE), carouselEnabled: true, carouselInterval: 5
+═══ HERO SECTION — CRITICAL ═══
+The hero is the PRIMARY visual statement of the store. It MUST be visually impactful.
 
-HERO LAYOUT RULES:
-- split-left: DEFAULT for most stores. Text left 50%, product image right 50%.
-- split-right: Product image left 50%, text right 50%.
-- product-first: Product 60% dominant + text 40%. Best for cosmetics, electronics, accessories, jewelry, packaged products.
-- text-first: Text 60% dominant + product 40%. Best for fashion campaigns, brand launches.
-- minimal: No product image. Premium centered. Best for luxury, spa/wellness, fine art.
+HERO CONTENT FIELDS:
+headline, subheadline, ctaText, ctaLink, alignment (left/center/right), height (sm/md/lg/xl), badge (short uppercase label), secondaryCtaText (optional)
 
-HERO RULES:
-- heroImages MUST contain exactly 3 objects using the REAL URLs provided above.
-- style.backgroundImage must use the 1st hero image URL.
-- style.overlay must be true.
-- vignette must be true.
-- carouselEnabled must be true, carouselInterval must be 5.
-- Do NOT use "centered" layout — use "minimal" instead.
+HERO LAYOUT — choose based on user prompt, NOT a default:
+- minimal: Full-bleed background image + text overlay. NO separate product image column. Best for: premium brands, editorial campaigns, luxury, skincare, cosmetics, fashion campaigns. Use this when user says "editorial", "premium", "campaign", "lifestyle", or when heroImages are campaign-style.
+- split-left: Text left 50% + product image right 50%. Use when user explicitly wants a split or product showcase.
+- split-right: Product image left 50% + text right 50%. Mirror of split-left.
+- product-first: Product image 60% dominant + text 40%. Use when user emphasizes the product.
+- text-first: Text 60% dominant + product image 40%. Use when user emphasizes the message.
+- DO NOT use "centered" — use "minimal" for centered text-over-image.
 
-AVAILABLE SECTION TYPES (create the sections the user requests, or pick appropriate ones):
+HERO IMAGE SYSTEM:
+- heroImages: Array of exactly 3 objects. Each has "src" (URL from the list above), "alt" (descriptive), and "role" (one of: "product-hero", "editorial-lifestyle", "product-detail", "campaign", "brand-atmosphere").
+- Assign distinct, meaningful roles to each image based on user's requirements.
+- carouselEnabled: true (always)
+- carouselInterval: 5 (always, unless user specifies differently)
+- style.backgroundImage: use the 1st hero image URL
+- style.overlay: true
+- backgroundTreatment: "editorial" for premium/fashion/skincare, "dramatic" for bold campaigns, "soft" for gentle brands, "none" only if user says no treatment
+- vignette: true
+- height: "xl" for editorial/premium, "lg" for standard, "md" only if user says compact
+- visualPriority: "headline" for minimal layout, "balanced" for split layouts, "product" for product-first
+
+HERO RULES — NON-NEGOTIABLE:
+1. heroImages MUST have exactly 3 objects with REAL URLs from the list above.
+2. Each heroImage MUST have a "role" field describing its semantic purpose.
+3. Do NOT set heroImage (singular foreground product image) when using minimal layout — the background images ARE the visuals.
+4. carouselEnabled MUST be true, carouselInterval MUST be 5.
+
+═══ SECTIONS — FOLLOW USER INTENT ═══
+- ONLY create sections the user explicitly requested, plus a hero (always first) and featured-products.
+- Do NOT automatically add testimonials, newsletter, or FAQ unless the user's prompt implies they are appropriate.
+- Section order must match the user's described flow.
+- Each section's style.maxWidth should be "xl" (not "lg") for a professional, expansive feel.
+
+AVAILABLE SECTION TYPES:
 - hero: {headline, subheadline, ctaText, ctaLink, alignment, height, badge, secondaryCtaText, layout, visualPriority, backgroundTreatment, vignette, heroImages, carouselEnabled, carouselInterval}
 - featured-products: {headline, subtitle, productIds, columns, showPrice, showAddToCart}
 - product-grid: {headline, columns, showPrice, showAddToCart}
@@ -219,12 +246,15 @@ PRODUCT (NO variants field):
 GENERATION RULES:
 - Generate EXACTLY ${productCount} products. Mark 1 as featured. Descriptions max 8 words.
 - Use REAL image URLs from the lists above. Do NOT make up photo IDs.
-- Create sections that match what the user requested. If the user specifies particular sections, create those. Otherwise create a professional set: hero, featured-products, and 1-2 more appropriate sections.
+- Theme colors MUST match the brand aesthetic described in the prompt.
+- If the user specifies exact colors, use those exactly.
+- If the user specifies a visual style (minimal, luxury, editorial, etc.), match it.
+- Include a relevant announcementText.
 - Do NOT add header, footer, spacer, or divider sections.
 - NO variants field on products.
-- Theme colors MUST match the brand aesthetic described in the prompt.
-- If the user specifies exact colors, use those. If the user specifies a visual style (minimal, luxury, editorial, etc.), match it.
-- Include a relevant announcementText.`;
+
+USER PROMPT (this is the design specification — follow it precisely):
+${userPrompt}`;
 }
 
 // ─── Phase 2 System Prompt (products only) ────────────────────────

@@ -223,6 +223,7 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
         heroImages: Array.isArray(c.heroImages) ? (c.heroImages as unknown[]).slice(0, 3).map((img: unknown) => ({
           src: str((img as Record<string, unknown>)?.src || '', ''),
           alt: (img as Record<string, unknown>)?.alt !== undefined ? str((img as Record<string, unknown>)!.alt, '') : undefined,
+          role: (img as Record<string, unknown>)?.role !== undefined ? str((img as Record<string, unknown>)!.role, '') : undefined,
         })) : undefined,
       };
     }

@@ -102,10 +102,14 @@ function buildChatSystemPrompt(store: Store): string {
     '| change visual focus | content.visualPriority | "product"/"headline"/"balanced" |\n' +
     '| enable carousel | content.carouselEnabled | true |\n' +
     '| disable carousel / stop rotation | content.carouselEnabled | false |\n' +
+    '| set carousel to 5 seconds | content.carouselInterval | 5 |\n' +
     '| make carousel faster | content.carouselInterval | 3 |\n' +
     '| make carousel slower | content.carouselInterval | 8 |\n' +
-    '| add hero image / add slide | content.heroImages | [{"src": "url", "alt": "desc"}] (append to existing array) |\n' +
-    '| set hero images | content.heroImages | [{"src": "url1", "alt": "desc1"}, {"src": "url2", "alt": "desc2"}] |\n\n' +
+    '| remove third hero image | content.heroImages | splice array to remove last index |\n' +
+    '| add hero image / add slide | content.heroImages | [{"src": "url", "alt": "desc", "role": "campaign"}] (append to existing array) |\n' +
+    '| set hero images | content.heroImages | [{"src": "url1", "alt": "desc1", "role": "product-hero"}, {"src": "url2", "alt": "desc2", "role": "editorial"}] |\n' +
+    '| make the hero image larger | (if minimal layout, no change needed — bg is already full-bleed; if split, change layout to product-first) |\n' +
+    '| change to full-bleed / remove product from hero | content.layout | "minimal" |\n\n' +
     '### HERO CONTENT FIELDS (ALL that exist):\n' +
     'headline, subheadline, ctaText, ctaLink, alignment, height, badge, layout, heroImage, secondaryCtaText, secondaryCtaLink, visualPriority, backgroundTreatment, vignette, ctaStyle, productTreatment, badgeStyle, headlineSize, heroImages, carouselEnabled, carouselInterval, initialSlide\n\n' +
     '### HERO STYLE FIELDS (ALL that exist):\n' +

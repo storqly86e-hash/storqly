@@ -132,7 +132,7 @@ export interface HeroContent {
   badgeStyle?: 'outlined' | 'filled' | 'gradient'; // Badge visual variant
   headlineSize?: 'sm' | 'md' | 'lg' | 'xl'; // Headline font size scale
   // Phase 5: Multi-image hero carousel
-  heroImages?: Array<{ src: string; alt?: string }>;
+  heroImages?: Array<{ src: string; alt?: string; role?: string }>;
   carouselEnabled?: boolean;           // Auto-rotation on/off
   carouselInterval?: number;            // Seconds between slides (default 5)
   initialSlide?: number;                // Which image shows first

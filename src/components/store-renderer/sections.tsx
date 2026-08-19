@@ -228,28 +228,28 @@ function ProductCard({
         )}
       </div>
       {/* Info — explicitly reset color to prevent section textColor bleeding into white card */}
-      <div className="p-3 sm:p-4" style={{ color: theme.colors.text }}>
+      <div className="p-4 sm:p-5" style={{ color: theme.colors.text }}>
         {product.category && (
-          <p className="mb-1 text-[10px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
             {product.category}
           </p>
         )}
-        <h3 className="text-sm font-semibold leading-snug line-clamp-2" style={{ color: theme.colors.text }}>
+        <h3 className="text-base font-semibold leading-snug line-clamp-2" style={{ color: theme.colors.text }}>
           {product.name}
         </h3>
-        <div className="mt-1.5 flex items-center gap-2">
-          <span className="text-sm font-bold" style={{ color: theme.colors.primary }}>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-base font-bold" style={{ color: theme.colors.primary }}>
             {formatPrice(product.price)}
           </span>
           {hasDiscount && product.compareAtPrice && (
-            <span className="text-xs line-through" style={{ color: theme.colors.textMuted }}>
+            <span className="text-sm line-through" style={{ color: theme.colors.textMuted }}>
               {formatPrice(product.compareAtPrice)}
             </span>
           )}
         </div>
         {showAddToCart && product.inStock && (
           <button
-            className={`mt-3 w-full rounded-md py-2 text-xs font-semibold transition-all duration-200 cursor-pointer ${
+            className={`mt-4 w-full rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 cursor-pointer ${
               hovered
                 ? 'opacity-100 translate-y-0'
                 : 'opacity-0 translate-y-1 pointer-events-none'
@@ -376,7 +376,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const content = section.content as unknown as HeroContent;
   const style = section.style;
   const isSelected = selectedSectionId === section.id;
-  const layout = content.layout || 'centered';
+  const layout = content.layout || 'minimal';
   const ctaStyle = content.ctaStyle || 'filled';
   const productTreatment = content.productTreatment || 'floating';
   const badgeStyle = content.badgeStyle || 'outlined';
@@ -393,11 +393,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   const showProduct = !!resolvedHeroImage && hasProductLayout;
 
-  // ── Height (responsive-aware) ──
-  const heightMap: Record<string, string> = { sm: 'min-h-[300px]', md: 'min-h-[420px]', lg: 'min-h-[540px]', xl: 'min-h-[640px]' };
+  // ── Height (responsive-aware) — generous for professional e-commerce ──
+  const heightMap: Record<string, string> = { sm: 'min-h-[360px]', md: 'min-h-[480px]', lg: 'min-h-[600px]', xl: 'min-h-[750px]' };
   const minHeight = layout === 'minimal'
-    ? 'min-h-[400px]'
-    : (heightMap[content.height] || heightMap.md);
+    ? (heightMap[content.height] || 'min-h-[600px]')
+    : (heightMap[content.height] || heightMap.lg);
 
   // ── Alignment (centered / minimal layouts) ──
   const alignClass = isCentered
@@ -499,24 +499,23 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const headlineSizeClass = (() => {
     switch (content.headlineSize) {
       case 'sm':
-        return 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]';
+        return 'text-3xl sm:text-4xl md:text-5xl lg:text-5xl font-bold tracking-tight leading-[1.15]';
       case 'lg':
-        return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-[1.05]';
+        return 'text-5xl sm:text-6xl md:text-7xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-[1.05]';
       case 'xl':
-        return 'text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black tracking-tight leading-[1.0]';
+        return 'text-6xl sm:text-7xl md:text-8xl lg:text-8xl xl:text-9xl font-black tracking-tight leading-[1.0]';
       case 'md':
       default:
-        // Use layout-based default
         if (layout === 'minimal') return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]';
-        if (layout === 'product-first') return 'text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1]';
-        if (layout === 'text-first') return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08]';
-        return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
+        if (layout === 'product-first') return 'text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight leading-[1.1]';
+        if (layout === 'text-first') return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight leading-[1.08]';
+        return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight leading-[1.1]';
     }
   })();
 
   const subheadlineClass = layout === 'minimal'
-    ? 'text-base sm:text-lg md:text-xl font-light leading-relaxed opacity-75'
-    : 'text-sm sm:text-base md:text-lg font-normal leading-relaxed opacity-80';
+    ? 'text-base sm:text-lg md:text-xl lg:text-2xl font-light leading-relaxed opacity-75 max-w-2xl'
+    : 'text-sm sm:text-base md:text-lg lg:text-xl font-normal leading-relaxed opacity-80';
 
   // ── Responsive grid: recompose on mobile (stack, not shrink) ──
   const gridClass = showProduct
@@ -561,10 +560,10 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     }
   };
 
-  // Product max-height responsive
+  // Product max-height responsive — larger for professional e-commerce
   const productMaxH = layout === 'product-first'
-    ? 'max-h-[220px] sm:max-h-[300px] lg:max-h-[420px] xl:max-h-[500px]'
-    : 'max-h-[200px] sm:max-h-[280px] lg:max-h-[380px] xl:max-h-[440px]';
+    ? 'max-h-[280px] sm:max-h-[380px] lg:max-h-[500px] xl:max-h-[560px]'
+    : 'max-h-[260px] sm:max-h-[340px] lg:max-h-[450px] xl:max-h-[520px]';
 
   // ── Badge style variants ──
   const getBadgeStyle = (): React.CSSProperties => {
@@ -594,7 +593,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   // ── CTA button class ──
   const primaryCtaClass = [
-    'inline-flex items-center gap-2 rounded-full px-7 py-3 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg hover:shadow-xl',
+    'inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg hover:shadow-xl',
     ctaColors.isOutline && 'border-2 hover:bg-white/10',
   ].filter(Boolean).join(' ');
 
@@ -771,18 +770,18 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
             )}
           </div>
 
-          {/* Product image column */}
+          {/* Product image column — full visual impact, not a tiny card */}
           {showProduct && (
-            <div className={productColClass}>
+            <div className={`${productColClass} flex items-center justify-center`}>
               <div
-                className="hero-float relative mx-auto w-auto"
+                className="hero-float relative mx-auto w-full max-w-full"
                 style={getProductImageStyle()}
               >
                 <StoreImage
                   src={resolvedHeroImage!}
                   alt={content.headline}
                   fallbackColor={theme.colors.primary}
-                  className={`${productMaxH} w-auto mx-auto object-contain`}
+                  className={`${productMaxH} w-full mx-auto object-contain rounded-2xl`}
                 />
               </div>
             </div>
@@ -806,16 +805,16 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-2 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}
       {content.subtitle && (
-        <p className="mb-8 text-sm opacity-65">
+        <p className="mb-8 text-base opacity-65">
           {content.subtitle}
         </p>
       )}
-      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+      <div className={`grid ${gridCols(content.columns)} gap-5 sm:gap-6 lg:gap-8`}>
         {featuredProducts.map((product) => (
           <ProductCard
             key={product.id}
@@ -850,11 +849,11 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
           {content.headline}
         </h2>
       )}
-      <div className={`grid ${gridCols(content.columns)} gap-4 sm:gap-6`}>
+      <div className={`grid ${gridCols(content.columns)} gap-5 sm:gap-6 lg:gap-8`}>
         {filteredProducts.map((product) => (
           <ProductCard
             key={product.id}
