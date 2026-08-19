@@ -27,3 +27,30 @@ Stage Summary:
 - Dev server: HTTP 200, compiles correctly
 - Committed as dcc4095
 - Push to GitHub requires manual credentials (no tokens in sandbox)
+---
+Task ID: 1
+Agent: Main
+Task: Phase 4 — Hero composition, intent-preserving generation, visual scale overhaul (10 tasks)
+
+Work Log:
+- Audited all critical files: generate/route.ts, sections.tsx, store-schema.ts, normalize-store.ts, renderer-properties.ts, chat/route.ts
+- Identified root causes: (1) default layout was centered, (2) generation prompt had generic "split-left DEFAULT", (3) no intent-preservation instructions, (4) small visual scale, (5) product cards tiny
+- Rewrote generation prompt: added USER INTENT IS LAW principle, detailed layout guidance per brand type, hero image system with roles, section creation rules that follow user prompt
+- Changed hero default layout from centered to minimal
+- Increased hero heights: sm=360px, md=480px, lg=600px, xl=750px
+- Increased headline typography by 1 tier across all layouts
+- Added lg:text-2xl to minimal subheadline
+- Improved product cards: larger padding, text-base names/prices, gap-5/6/8
+- Added section headline lg:text-4xl scale
+- Added role field to heroImages schema and normalize-store
+- Updated chat semantic map with new commands
+- Verified via browser: page renders, demo store loads, VLM confirms large professional typography
+- Pushed to GitHub: commit 2370092
+
+Stage Summary:
+- 5 files changed: generate/route.ts, sections.tsx, store-schema.ts, normalize-store.ts, chat/route.ts
+- Generation prompt now preserves user intent and stops over-templating
+- Hero defaults to minimal (full-bleed) layout for premium brands
+- Visual scale significantly improved for professional e-commerce feel
+- Image role support added to schema
+- All changes pushed to GitHub for Railway redeployment
