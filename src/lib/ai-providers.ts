@@ -82,35 +82,53 @@ class ZAIProvider implements AIProvider {
   }
 
   async call(options: ProviderCallOptions): Promise<string> {
-    const zai = await this.getInstance() as {
-      chat: {
-        completions: {
-          create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
-        }
-      }
-    };
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
-    const completion = await Promise.race([
-      zai.chat.completions.create({
-        messages,
-        temperature,
-        thinking: { type: 'disabled' },
-        ...(maxTokens ? { max_tokens: maxTokens } : {}),
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), timeout)
-      ),
-    ]);
+    // Try with existing instance, then with fresh instance on 401/auth errors
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const zai = await this.getInstance() as {
+          chat: {
+            completions: {
+              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
+            }
+          }
+        };
 
-    const content = completion.choices[0]?.message?.content;
-    if (!content || content.trim().length === 0) throw new Error('Empty response');
-    return content.trim();
+        const completion = await Promise.race([
+          zai.chat.completions.create({
+            messages,
+            temperature,
+            thinking: { type: 'disabled' },
+            ...(maxTokens ? { max_tokens: maxTokens } : {}),
+            ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
+
+        const content = completion.choices[0]?.message?.content;
+        if (!content || content.trim().length === 0) throw new Error('Empty response');
+        return content.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // On auth error (401), refresh the instance and retry once
+        if ((msg.includes('401') || msg.includes('authentication') || msg.includes('unauthorized')) && attempt === 0) {
+          console.warn('[ZAI Provider] Auth error, refreshing instance and retrying...');
+          this.instance = null;
+          this.available = true;
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw new Error('z-ai: Unexpected loop exit');
   }
 
   reset() {
     this.instance = null;
+    this.available = true;
   }
 }
 

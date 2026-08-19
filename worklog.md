@@ -147,3 +147,29 @@ Stage Summary:
 - Provider chain: z-ai (1 provider)
 - User should refresh the page to see the fix take effect
 
+---
+Task ID: 3
+Agent: main
+Task: Complete fix for persistent AI unavailable error
+
+Work Log:
+- Analyzed user screenshot: error shows 401 auth failure + FallbackBanner + stale toast
+- Added StaleFallbackRecovery component that auto-redirects to landing page when AI is available
+- Made z-ai provider auto-retry with fresh instance on 401/auth errors
+- Made orchestrator reset provider on auth error instead of skipping to next
+- Changed fallback toast from raw error dump to clean actionable message
+- FallbackBanner now auto-dismisses when AI status shows providers available
+
+Files Changed:
+- src/app/api/ai-status/route.ts: Added z-ai SDK detection
+- src/app/page.tsx: StaleFallbackRecovery component, cleaner fallback toast, FallbackBanner auto-dismiss
+- src/lib/ai-providers.ts: z-ai 401 auto-retry with instance refresh
+- src/lib/ai-orchestrator.ts: Auth error reset-and-retry logic
+
+Stage Summary:
+- 4 files modified with layered fixes
+- z-ai provider: auto-recovers from 401 by refreshing SDK instance
+- Stale fallback state: auto-cleared on page load when AI is available
+- Error toasts: clean messages instead of raw error dumps
+- Server compiles and runs cleanly
+

@@ -548,13 +548,12 @@ function LandingPage() {
                 resolved = true
 
                 if (data._isFallback) {
-                  // Always show the ACTUAL error reason — never hide it behind a generic message.
-                  // The exact error (429/401/timeout/model-not-found) is needed for diagnosis.
                   const reason = data._fallbackReason || 'AI generation failed'
                   console.error('[Storqly] Generation returned fallback. Reason:', reason)
-                  toast.warning(
-                    `AI generation failed: ${reason.substring(0, 200)}`,
-                    { duration: 15000 }
+                  // Show a short, actionable message — no raw error dump
+                  toast.error(
+                    'AI generation failed — please try again',
+                    { description: 'The AI service was temporarily unavailable. Your store template is ready to edit manually or you can regenerate.', duration: 8000 }
                   )
                   setStoreWithFallback(data.store, true, reason)
                 } else {
@@ -1636,6 +1635,42 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
   )
 }
 
+// ─── Stale Fallback Recovery ──────────────────────────────────────
+// If the user has a stale fallback store from a previous failed generation,
+// and AI is now available, automatically reset to the landing page.
+// This prevents the user from being stuck on the misleading error banner.
+
+function StaleFallbackRecovery() {
+  const view = useStoreEditor((s) => s.view)
+  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
+  const reset = useStoreEditor((s) => s.reset)
+
+  useEffect(() => {
+    // Only run in editor view with a fallback store
+    if (view !== 'editor' || !isFallbackStore) return
+
+    let cancelled = false
+    fetch('/api/ai-status')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.anyWorking) {
+          // AI is available — clear the stale fallback and go back to landing
+          console.log('[Storqly] AI is back online. Clearing stale fallback state.')
+          toast.success('AI is back online! You can now generate your store.', { duration: 4000 })
+          // Small delay so the toast is visible before the view switches
+          setTimeout(() => {
+            if (!cancelled) reset()
+          }, 800)
+        }
+      })
+      .catch(() => { /* silently ignore */ })
+    return () => { cancelled = true }
+  }, [view, isFallbackStore, reset])
+
+  return null // This component renders nothing
+}
+
 // ─── Page Root ────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -1654,6 +1689,7 @@ export default function Home() {
   return (
     <>
       <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>
+        {view === 'editor' && <StaleFallbackRecovery />}
         {view === 'landing' ? <LandingPage /> : <EditorView />}
 
         {view === 'landing' && (

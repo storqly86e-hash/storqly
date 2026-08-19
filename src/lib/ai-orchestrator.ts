@@ -462,6 +462,14 @@ export async function executeAI(
         lastAICallTime = Date.now();
         if (is429) lastAICallTime += 2_000;
 
+        // On auth error: reset provider and retry (don't skip to next on first attempt)
+        const isAuth = isAuthError(lastError);
+        if (isAuth) {
+          console.warn(`[AI Orchestrator] [${provider.name}] Auth error — resetting and retrying...`);
+          provider.reset();
+          if (ri === 0) continue; // Retry with fresh instance
+        }
+
         // On rate limit or timeout: skip remaining retries on this provider, go to next
         if ((is429 || isTimeout) && ri === 0) {
           console.warn(`[AI Orchestrator] [${provider.name}] ${is429 ? 'Rate limited' : 'Timed out'} — skipping to next provider`);
