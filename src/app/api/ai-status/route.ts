@@ -3,11 +3,22 @@
 // ========================================
 // GET /api/ai-status
 // Strategy: Check key format first (instant, no API call).
-// If any key has valid format, report anyWorking=true.
+// Also detect z-ai SDK availability (sandbox primary provider).
+// If any provider is available, report anyWorking=true.
 // If ?ping=true query param, also do a live API test.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getProviders } from '@/lib/ai-providers';
+
+// Detect z-ai SDK (same logic as ai-providers.ts)
+let zaiSdkAvailable = false;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('z-ai-web-dev-sdk');
+  if (mod?.default?.create) zaiSdkAvailable = true;
+} catch {
+  zaiSdkAvailable = false;
+}
 
 type ProviderStatus = {
   name: string;
@@ -21,6 +32,11 @@ type ProviderStatus = {
 function checkByFormat(): ProviderStatus[] {
   const results: ProviderStatus[] = [];
   const start = Date.now();
+
+  // z-ai SDK (sandbox primary provider — no API key needed)
+  if (zaiSdkAvailable && process.env.NODE_ENV !== 'production') {
+    results.push({ name: 'z-ai', ok: true, latencyMs: Date.now() - start, method: 'format' });
+  }
 
   // OpenRouter
   const orKey = process.env.OPENROUTER_API_KEY;

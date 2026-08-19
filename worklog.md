@@ -111,3 +111,20 @@ Stage Summary:
 - Files changed: src/app/page.tsx (1 line move), src/app/api/store/generate/route.ts (body read + send logging)
 - Zero new TypeScript errors, zero new ESLint errors in changed files
 - Backward compatible: no behavior change for small SSE events that always fit in one TCP chunk
+---
+Task ID: 1
+Agent: main
+Task: Fix "All AI providers are currently unavailable" false-negative warning
+
+Work Log:
+- Diagnosed the issue: /api/ai-status route.ts checkByFormat() only checked API key env vars (OpenRouter, GROQ, Gemini) but ignored the z-ai SDK provider
+- z-ai SDK is the primary and only AI provider in the sandbox environment (no API keys needed)
+- Added z-ai SDK availability detection to checkByFormat() using same require() logic as ai-providers.ts
+- Verified z-ai SDK is loadable and detectable (zaiCreate is function: true)
+- Ran linter — no new errors introduced (pre-existing errors in carousel.tsx and use-mobile.ts only)
+
+Stage Summary:
+- Fixed /home/z/my-project/src/app/api/ai-status/route.ts to detect z-ai SDK availability
+- The endpoint now returns anyWorking: true when z-ai SDK is available (non-production)
+- The misleading "All AI providers are currently unavailable" banner on the landing page will no longer appear
+
