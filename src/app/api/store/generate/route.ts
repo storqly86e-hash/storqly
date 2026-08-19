@@ -51,7 +51,7 @@ SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"md"
 HERO STYLE: For the hero section ONLY, add "backgroundImage":"https://images.unsplash.com/photo-<lifestyle-id>?w=1400","overlay":true to style. Use a real Unsplash photo ID that matches the store theme (lifestyle/setting photo, NOT a product photo).
 
 SECTION CONTENTS (use ONLY these 4):
-- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>", layout: "<one of: split-left, split-right, product-first, text-first, minimal>", visualPriority: "<product or headline or balanced>", backgroundTreatment: "<soft or editorial or dramatic>", vignette: true}
+- hero: {headline, subheadline, ctaText: "Shop Now", ctaLink: "#products", alignment: "center", height: "lg", badge: "<short uppercase label like NEW COLLECTION or HANDCRAFTED or SEASONAL DROP>", secondaryCtaText: "<optional secondary button like Learn More or View Lookbook>", layout: "<one of: split-left, split-right, product-first, text-first, minimal>", visualPriority: "<product or headline or balanced>", backgroundTreatment: "<soft or editorial or dramatic>", vignette: true, heroImages: [{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"},{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"},{src:"https://images.unsplash.com/photo-<id>?w=1400",alt:"<description>"}], carouselEnabled: true, carouselInterval: 5}
 
 HERO LAYOUT RULES (choose the BEST layout for the store type):
 - split-left: DEFAULT for most stores. Text left 50%, product image right 50%.

@@ -130,6 +130,12 @@ export interface HeroContent {
   ctaStyle?: HeroCtaStyle;             // CTA button visual style
   productTreatment?: HeroProductTreatment; // Product image presentation style
   badgeStyle?: 'outlined' | 'filled' | 'gradient'; // Badge visual variant
+  headlineSize?: 'sm' | 'md' | 'lg' | 'xl'; // Headline font size scale
+  // Phase 5: Multi-image hero carousel
+  heroImages?: Array<{ src: string; alt?: string }>;
+  carouselEnabled?: boolean;           // Auto-rotation on/off
+  carouselInterval?: number;            // Seconds between slides (default 5)
+  initialSlide?: number;                // Which image shows first
 }
 
 export interface FeaturedProductsContent {

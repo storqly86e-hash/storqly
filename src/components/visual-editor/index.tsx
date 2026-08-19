@@ -522,6 +522,13 @@ function HeroPropertiesPanel({
         <div>
           <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Background & Effects</h4>
           <div className="space-y-3">
+            {renderSelect('Headline Size', content.headlineSize as string, [
+              { label: 'Small', value: 'sm' },
+              { label: 'Medium (Default)', value: 'md' },
+              { label: 'Large', value: 'lg' },
+              { label: 'Extra Large', value: 'xl' },
+            ], (val) => handleContentChange('headlineSize', val))}
+
             {renderSelect('Background Treatment', content.backgroundTreatment as string, [
               { label: 'None', value: 'none' },
               { label: 'Soft (Gentle Darken)', value: 'soft' },
@@ -563,6 +570,75 @@ function HeroPropertiesPanel({
               { label: 'Filled (Brand Tint)', value: 'filled' },
               { label: 'Gradient (Brand Blend)', value: 'gradient' },
             ], (val) => handleContentChange('badgeStyle', val))}
+          </div>
+        </div>
+
+        <Separator className="bg-zinc-800" />
+
+        {/* ── Hero Image Carousel ── */}
+        <div>
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Image Carousel</h4>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs text-zinc-400">Auto-Rotate</Label>
+              <Switch
+                checked={content.carouselEnabled !== false}
+                onCheckedChange={(checked) => handleContentChange('carouselEnabled', checked)}
+              />
+            </div>
+            {content.carouselEnabled !== false && (
+              <div>
+                <Label className="text-xs text-zinc-400 mb-1.5 block">Rotation Interval (seconds)</Label>
+                <Input
+                  type="number"
+                  value={(content.carouselInterval as number) || 5}
+                  onChange={(e) => handleContentChange('carouselInterval', parseInt(e.target.value) || 5)}
+                  min={2}
+                  max={30}
+                  className="bg-zinc-800 border-zinc-700 text-zinc-100 h-8 text-sm"
+                />
+              </div>
+            )}
+            <div>
+              <Label className="text-xs text-zinc-400 mb-1.5 block">Banner Images ({(content.heroImages as unknown[])?.length || 1}/3)</Label>
+              <div className="space-y-1.5">
+                {((content.heroImages as Array<{src: string; alt?: string}>) || []).map((img, i) => (
+                  <div key={i} className="flex items-center gap-2 bg-zinc-800/60 rounded-lg px-2 py-1.5">
+                    <span className="text-[10px] text-zinc-500 w-4">{i + 1}</span>
+                    <Input
+                      value={img.src}
+                      onChange={(e) => {
+                        const imgs = [...((content.heroImages as Array<{src: string; alt?: string}>) || [])];
+                        imgs[i] = { ...imgs[i], src: e.target.value };
+                        handleContentChange('heroImages', imgs);
+                      }}
+                      placeholder="Image URL"
+                      className="flex-1 bg-zinc-800 border-zinc-700 text-zinc-100 h-7 text-xs font-mono"
+                    />
+                    <button
+                      className="flex-shrink-0 w-6 h-6 rounded text-zinc-500 hover:text-red-400 hover:bg-red-400/10 flex items-center justify-center"
+                      onClick={() => {
+                        const imgs = [...((content.heroImages as Array<{src: string; alt?: string}>) || [])];
+                        imgs.splice(i, 1);
+                        handleContentChange('heroImages', imgs);
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {((content.heroImages as unknown[]) || []).length < 3 && (
+                  <button
+                    className="w-full rounded-lg border border-dashed border-zinc-700 text-zinc-500 hover:text-zinc-300 hover:border-zinc-600 text-xs py-2 transition-colors"
+                    onClick={() => {
+                      const imgs = [...((content.heroImages as Array<{src: string; alt?: string}>) || [])];
+                      imgs.push({ src: '', alt: '' });
+                      handleContentChange('heroImages', imgs);
+                    }}
+                  >+ Add Image</button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
 

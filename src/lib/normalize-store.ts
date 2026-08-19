@@ -37,6 +37,7 @@ const VALID_BG_TREATMENT = new Set<string>(['none', 'soft', 'editorial', 'dramat
 const VALID_HERO_CTA_STYLE = new Set<string>(['filled', 'outline', 'gradient']);
 const VALID_PRODUCT_TREATMENT = new Set<string>(['floating', 'framed', 'cutout', 'shadow']);
 const VALID_BADGE_STYLE = new Set<string>(['outlined', 'filled', 'gradient']);
+const VALID_HEADLINE_SIZE = new Set<string>(['sm', 'md', 'lg', 'xl']);
 const VALID_SIZE = new Set<string>(['sm', 'md', 'lg']);
 const VALID_COLUMNS = new Set<number>([2, 3, 4]);
 const VALID_PAGE_TYPES = new Set<string>(['home', 'collection', 'product', 'cart', 'checkout']);
@@ -214,6 +215,15 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
         ctaStyle: c.ctaStyle !== undefined ? enumVal(c.ctaStyle, VALID_HERO_CTA_STYLE, 'filled') : undefined,
         productTreatment: c.productTreatment !== undefined ? enumVal(c.productTreatment, VALID_PRODUCT_TREATMENT, 'floating') : undefined,
         badgeStyle: c.badgeStyle !== undefined ? enumVal(c.badgeStyle, VALID_BADGE_STYLE, 'outlined') : undefined,
+        headlineSize: c.headlineSize !== undefined ? enumVal(c.headlineSize, VALID_HEADLINE_SIZE, 'md') : undefined,
+        // Phase 5: Carousel
+        carouselEnabled: c.carouselEnabled !== undefined ? bool(c.carouselEnabled, false) : undefined,
+        carouselInterval: c.carouselInterval !== undefined ? num(c.carouselInterval, 5, 2, 30) : undefined,
+        initialSlide: c.initialSlide !== undefined ? num(c.initialSlide, 0, 0, 2) : undefined,
+        heroImages: Array.isArray(c.heroImages) ? (c.heroImages as unknown[]).slice(0, 3).map((img: unknown) => ({
+          src: str((img as Record<string, unknown>)?.src || '', ''),
+          alt: (img as Record<string, unknown>)?.alt !== undefined ? str((img as Record<string, unknown>)!.alt, '') : undefined,
+        })) : undefined,
       };
     }
     case 'featured-products': {

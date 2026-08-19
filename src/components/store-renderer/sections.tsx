@@ -1,6 +1,6 @@
 'use client';
 
-import { Component, useMemo, useState } from 'react';
+import { Component, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import {
   parseColorToRGB,
   contrastTextColor,
@@ -404,9 +404,35 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     ? ({ left: 'items-start text-left', center: 'items-center text-center', right: 'items-end text-right' } as const)[content.alignment]
     : 'items-center';
 
+  // ── Hero Image Carousel ──
+  const heroImages = content.heroImages && Array.isArray(content.heroImages) && content.heroImages.length > 0
+    ? content.heroImages : (!!style.backgroundImage ? [{ src: style.backgroundImage!, alt: '' }] : []);
+  const hasCarousel = heroImages.length > 1;
+  const carouselOn = content.carouselEnabled !== false && hasCarousel;
+  const [activeSlide, setActiveSlide] = useState(content.initialSlide || 0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const goToSlide = useCallback((idx: number) => {
+    setActiveSlide(idx % heroImages.length);
+  }, [heroImages.length]);
+
+  const nextSlide = useCallback(() => goToSlide(activeSlide + 1), [activeSlide, goToSlide]);
+  const prevSlide = useCallback(() => goToSlide((activeSlide - 1 + heroImages.length) % heroImages.length), [activeSlide, goToSlide, heroImages.length]);
+
+  // Auto-rotation
+  useEffect(() => {
+    if (!carouselOn) { if (timerRef.current) clearInterval(timerRef.current); return; }
+    const interval = (content.carouselInterval || 5) * 1000;
+    timerRef.current = setInterval(nextSlide, interval);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [carouselOn, content.carouselInterval, nextSlide]);
+
+  // Resolve which background image to show
+  const currentBgImage = heroImages[activeSlide]?.src || style.backgroundImage;
+  const effectiveHasBgImage = !!currentBgImage;
+
   // ── Background ──
-  const hasBgImage = !!style.backgroundImage;
-  const bgGradient = !hasBgImage && !style.backgroundColor
+  const bgGradient = !effectiveHasBgImage && !style.backgroundColor
     ? `linear-gradient(135deg, ${theme.colors.primary} 0%, ${theme.colors.secondary} 100%)`
     : undefined;
 
@@ -422,7 +448,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   // ── Directional overlay (varies by layout for depth) ──
   const overlayGradient = (() => {
-    if (!hasBgImage) return undefined;
+    if (!effectiveHasBgImage) return undefined;
     // Dramatic: heavier, more cinematic
     if (content.backgroundTreatment === 'dramatic') {
       if (layout === 'split-right') return 'linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15) 100%)';
@@ -466,17 +492,27 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const ctaColors = getCtaColors();
 
   // ── Text shadow (background image only) ──
-  const headlineShadow = hasBgImage ? '0 2px 24px rgba(0,0,0,0.45)' : undefined;
-  const subheadlineShadow = hasBgImage ? '0 1px 12px rgba(0,0,0,0.3)' : undefined;
+  const headlineShadow = effectiveHasBgImage ? '0 2px 24px rgba(0,0,0,0.45)' : undefined;
+  const subheadlineShadow = effectiveHasBgImage ? '0 1px 12px rgba(0,0,0,0.3)' : undefined;
 
-  // ── Professional typography scale ──
-  const headlineClass = layout === 'minimal'
-    ? 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]'
-    : layout === 'product-first'
-      ? 'text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1]'
-      : layout === 'text-first'
-        ? 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08]'
-        : 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
+  // ── Headline size scale (user-controllable via headlineSize content field) ──
+  const headlineSizeClass = (() => {
+    switch (content.headlineSize) {
+      case 'sm':
+        return 'text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]';
+      case 'lg':
+        return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-[1.05]';
+      case 'xl':
+        return 'text-5xl sm:text-6xl md:text-7xl lg:text-8xl xl:text-9xl font-black tracking-tight leading-[1.0]';
+      case 'md':
+      default:
+        // Use layout-based default
+        if (layout === 'minimal') return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]';
+        if (layout === 'product-first') return 'text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-[1.1]';
+        if (layout === 'text-first') return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.08]';
+        return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-extrabold tracking-tight leading-[1.1]';
+    }
+  })();
 
   const subheadlineClass = layout === 'minimal'
     ? 'text-base sm:text-lg md:text-xl font-light leading-relaxed opacity-75'
@@ -587,21 +623,60 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         data-section-type={section.type}
       >
         {/* Base background: solid color or theme gradient */}
-        {!hasBgImage && (
+        {!effectiveHasBgImage && (
           <div className="absolute inset-0" style={{
             backgroundColor: style.backgroundColor || undefined,
             backgroundImage: bgGradient || undefined,
           }} />
         )}
 
-        {/* Background image layer with CSS filter */}
-        {hasBgImage && (
-          <div className="absolute inset-0" style={{
-            backgroundImage: `url(${style.backgroundImage})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            filter: bgTreatmentFilter || undefined,
-          }} />
+        {/* Background image layer(s) — carousel with crossfade */}
+        {effectiveHasBgImage && (
+          <div className="absolute inset-0">
+            {heroImages.map((img, i) => (
+              <div
+                key={i}
+                className="absolute inset-0 transition-opacity duration-1000 ease-in-out"
+                style={{
+                  opacity: i === activeSlide ? 1 : 0,
+                  backgroundImage: `url(${img.src})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                  filter: bgTreatmentFilter || undefined,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* Carousel controls — subtle, theme-aware */}
+        {hasCarousel && carouselOn && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2">
+            <button
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              onClick={(e) => { e.stopPropagation(); prevSlide(); }}
+              aria-label="Previous slide"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <div className="flex gap-1.5">
+              {heroImages.map((_, i) => (
+                <button
+                  key={i}
+                  className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === activeSlide ? 'bg-white w-4' : 'bg-white/40 hover:bg-white/60'}`}
+                  onClick={(e) => { e.stopPropagation(); goToSlide(i); }}
+                  aria-label={`Go to slide ${i + 1}`}
+                />
+              ))}
+            </div>
+            <button
+              className="w-7 h-7 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+              onClick={(e) => { e.stopPropagation(); nextSlide(); }}
+              aria-label="Next slide"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+            </button>
+          </div>
         )}
 
         {/* Gradient depth for non-image gradient backgrounds */}
@@ -648,7 +723,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
             {/* Headline */}
             <h1
-              className={`hero-fade-in-delay-1 ${headlineClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
+              className={`hero-fade-in-delay-1 ${headlineSizeClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
               style={{ textShadow: headlineShadow, ...(headlineColor ? { color: headlineColor } : {}) }}
             >
               {content.headline}
