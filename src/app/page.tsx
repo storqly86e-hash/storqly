@@ -14,8 +14,14 @@ const ChatPanel = dynamic(() => import('@/components/chat-panel'), { ssr: false,
 const VisualEditor = dynamic(() => import('@/components/visual-editor'), { ssr: false, loading: () => <PanelSkeleton label="Sections" /> })
 const MarketingKit = dynamic(() => import('@/components/marketing-kit'), { ssr: false })
 
-// Build hash — computed once at module load, suppressHydrationWarning on the element
-const BUILD_HASH = `build:${new Date().toISOString().replace(/[.:]/g, '-').slice(0, -5)}-${Math.random().toString(36).slice(2, 9)}`
+// Build hash — rendered client-only to prevent hydration mismatch (no Math.random/Date in SSR)
+function BuildHash() {
+  const [hash, setHash] = useState('')
+  useEffect(() => {
+    setHash(`build:${new Date().toISOString().replace(/[.:]/g, '-').slice(0, -5)}-${Math.random().toString(36).slice(2, 9)}`)
+  }, [])
+  return <>{hash}</>
+}
 
 // Inline skeleton components for lazy-loaded panels
 function PanelSkeleton({ label }: { label: string }) {
@@ -1644,7 +1650,7 @@ export default function Home() {
               <p className="text-xs text-zinc-700">
                 Build, customize, and launch — powered by AI.
               </p>
-              <p className="text-xs text-zinc-800 font-mono" id="build-id" suppressHydrationWarning>{BUILD_HASH}</p>
+              <p className="text-xs text-zinc-800 font-mono" id="build-id"><BuildHash /></p>
             </div>
           </footer>
         )}
