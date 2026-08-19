@@ -2,6 +2,19 @@ import { create } from 'zustand';
 import type { Store, StorePage, Section, SectionStyle, ChatMessage, ChatEditOperation, SectionType } from './store-schema';
 import { createBlankStore } from './store-schema';
 
+// Shallow value equality check (for client-side change detection)
+function valuesEqualShallow(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (a === null || b === null || a === undefined || b === undefined) return a === b;
+  if (typeof a === 'string' && typeof b === 'string') {
+    if (/^#[0-9a-f]{6}$/i.test(a) && /^#[0-9a-f]{6}$/i.test(b)) return a.toLowerCase() === b.toLowerCase();
+    return a === b;
+  }
+  if (typeof a === 'number' && typeof b === 'number') return a === b;
+  if (typeof a === 'boolean' && typeof b === 'boolean') return a === b;
+  return false;
+}
+
 // All valid section types — used to sanitize AI-generated operations
 const VALID_SECTION_TYPES: SectionType[] = ['hero','featured-products','product-grid','text-banner','image-gallery','testimonials','newsletter','faq','cta','categories','spacer','divider','rich-text','header','footer'];
 function sanitizeSectionType(type: string): SectionType {
@@ -191,44 +204,67 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
   addChatMessage: (msg) => set((s) => ({ chatMessages: [...s.chatMessages, msg] })),
   clearChat: () => set({ chatMessages: [] }),
 
-  // Apply operations from chat AI
+  // Apply operations from chat AI — with change detection
   applyOperations: (operations) => {
     const { store } = get();
-    if (!store) return;
+    if (!store || operations.length === 0) return;
 
     let updatedStore = { ...store, updatedAt: new Date().toISOString() };
+    let hadEffect = false;
 
     for (const op of operations) {
       switch (op.type) {
-        case 'update-theme':
-          updatedStore = {
-            ...updatedStore,
-            theme: {
-              ...updatedStore.theme,
-              ...op.payload,
-              colors: { ...updatedStore.theme.colors, ...op.payload.colors },
-              fonts: { ...updatedStore.theme.fonts, ...op.payload.fonts },
-            },
-          };
+        case 'update-theme': {
+          const p = op.payload;
+          const colorsChanged = !!p.colors && Object.keys(p.colors).some(k => p.colors![k] !== updatedStore.theme.colors[k as keyof typeof p.colors]);
+          const fontsChanged = !!p.fonts && Object.keys(p.fonts).some(k => p.fonts![k] !== updatedStore.theme.fonts[k as keyof typeof p.fonts]);
+          const otherChanged = Object.keys(p).some(k => {
+            if (k === 'colors' || k === 'fonts') return false;
+            return (p as Record<string, unknown>)[k] !== (updatedStore as unknown as Record<string, unknown>)[k];
+          });
+          if (colorsChanged || fontsChanged || otherChanged) {
+            hadEffect = true;
+            updatedStore = {
+              ...updatedStore,
+              theme: {
+                ...updatedStore.theme,
+                ...p,
+                colors: { ...updatedStore.theme.colors, ...p.colors },
+                fonts: { ...updatedStore.theme.fonts, ...p.fonts },
+              },
+            };
+          }
           break;
+        }
 
         case 'update-section': {
           const { sectionId, content, style } = op.payload;
+          let sectionFound = false;
           updatedStore = {
             ...updatedStore,
             pages: updatedStore.pages.map((page) => ({
               ...page,
-              sections: page.sections.map((s) =>
-                s.id === sectionId
-                  ? {
-                      ...s,
-                      content: content ? { ...s.content, ...content } : s.content,
-                      style: style ? { ...s.style, ...style } : s.style,
-                    }
-                  : s
-              ),
+              sections: page.sections.map((s) => {
+                if (s.id !== sectionId) return s;
+                sectionFound = true;
+                // Check if content/style would actually change
+                const contentChanged = content && Object.keys(content).some(k => !valuesEqualShallow(content[k], (s.content as Record<string, unknown>)[k]));
+                const styleChanged = style && Object.keys(style).some(k => !valuesEqualShallow(style[k], (s.style as Record<string, unknown>)[k]));
+                if (contentChanged || styleChanged) {
+                  hadEffect = true;
+                  return {
+                    ...s,
+                    content: content ? { ...s.content, ...content } : s.content,
+                    style: style ? { ...s.style, ...style } : s.style,
+                  };
+                }
+                return s;
+              }),
             })),
           };
+          if (!sectionFound) {
+            console.warn('[applyOperations] sectionId not found on client:', sectionId);
+          }
           break;
         }
 
@@ -377,7 +413,11 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
       }
     }
 
-    set({ store: updatedStore });
+    if (hadEffect) {
+      set({ store: updatedStore });
+    } else {
+      console.log('[applyOperations] All operations were no-ops — state not updated');
+    }
   },
 
   // Visual editor operations

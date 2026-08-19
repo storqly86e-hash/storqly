@@ -24,10 +24,13 @@ function buildChatSystemPrompt(store: Store): string {
     return '  - "' + p.name + '" (id: "' + p.id + '", $' + p.price + ', category: "' + (p.category || 'none') + '")';
   }).join('\n');
 
-  // Include FULL section content so the AI knows current values
+  // Include section content so the AI knows current values and can target correct IDs
+  // Hero sections get full content (critical for semantic mutations), others truncated
   let sectsList = store.pages.flatMap(function(p) {
     return p.sections.map(function(s) {
-      let contentStr = JSON.stringify(s.content).replace(/"/g, "'").substring(0, 300);
+      // Hero gets full content — the AI needs all fields to generate correct mutations
+      let contentLimit = s.type === 'hero' ? 800 : 300;
+      let contentStr = JSON.stringify(s.content).replace(/"/g, "'").substring(0, contentLimit);
       let styleStr = Object.keys(s.style || {}).length > 0
         ? ', style: ' + JSON.stringify(s.style).replace(/"/g, "'").substring(0, 200)
         : '';
@@ -35,8 +38,6 @@ function buildChatSystemPrompt(store: Store): string {
         '\n    content: ' + contentStr + styleStr;
     });
   }).join('\n');
-
-  let themeStr = JSON.stringify(store);
 
   return 'You are Storqly AI, a store editor. Translate natural language edit commands into precise JSON operations.\n\n' +
     '## Current Store State\n\n' +
@@ -98,7 +99,13 @@ function buildChatSystemPrompt(store: Store): string {
     '| add/toggle vignette | content.vignette | true/false |\n' +
     '| change hero height | content.height | "sm"/"md"/"lg"/"xl" |\n' +
     '| change alignment | content.alignment | "left"/"center"/"right" |\n' +
-    '| change visual focus | content.visualPriority | "product"/"headline"/"balanced" |\n\n' +
+    '| change visual focus | content.visualPriority | "product"/"headline"/"balanced" |\n' +
+    '| enable carousel | content.carouselEnabled | true |\n' +
+    '| disable carousel / stop rotation | content.carouselEnabled | false |\n' +
+    '| make carousel faster | content.carouselInterval | 3 |\n' +
+    '| make carousel slower | content.carouselInterval | 8 |\n' +
+    '| add hero image / add slide | content.heroImages | [{"src": "url", "alt": "desc"}] (append to existing array) |\n' +
+    '| set hero images | content.heroImages | [{"src": "url1", "alt": "desc1"}, {"src": "url2", "alt": "desc2"}] |\n\n' +
     '### HERO CONTENT FIELDS (ALL that exist):\n' +
     'headline, subheadline, ctaText, ctaLink, alignment, height, badge, layout, heroImage, secondaryCtaText, secondaryCtaLink, visualPriority, backgroundTreatment, vignette, ctaStyle, productTreatment, badgeStyle, headlineSize, heroImages, carouselEnabled, carouselInterval, initialSlide\n\n' +
     '### HERO STYLE FIELDS (ALL that exist):\n' +
@@ -166,11 +173,13 @@ interface SanitizeResult {
   operations: ChatEditOperation[];
   strippedFields: string[];
   rejectedFields: string[];
+  droppedSections: string[];  // sectionIds that don't exist
 }
 
 function sanitizeOperations(operations: ChatEditOperation[], store: Store): SanitizeResult {
   let strippedFields: string[] = [];
   let rejectedFields: string[] = [];
+  let droppedSections: string[] = [];
 
   // Build section lookup
   let sectionMap = new Map<string, { content: Record<string, unknown>; style: Record<string, unknown>; type: string }>();
@@ -184,13 +193,19 @@ function sanitizeOperations(operations: ChatEditOperation[], store: Store): Sani
     }
   }
 
-  let sanitized = operations.map(function(op) {
+  let sanitized = operations.map(function(op): ChatEditOperation | null {
     if (op.type !== 'update-section') return op;
 
     let payload = op.payload as Record<string, unknown>;
     let sectionId = payload.sectionId as string;
     let existing = sectionMap.get(sectionId);
-    if (!existing) return op;
+    if (!existing) {
+      // CRITICAL: Drop operation for non-existent sectionId.
+      // Previously this returned the op as-is, causing "Applied" but no visual change.
+      console.log('[Chat Edit] Dropped operation: sectionId not found:', sectionId);
+      droppedSections.push(sectionId + ' (not found)');
+      return null as unknown as ChatEditOperation;
+    }
 
     // ── Renderer verification: reject properties the renderer doesn't consume ──
     let content = payload.content as Record<string, unknown> | undefined;
@@ -285,11 +300,12 @@ function sanitizeOperations(operations: ChatEditOperation[], store: Store): Sani
       }
     }
 
-    return { ...op, payload };
+    return { ...op, payload } as unknown as ChatEditOperation;
   });
 
-  // Drop empty operations
-  let finalOps = sanitized.filter(function(op) {
+  // Drop null operations (non-existent sections) and empty operations
+  let finalOps = sanitized.filter(function(op): op is ChatEditOperation {
+    if (!op) return false;
     if (op.type !== 'update-section') return true;
     let p = op.payload as Record<string, unknown>;
     let hasContent = p.content && typeof p.content === 'object' && Object.keys(p.content).length > 0;
@@ -301,12 +317,15 @@ function sanitizeOperations(operations: ChatEditOperation[], store: Store): Sani
     return true;
   });
 
-  return { operations: finalOps, strippedFields, rejectedFields };
+  return { operations: finalOps, strippedFields, rejectedFields, droppedSections };
 }
 
 // ─── Build detailed summary ──────────────────────────────────────
-function buildSummary(operations: ChatEditOperation[], strippedFields: string[], rejectedFields: string[]): string {
+function buildSummary(operations: ChatEditOperation[], strippedFields: string[], rejectedFields: string[], droppedSections: string[]): string {
   if (operations.length === 0) {
+    if (droppedSections.length > 0) {
+      return 'I could not find the section to edit. The section ID may have changed — please try selecting the section first, then ask again.';
+    }
     if (rejectedFields.length > 0) {
       return 'The requested changes use properties that are not supported by the renderer. Please try rephrasing your request.';
     }
@@ -355,6 +374,10 @@ function buildSummary(operations: ChatEditOperation[], strippedFields: string[],
 
   if (rejectedFields.length > 0) {
     summary += ' (' + rejectedFields.length + ' unsupported field' + (rejectedFields.length > 1 ? 's' : '') + ' ignored)';
+  }
+
+  if (droppedSections.length > 0) {
+    summary += ' (' + droppedSections.length + ' section not found — skipped)';
   }
 
   return summary;
@@ -436,10 +459,10 @@ export async function POST(req: NextRequest) {
 
     // ── THREE-LAYER FILTERING ──
     console.log('[Chat Edit] Raw operations:', operations.length);
-    const { operations: sanitized, strippedFields, rejectedFields } = sanitizeOperations(operations, store);
-    console.log('[Chat Edit] After filtering:', sanitized.length, '(stripped:', strippedFields.length, ', rejected:', rejectedFields.length, ')');
+    const { operations: sanitized, strippedFields, rejectedFields, droppedSections } = sanitizeOperations(operations, store);
+    console.log('[Chat Edit] After filtering:', sanitized.length, '(stripped:', strippedFields.length, ', rejected:', rejectedFields.length, ', dropped:', droppedSections.length, ')');
 
-    const summary = buildSummary(sanitized, strippedFields, rejectedFields);
+    const summary = buildSummary(sanitized, strippedFields, rejectedFields, droppedSections);
     return NextResponse.json({ message: summary, operations: sanitized });
   } catch (err: unknown) {
     if (err instanceof AuthError) return authErrorResponse(err);
