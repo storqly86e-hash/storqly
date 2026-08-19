@@ -511,6 +511,7 @@ function LandingPage() {
       const decoder = new TextDecoder()
       let buffer = ''
       let resolved = false
+      let currentEvent = '' // CRITICAL: must persist across chunks — event: and data: lines can arrive in separate TCP segments
 
       while (true) {
         const { done, value } = await reader.read()
@@ -522,7 +523,6 @@ function LandingPage() {
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
-        let currentEvent = ''
         for (const line of lines) {
           if (line.startsWith(':')) continue
           if (line.startsWith('event: ')) {

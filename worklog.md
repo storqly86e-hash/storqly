@@ -78,3 +78,36 @@ Stage Summary:
 - Backward compatibility: legacy stores without variantCssVars render identically to before
 - Zero new TypeScript errors, zero new ESLint errors in changed files
 - Secondary audit result: No additional CSS var wiring needed for any family
+
+---
+Task ID: 5
+Agent: main
+Task: Fix "Stream ended without a result" error in production store generation
+
+Work Log:
+- Read full /api/store/generate/route.ts (707 lines), ai-orchestrator.ts, ai-providers.ts, page.tsx SSE parser
+- Checked env variables (only DATABASE_URL set, z-ai SDK available in sandbox as sole provider)
+- Checked design library imports (ensure-registered.ts, composition.ts, loader.ts) — all safe, no runtime errors
+- Checked Caddy proxy config — generous 600s timeouts, flush_interval -1 (no buffering)
+- Traced complete SSE lifecycle: POST handler → ReadableStream.start() → send() → controller.enqueue() → TCP → reader.read() → SSE parser
+
+ROOT CAUSE (PRIMARY — Frontend SSE parser bug):
+- page.tsx line 525: `let currentEvent = ''` was declared INSIDE the while(true) loop
+- Each TCP chunk reset currentEvent to '', losing the event type
+- When a large SSE event's `event:` and `data:` lines are split across TCP chunks (happens for payloads >~1460 bytes), the event type is lost and the data line is silently dropped
+- The Design Library changes made the `result` event significantly larger (componentMeta on every section), making chunk splits more likely
+- Fix: moved `let currentEvent = ''` OUTSIDE the while loop (line 514)
+
+ROOT CAUSE (SECONDARY — Backend req.json() timing):
+- route.ts line 414: `req.json()` was called inside `ReadableStream.start()`, which runs asynchronously AFTER the Response is returned
+- In some environments, the request body stream may be invalidated between Response creation and start() execution
+- Fix: moved `req.json()` BEFORE ReadableStream creation, passing parsed `prompt` via closure
+
+IMPROVEMENT (Tertiary — Silent send() failures):
+- `send()` function silently swallowed `controller.enqueue()` errors, making stream failures invisible
+- Fix: log first enqueue failure with event name and error message
+
+Stage Summary:
+- Files changed: src/app/page.tsx (1 line move), src/app/api/store/generate/route.ts (body read + send logging)
+- Zero new TypeScript errors, zero new ESLint errors in changed files
+- Backward compatible: no behavior change for small SSE events that always fit in one TCP chunk

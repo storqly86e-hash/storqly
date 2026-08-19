@@ -390,14 +390,35 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 
+  // ── Read request body BEFORE creating the ReadableStream ──
+  // Reading req.json() inside ReadableStream.start() is unsafe: start() runs
+  // asynchronously after the Response is returned, and the request body may
+  // already be consumed or invalidated by the runtime in some environments.
+  let prompt: string | undefined;
+  try {
+    const body = await req.json();
+    prompt = body?.prompt;
+  } catch (e) {
+    return new Response(JSON.stringify({ error: 'Invalid request body.' }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
   const encoder = new TextEncoder();
+  let sendFailed = false;
 
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: string, data: unknown) => {
         try {
           controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch { /* Stream already closed */ }
+        } catch (e) {
+          if (!sendFailed) {
+            sendFailed = true;
+            logErr(`[Store Generate] send('${event}') failed — stream likely closed. Error: ${e instanceof Error ? e.message : e}`);
+          }
+        }
       };
 
       // Heartbeat: send keepalive every 4s to prevent proxy timeouts
@@ -411,9 +432,6 @@ export async function POST(req: NextRequest) {
       const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
 
       try {
-        const body = await req.json();
-        const { prompt } = body as { prompt?: string };
-
         if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
           send('error', { message: 'A prompt is required.' });
           return;
