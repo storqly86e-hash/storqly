@@ -50,8 +50,23 @@ import type {
   SpacerContent,
   StoreProduct,
 } from '@/lib/store-schema';
+import { componentRegistry } from '@/lib/component-registry';
+import type { SectionRendererProps } from '@/lib/component-registry';
+import { resolveVariantConfig } from '@/lib/design-library/variant-config-resolver';
+import type { CardStyle } from '@/lib/design-library/variant-config-resolver';
 import { StoreImage } from './store-image';
 
+
+// ─── Heading font helper ─────────────────────────────────────────────
+// Returns fontFamily style when the store has a distinct heading font.
+// This ensures the design library's typography system is respected.
+
+function headingFontStyle(theme: StoreTheme): React.CSSProperties {
+  if (theme.fonts.heading && theme.fonts.heading !== theme.fonts.body) {
+    return { fontFamily: 'var(--sq-font-heading)' };
+  }
+  return {};
+}
 
 // ─── Error boundary for individual sections ──────────────────────────
 // Prevents a malformed section from crashing the entire page.
@@ -95,6 +110,10 @@ interface SectionWrapperProps {
   selectedSectionId?: string | null;
   onSelectSection?: (sectionId: string | null) => void;
   children: React.ReactNode;
+  /** CSS custom properties applied to the section wrapper div */
+  cssVars?: Record<string, string>;
+  /** Tailwind utility classes to append to the outer wrapper */
+  extraClasses?: string;
 }
 
 function SectionWrapper({
@@ -103,6 +122,8 @@ function SectionWrapper({
   selectedSectionId,
   onSelectSection,
   children,
+  cssVars,
+  extraClasses,
 }: SectionWrapperProps) {
   const isSelected = selectedSectionId === section.id;
   const style = section.style;
@@ -118,18 +139,29 @@ function SectionWrapper({
     'relative transition-all duration-200 cursor-pointer',
     pyClass(style.paddingY),
     isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+    extraClasses || '',
   ].join(' ');
+
+  // Build inline style with variant CSS custom properties
+  const inlineStyle: React.CSSProperties = {
+    backgroundColor: sectionBg,
+    color: sectionText,
+    backgroundImage: bgImage,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+  if (cssVars && Object.keys(cssVars).length > 0) {
+    // CSS custom properties must be set via type assertion
+    // because React.CSSProperties doesn't include arbitrary --var keys
+    Object.entries(cssVars).forEach(([key, value]) => {
+      (inlineStyle as Record<string, string>)[key] = value;
+    });
+  }
 
   return (
     <div
       className={outerClasses}
-      style={{
-        backgroundColor: sectionBg,
-        color: sectionText,
-        backgroundImage: bgImage,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-      }}
+      style={inlineStyle}
       onClick={(e) => {
         e.stopPropagation();
         onSelectSection?.(isSelected ? null : section.id);
@@ -166,6 +198,7 @@ function ProductCard({
   buttonBgOverride,
   buttonTextOverride,
   onViewProduct,
+  cardStyle,
 }: {
   product: StoreProduct;
   theme: StoreTheme;
@@ -174,6 +207,8 @@ function ProductCard({
   buttonBgOverride?: string;
   buttonTextOverride?: string;
   onViewProduct?: (productId: string) => void;
+  /** Design library card variant style */
+  cardStyle?: CardStyle;
 }) {
   const [hovered, setHovered] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState(false);
@@ -188,11 +223,74 @@ function ProductCard({
     setTimeout(() => setAddedFeedback(false), 1200);
   };
 
+  // ── Card style variant derivatives ──
+  const isDense = cardStyle === 'utility_dense';
+  const isEditorial = cardStyle === 'editorial_portrait';
+  const isBold = cardStyle === 'bold_utility';
+  const isReviewLed = cardStyle === 'review_led';
+  const isQuickAdd = cardStyle === 'quick_add';
+  const isSwatch = cardStyle === 'swatch_story';
+  const isBundle = cardStyle === 'bundle_stack';
+
+  // Aspect ratio: editorial & review use 3/4, bold uses 4/5, rest 1/1
+  const aspectClass = isEditorial || isReviewLed || isSwatch
+    ? 'aspect-[3/4]'
+    : isBold
+      ? 'aspect-[4/5]'
+      : 'aspect-square';
+
+  // Padding: dense is compact, editorial has more
+  const paddingClass = isDense ? 'p-2 sm:p-3' : isEditorial ? 'p-4 sm:p-6' : 'p-4 sm:p-5';
+
+  // Border: bold gets thick border
+  const borderClass = isBold
+    ? 'border-2'
+    : isEditorial
+      ? 'border-0'
+      : 'border border-gray-100';
+
+  // Hover zoom: dense & bold skip hover zoom
+  const imageHoverClass = (isDense || isBold) ? '' : 'group-hover:scale-105';
+
+  // Text sizing
+  const titleClass = isDense
+    ? 'text-sm font-medium leading-snug line-clamp-1'
+    : isBold
+      ? 'text-base font-bold leading-snug line-clamp-2'
+      : 'text-base font-semibold leading-snug line-clamp-2';
+
+  const categoryClass = isDense
+    ? 'mb-0.5 text-[10px] font-medium uppercase tracking-wider'
+    : 'mb-1.5 text-[11px] font-medium uppercase tracking-wider';
+
+  const priceClass = isDense
+    ? 'text-sm font-bold'
+    : 'text-base font-bold';
+
+  // Hover lift for editorial/bundle/review
+  const hoverLiftClass = (isEditorial || isBundle || isReviewLed)
+    ? 'transition-transform duration-200 hover:-translate-y-1'
+    : 'transition-shadow duration-200';
+
+  // Shadow
+  const shadowClass = isEditorial ? 'shadow-none' : 'shadow-sm';
+
+  // Simulated star rating for review_led (uses product.description length as proxy)
+  const reviewStars = isReviewLed ? 4.5 : 0;
+
+  // Swatch colors for swatch_story
+  const swatchColors = isSwatch
+    ? ['#1a1a2e', '#b8860b', '#6b7280', '#ec4899']
+    : [];
+
+  // Bundle badge
+  const showBundleBadge = isBundle;
+
   return (
     <div
-      className={`${borderRadius} ${onViewProduct ? 'cursor-pointer' : ''} overflow-hidden bg-white border border-gray-100 shadow-sm transition-shadow duration-200 group`}
+      className={`${borderRadius} ${onViewProduct ? 'cursor-pointer' : ''} overflow-hidden bg-white ${borderClass} ${shadowClass} ${hoverLiftClass} group`}
       style={{
-        borderColor: theme.colors.border,
+        borderColor: isBold ? theme.colors.text : theme.colors.border,
       }}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -200,16 +298,16 @@ function ProductCard({
       role={onViewProduct ? 'button' : undefined}
       tabIndex={onViewProduct ? 0 : undefined}
     >
-      {/* Product image with real image + fallback */}
+      {/* Product image */}
       <div
-        className="relative aspect-square w-full overflow-hidden"
+        className={`relative ${aspectClass} w-full overflow-hidden`}
         style={{ backgroundColor: imgColor }}
       >
         <StoreImage
           src={product.images[0] || ''}
           alt={product.name}
           fallbackColor={imgColor}
-          className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`absolute inset-0 h-full w-full object-cover transition-transform duration-300 ${imageHoverClass}`}
           iconSize="lg"
         />
         {/* Out of stock overlay */}
@@ -226,19 +324,67 @@ function ProductCard({
             {Math.round(((product.compareAtPrice - product.price) / product.compareAtPrice) * 100)}% Off
           </div>
         )}
+        {/* Bundle badge */}
+        {showBundleBadge && (
+          <div className="absolute right-2 top-2 rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+            Bundle
+          </div>
+        )}
+        {/* Quick-add overlay */}
+        {isQuickAdd && product.inStock && (
+          <button
+            className={`absolute bottom-2 left-2 right-2 flex items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition-all duration-200 cursor-pointer ${
+              hovered
+                ? 'opacity-100 translate-y-0'
+                : 'opacity-0 translate-y-1 pointer-events-none'
+            }`}
+            style={{
+              backgroundColor: addedFeedback ? '#16a34a' : (buttonBgOverride || theme.colors.primary),
+              color: addedFeedback ? '#ffffff' : (buttonTextOverride || contrastTextColor(buttonBgOverride || theme.colors.primary)),
+            }}
+            onClick={(e) => { e.stopPropagation(); handleAddToCart(e); }}
+          >
+            <ShoppingCart className="h-3.5 w-3.5" />
+            {addedFeedback ? 'Added!' : 'Add'}
+          </button>
+        )}
       </div>
-      {/* Info — explicitly reset color to prevent section textColor bleeding into white card */}
-      <div className="p-4 sm:p-5" style={{ color: theme.colors.text }}>
+      {/* Info */}
+      <div className={paddingClass} style={{ color: theme.colors.text }}>
         {product.category && (
-          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider" style={{ color: theme.colors.textMuted }}>
+          <p className={categoryClass} style={{ color: theme.colors.textMuted }}>
             {product.category}
           </p>
         )}
-        <h3 className="text-base font-semibold leading-snug line-clamp-2" style={{ color: theme.colors.text }}>
+        <h3 className={titleClass} style={{ color: theme.colors.text }}>
           {product.name}
         </h3>
+        {/* Swatch dots below product name */}
+        {isSwatch && swatchColors.length > 0 && (
+          <div className="mt-1.5 flex gap-1">
+            {swatchColors.map((color, i) => (
+              <span
+                key={i}
+                className="h-3 w-3 rounded-full border border-gray-200"
+                style={{ backgroundColor: color }}
+              />
+            ))}
+          </div>
+        )}
+        {/* Star rating for review_led */}
+        {isReviewLed && (
+          <div className="mt-1.5 flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map((star) => (
+              <Star
+                key={star}
+                className={`h-3 w-3 ${star <= Math.floor(reviewStars) ? 'fill-amber-400 text-amber-400' : 'text-gray-300'}`}
+              />
+            ))}
+            <span className="ml-1 text-[10px]" style={{ color: theme.colors.textMuted }}>{reviewStars}</span>
+          </div>
+        )}
         <div className="mt-2 flex items-center gap-2">
-          <span className="text-base font-bold" style={{ color: theme.colors.primary }}>
+          <span className={priceClass} style={{ color: theme.colors.primary }}>
             {formatPrice(product.price)}
           </span>
           {hasDiscount && product.compareAtPrice && (
@@ -247,7 +393,8 @@ function ProductCard({
             </span>
           )}
         </div>
-        {showAddToCart && product.inStock && (
+        {/* Standard add-to-cart button (non-quick-add styles) */}
+        {showAddToCart && product.inStock && !isQuickAdd && (
           <button
             className={`mt-4 w-full rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 cursor-pointer ${
               hovered
@@ -723,7 +870,14 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
             {/* Headline */}
             <h1
               className={`hero-fade-in-delay-1 ${headlineSizeClass} ${isCentered && content.alignment === 'center' ? 'mx-auto' : ''} ${isCentered && content.alignment === 'right' ? 'ml-auto' : ''}`}
-              style={{ textShadow: headlineShadow, ...(headlineColor ? { color: headlineColor } : {}) }}
+              style={{
+                textShadow: headlineShadow,
+                ...(headlineColor ? { color: headlineColor } : {}),
+                // Use heading font when it differs from body font
+                ...(theme.fonts.heading && theme.fonts.heading !== theme.fonts.body
+                  ? { fontFamily: `var(--sq-font-heading)` }
+                  : {}),
+              }}
             >
               {content.headline}
             </h1>
@@ -794,7 +948,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
 // ─── 3. Featured Products ───────────────────────────────────────────────
 
-export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
+export function FeaturedProductsSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart, cardStyle }: SectionRendererProps) {
   const content = section.content as unknown as FeaturedProductsContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
   const featuredProducts = useMemo(
@@ -805,7 +959,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}
@@ -825,6 +979,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
             onViewProduct={onViewProduct}
+            cardStyle={cardStyle as CardStyle | undefined}
           />
         ))}
       </div>
@@ -834,7 +989,7 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
 
 // ─── 4. Product Grid ───────────────────────────────────────────────────
 
-export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart }: SectionRendererProps) {
+export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart, cardStyle }: SectionRendererProps) {
   const content = section.content as unknown as ProductGridContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
@@ -849,7 +1004,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}
@@ -864,6 +1019,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
             buttonBgOverride={section.style.buttonBackgroundColor}
             buttonTextOverride={section.style.buttonTextColor}
             onViewProduct={onViewProduct}
+            cardStyle={cardStyle as CardStyle | undefined}
           />
         ))}
       </div>
@@ -895,7 +1051,7 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className={`${alignMap[content.alignment]}`}>
-        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
         {content.body && (
@@ -947,74 +1103,164 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
 
 // ─── 7. Testimonials ────────────────────────────────────────────────────
 
-export function TestimonialsSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+export function TestimonialsSection({ section, theme, selectedSectionId, onSelectSection, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as TestimonialsContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
+
+  // ── Variant-aware configuration from design library ──
+  // These are read from variantCssVars set by resolveVariantConfig.
+  // When absent (legacy stores), every check falls to the default
+  // branch, preserving the original rendering exactly.
+
+  const layout = (section.content as Record<string, unknown>).layout as string | undefined;
+  const isHorizontalScroll = layout === 'horizontal-scroll';
+
+  // CSS variable reads (all undefined for legacy stores)
+  const vCardMode = variantCssVars?.['--testimonials-card-mode'];
+  const vQuoteScale = variantCssVars?.['--testimonials-quote-scale'];
+  const vSurface = variantCssVars?.['--testimonials-surface'];
+  const vDividerMode = variantCssVars?.['--testimonials-divider-mode'];
+  const vQuoteMark = variantCssVars?.['--testimonials-quote-mark'];
+  const vColumns = variantCssVars?.['--testimonials-columns'];
+  const vRailGap = variantCssVars?.['--testimonials-rail-gap'];
+  const vRatingSummary = variantCssVars?.['--testimonials-rating-summary'];
+
+  // Derived booleans
+  const isMinimalCard = vCardMode === 'minimal';
+  const isTransparent = vSurface === 'transparent';
+  const showDivider = vDividerMode === 'border';
+  const showQuoteMark = vQuoteMark === 'visible';
+  const showRatingSummary = vRatingSummary === 'visible';
+  const colCount = vColumns ? parseInt(vColumns, 10) : 0;
+
+  // ── Grid layout classes ──
+  // Default (no variant): grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+  const gridClasses = isHorizontalScroll
+    ? ''
+    : colCount === 2
+      ? 'grid grid-cols-1 gap-6 sm:grid-cols-2'
+      : 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3';
+
+  // ── Card visual treatment ──
+  // Default (no variant): border + shadow + hover + surface bg
+  const cardBaseClasses = isMinimalCard
+    ? 'p-6'
+    : `${borderRadius} p-6 shadow-sm transition-shadow hover:shadow-md`;
+
+  const cardInlineStyle: React.CSSProperties = {
+    ...(isTransparent ? {} : { backgroundColor: theme.colors.surface }),
+    ...(showDivider || (!vDividerMode && !isMinimalCard)
+      ? { border: `1px solid ${theme.colors.border}` }
+      : {}),
+  };
+
+  // ── Quote text size ──
+  const quoteInlineStyle: React.CSSProperties = {};
+  if (vQuoteScale) {
+    quoteInlineStyle.fontSize = `${parseFloat(vQuoteScale) * 0.875}rem`;
+  }
+
+  // ── Rating summary (aggregate) ──
+  const aggregateRating = showRatingSummary && content.items.length > 0
+    ? content.items.reduce((sum, item) => sum + (item.rating ?? 0), 0) / content.items.length
+    : 0;
+
+  // ── Render a single testimonial card ──
+  const renderCard = (item: TestimonialsContent['items'][0], index: number) => (
+    <div
+      key={item.id}
+      className={`${cardBaseClasses}${isHorizontalScroll ? ' min-w-[280px] max-w-[320px] flex-shrink-0 snap-start' : ''}`}
+      style={cardInlineStyle}
+    >
+      {/* Decorative quote mark (quote_wall) */}
+      {showQuoteMark && (
+        <div className="mb-2 text-5xl leading-none opacity-15 select-none" style={{ ...headingFontStyle(theme), fontWeight: 400 }}>&ldquo;</div>
+      )}
+
+      {/* Stars */}
+      {item.rating && (
+        <div className="mb-3 flex gap-0.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star
+              key={i}
+              className={`h-4 w-4 ${i < item.rating! ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Quote */}
+      <p className="text-sm leading-relaxed" style={quoteInlineStyle}>
+        &ldquo;{item.quote}&rdquo;
+      </p>
+
+      {/* Author attribution */}
+      <div className="mt-4 flex items-center gap-3">
+        {item.avatar ? (
+          <StoreImage
+            src={item.avatar}
+            alt={item.author}
+            fallbackColor={theme.colors.primary}
+            className="h-9 w-9 rounded-full object-cover"
+            iconSize="sm"
+          />
+        ) : (
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
+            style={{ backgroundColor: theme.colors.primary }}
+          >
+            {getInitials(item.author)}
+          </div>
+        )}
+        <div>
+          <p className="text-sm font-semibold">
+            {item.author}
+          </p>
+          {item.role && (
+            <p className="text-xs opacity-65">
+              {item.role}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {content.items.map((item) => (
-          <div
-            key={item.id}
-            className={`${borderRadius} p-6 shadow-sm transition-shadow hover:shadow-md`}
-            style={{
-              backgroundColor: theme.colors.surface,
-              border: `1px solid ${theme.colors.border}`,
-            }}
-          >
-            {/* Stars */}
-            {item.rating && (
-              <div className="mb-3 flex gap-0.5">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Star
-                    key={i}
-                    className={`h-4 w-4 ${i < item.rating! ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`}
-                  />
-                ))}
-              </div>
-            )}
-            {/* Quote */}
-            <p className="text-sm leading-relaxed">
-              &ldquo;{item.quote}&rdquo;
-            </p>
-            {/* Author */}
-            <div className="mt-4 flex items-center gap-3">
-              {item.avatar ? (
-                <StoreImage
-                  src={item.avatar}
-                  alt={item.author}
-                  fallbackColor={theme.colors.primary}
-                  className="h-9 w-9 rounded-full object-cover"
-                  iconSize="sm"
-                />
-              ) : (
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold text-white"
-                  style={{ backgroundColor: theme.colors.primary }}
-                >
-                  {getInitials(item.author)}
-                </div>
-              )}
-              <div>
-                <p className="text-sm font-semibold">
-                  {item.author}
-                </p>
-                {item.role && (
-                  <p className="text-xs opacity-65">
-                    {item.role}
-                  </p>
-                )}
-              </div>
-            </div>
+
+      {/* Aggregate rating summary (rating_rail) */}
+      {showRatingSummary && aggregateRating > 0 && (
+        <div className="mb-6 flex items-center justify-center gap-2">
+          <div className="flex gap-0.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Star
+                key={`summary-${i}`}
+                className={`h-5 w-5 ${i < Math.round(aggregateRating) ? 'fill-amber-400 text-amber-400' : 'fill-gray-200 text-gray-200'}`}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+          <span className="text-sm font-semibold">{aggregateRating.toFixed(1)}</span>
+          <span className="text-xs opacity-65">({content.items.length} reviews)</span>
+        </div>
+      )}
+
+      {/* Horizontal scroll layout (rating_rail, ugc_rail) */}
+      {isHorizontalScroll ? (
+        <div className="flex overflow-x-auto pb-4 snap-x snap-mandatory" style={vRailGap ? { gap: vRailGap } : { gap: '1rem' }}>
+          {content.items.map((item, i) => renderCard(item, i))}
+        </div>
+      ) : (
+        /* Grid layout (quote_wall, or default) */
+        <div className={gridClasses}>
+          {content.items.map((item, i) => renderCard(item, i))}
+        </div>
+      )}
     </SectionWrapper>
   );
 }
@@ -1031,7 +1277,7 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
         <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
           <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
         </div>
-        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
         {content.subtitle && (
@@ -1077,7 +1323,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection 
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       <div className="mx-auto max-w-2xl">
         {content.headline && (
-          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
             {content.headline}
           </h2>
         )}
@@ -1153,7 +1399,7 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
       <div className={`mx-auto max-w-2xl text-center`}
         style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
       >
-        <h2 className="text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
         {content.body && (
@@ -1182,7 +1428,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={section.style.headlineColor ? { color: section.style.headlineColor } : undefined}>
+        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}
@@ -1310,6 +1556,7 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
               <StoreImage
                 src={content.logo}
                 alt={content.storeName}
+                fallbackColor={theme.colors.surface}
                 className="mb-3 h-8 w-auto object-contain"
               />
             ) : (
@@ -1566,64 +1813,100 @@ export function DividerSection({ section, theme, selectedSectionId, onSelectSect
   );
 }
 
-// ─── Section Renderer Props (shared) ────────────────────────────────────
-
-interface SectionRendererProps {
-  section: Section;
-  theme: StoreTheme;
-  selectedSectionId?: string | null;
-  onSelectSection?: (sectionId: string | null) => void;
-  products: StoreProduct[];
-  onViewProduct?: (productId: string) => void;
-  onNavigate?: (pageId: string) => void;
-  /** When true, force-hide the Add to Cart button on product cards (e.g. home page) */
-  forceHideAddToCart?: boolean;
-}
+// ─── Section Renderer Props — use the canonical type from component-registry ──
+// Extended locally with variant-specific props for the rendering pipeline.
 
 // ─── Main Section Router ────────────────────────────────────────────────
 
 export function renderSection(props: SectionRendererProps): React.ReactNode {
-  const { section } = props;
+  const { section, theme } = props;
 
   if (!section.visible) return null;
 
+  // ── GAP 3: Resolve variant configuration ──────────────────────
+  let effectiveSection = section;
+  let variantCssVars: Record<string, string> = {};
+  let variantExtraClasses = '';
+  let variantCardStyle: string | undefined;
+
+  if (section.componentMeta?.componentId) {
+    const entry = componentRegistry.getByComponentId(section.componentMeta.componentId);
+    if (entry?.Component) {
+      return (
+        <SectionErrorBoundary sectionType={`${section.type} (${entry.componentId})`}>
+          <entry.Component {...props} />
+        </SectionErrorBoundary>
+      );
+    }
+    // No custom component registered — resolve variant config to
+    // produce visual differences between variants using default renderers.
+    const config = resolveVariantConfig(section, theme);
+    if (config) {
+      // Merge content overrides into section.content
+      if (Object.keys(config.contentOverrides).length > 0) {
+        effectiveSection = {
+          ...effectiveSection,
+          content: { ...effectiveSection.content, ...config.contentOverrides },
+        };
+      }
+      // Merge style overrides into section.style
+      if (Object.keys(config.styleOverrides).length > 0) {
+        effectiveSection = {
+          ...effectiveSection,
+          style: { ...effectiveSection.style, ...config.styleOverrides },
+        };
+      }
+      variantCssVars = config.cssVars ?? {};
+      variantExtraClasses = config.extraClasses ?? '';
+      variantCardStyle = config.cardStyle;
+    }
+  }
+
+  // Build effective props with the merged section + variant metadata
+  const effectiveProps: SectionRendererProps = {
+    ...props,
+    section: effectiveSection,
+    variantCssVars: Object.keys(variantCssVars).length > 0 ? variantCssVars : undefined,
+    variantExtraClasses: variantExtraClasses || undefined,
+    cardStyle: variantCardStyle,
+  };
+
   let element: React.ReactNode = null;
 
-  switch (section.type) {
+  switch (effectiveSection.type) {
     case 'header':
-      element = <HeaderSection {...props} />; break;
+      element = <HeaderSection {...effectiveProps} />; break;
     case 'hero':
-      element = <HeroSection {...props} />; break;
+      element = <HeroSection {...effectiveProps} />; break;
     case 'featured-products':
-      element = <FeaturedProductsSection {...props} />; break;
+      element = <FeaturedProductsSection {...effectiveProps} />; break;
     case 'product-grid':
-      element = <ProductGridSection {...props} />; break;
+      element = <ProductGridSection {...effectiveProps} />; break;
     case 'text-banner':
-      element = <TextBannerSection {...props} />; break;
+      element = <TextBannerSection {...effectiveProps} />; break;
     case 'image-gallery':
-      element = <ImageGallerySection {...props} />; break;
+      element = <ImageGallerySection {...effectiveProps} />; break;
     case 'testimonials':
-      element = <TestimonialsSection {...props} />; break;
+      element = <TestimonialsSection {...effectiveProps} />; break;
     case 'newsletter':
-      element = <NewsletterSection {...props} />; break;
+      element = <NewsletterSection {...effectiveProps} />; break;
     case 'faq':
-      element = <FAQSection {...props} />; break;
+      element = <FAQSection {...effectiveProps} />; break;
     case 'cta':
-      element = <CTASection {...props} />; break;
+      element = <CTASection {...effectiveProps} />; break;
     case 'categories':
-      element = <CategoriesSection {...props} />; break;
+      element = <CategoriesSection {...effectiveProps} />; break;
     case 'brand-statement':
-      element = <BrandStatementSection {...props} />; break;
+      element = <BrandStatementSection {...effectiveProps} />; break;
     case 'footer':
-      element = <FooterSection {...props} />; break;
+      element = <FooterSection {...effectiveProps} />; break;
     case 'rich-text':
-      element = <RichTextSection {...props} />; break;
+      element = <RichTextSection {...effectiveProps} />; break;
     case 'spacer':
-      element = <SpacerSection {...props} />; break;
+      element = <SpacerSection {...effectiveProps} />; break;
     case 'divider':
-      element = <DividerSection {...props} />; break;
+      element = <DividerSection {...effectiveProps} />; break;
     default:
-      // Unknown section type — render a visible placeholder instead of invisible null
       return (
         <SectionErrorBoundary sectionType={section.type}>
           <div className="py-8 text-center text-sm text-gray-400">
@@ -1634,12 +1917,29 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
       );
   }
 
-  // Wrap each section in its own error boundary so a malformed
-  // section (e.g. AI-generated content with wrong shape) can never
-  // crash the entire page.
-  return (
+  // Wrap in error boundary, then optionally wrap in a variant div
+  // that applies CSS custom properties and extra utility classes.
+  const withBoundary = (
     <SectionErrorBoundary sectionType={section.type}>
       {element}
     </SectionErrorBoundary>
   );
+
+  // If variant has CSS vars or extra classes, wrap in a div so they
+  // cascade to all children (including SectionWrapper's inner content).
+  if (variantCssVars && Object.keys(variantCssVars).length > 0 || variantExtraClasses) {
+    const wrapperStyle: React.CSSProperties = {};
+    if (variantCssVars) {
+      Object.entries(variantCssVars).forEach(([key, value]) => {
+        (wrapperStyle as Record<string, string>)[key] = value;
+      });
+    }
+    return (
+      <div className={variantExtraClasses || undefined} style={wrapperStyle}>
+        {withBoundary}
+      </div>
+    );
+  }
+
+  return withBoundary;
 }

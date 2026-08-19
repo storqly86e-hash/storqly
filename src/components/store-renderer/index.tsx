@@ -306,6 +306,80 @@ function TemplatePageRenderer({
   }
 }
 
+// ─── Typography + Density CSS Variables (GAP 6) ──────────────────────
+
+/**
+ * Resolves typography system and density preset from the store's
+ * designLibrary metadata into CSS custom properties that sections
+ * can consume via var(--sq-*).
+ *
+ * Typography systems:
+ *   - editorial_serif_sans: serif headings, sans body, looser leading
+ *   - modern_geometric: geometric sans for both, tight tracking
+ *   - brutalist_mono: monospace headings, sans body, raw feel
+ *   - minimal_clean: same sans for both, generous whitespace
+ *   - editorial_sans_serif: inverse of editorial_serif_sans
+ *
+ * Density presets:
+ *   - airy: generous padding/margins, larger gaps
+ *   - balanced: default spacing
+ *   - compact: reduced padding/margins, tighter gaps
+ */
+function resolveTypographyDensity(store: Store): Record<string, string> {
+  const vars: Record<string, string> = {};
+  const typo = store.designLibrary?.typographySystem;
+  const density = store.designLibrary?.densityPreset;
+
+  // ── Typography systems ──
+  // Names come from composition-recipes.json recommended_theme.
+  // Aliases (modern_geometric, brutalist_mono, minimal_clean, editorial_sans_serif)
+  // are kept for backward compatibility.
+  if (typo === 'editorial_serif_sans' || typo === 'editorial_sans_serif') {
+    vars['--sq-font-heading'] = 'Georgia, "Times New Roman", serif';
+    vars['--sq-heading-weight'] = '400';
+    vars['--sq-heading-letter-spacing'] = '-0.01em';
+    vars['--sq-heading-line-height'] = '1.15';
+    vars['--sq-body-line-height'] = '1.7';
+  } else if (typo === 'modern_grotesk' || typo === 'modern_geometric') {
+    vars['--sq-font-heading'] = '"Inter", "Helvetica Neue", sans-serif';
+    vars['--sq-heading-weight'] = '600';
+    vars['--sq-heading-letter-spacing'] = '-0.03em';
+    vars['--sq-heading-line-height'] = '1.1';
+    vars['--sq-body-line-height'] = '1.55';
+  } else if (typo === 'soft_humanist' || typo === 'minimal_clean') {
+    vars['--sq-font-heading'] = '"Inter", system-ui, sans-serif';
+    vars['--sq-heading-weight'] = '300';
+    vars['--sq-heading-letter-spacing'] = '0.005em';
+    vars['--sq-heading-line-height'] = '1.25';
+    vars['--sq-body-line-height'] = '1.75';
+  } else if (typo === 'compressed_utility' || typo === 'brutalist_mono') {
+    vars['--sq-font-heading'] = '"Inter", "Helvetica Neue", sans-serif';
+    vars['--sq-heading-weight'] = '700';
+    vars['--sq-heading-letter-spacing'] = '0.02em';
+    vars['--sq-heading-line-height'] = '1.1';
+    vars['--sq-heading-text-transform'] = 'uppercase';
+    vars['--sq-body-line-height'] = '1.5';
+  }
+
+  // ── Density presets ──
+  if (density === 'airy') {
+    vars['--sq-section-py'] = '6rem';
+    vars['--sq-section-px'] = '2rem';
+    vars['--sq-grid-gap'] = '2rem';
+    vars['--sq-element-gap'] = '1.5rem';
+    vars['--sq-text-spacing'] = '0.5rem';
+  } else if (density === 'compact') {
+    vars['--sq-section-py'] = '2rem';
+    vars['--sq-section-px'] = '1rem';
+    vars['--sq-grid-gap'] = '0.75rem';
+    vars['--sq-element-gap'] = '0.75rem';
+    vars['--sq-text-spacing'] = '0.25rem';
+  }
+  // 'balanced' = default, no overrides needed
+
+  return vars;
+}
+
 // ═══════════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
@@ -423,14 +497,38 @@ export function StoreRenderer({
     );
   }
 
+  // GAP 6: Resolve typography + density CSS variables from design library
+  const typoDensityVars = resolveTypographyDensity(store);
+  const hasTypoDensityVars = Object.keys(typoDensityVars).length > 0;
+
+  // Merge typography/density vars into the base theme style.
+  // Typography system vars override the theme font when set.
+  const baseStyle: Record<string, string | undefined> = {
+    backgroundColor: theme.colors.background,
+    color: theme.colors.text,
+    fontFamily: theme.fonts.body ? `"${theme.fonts.body}", system-ui, sans-serif` : undefined,
+    '--sq-primary': theme.colors.primary,
+    '--sq-secondary': theme.colors.secondary,
+    '--sq-accent': theme.colors.accent,
+    '--sq-background': theme.colors.background,
+    '--sq-surface': theme.colors.surface,
+    '--sq-text': theme.colors.text,
+    '--sq-text-muted': theme.colors.textMuted,
+    '--sq-border': theme.colors.border,
+    '--sq-font-heading': theme.fonts.heading ? `"${theme.fonts.heading}", system-ui, sans-serif` : undefined,
+    '--sq-font-body': theme.fonts.body ? `"${theme.fonts.body}", system-ui, sans-serif` : undefined,
+  };
+  // Typography/density vars take precedence (e.g. --sq-font-heading from editorial_serif_sans)
+  if (hasTypoDensityVars) {
+    Object.entries(typoDensityVars).forEach(([key, value]) => {
+      baseStyle[key] = value;
+    });
+  }
+
   return (
     <div
       className="min-h-screen flex flex-col font-sans antialiased"
-      style={{
-        backgroundColor: theme.colors.background,
-        color: theme.colors.text,
-        fontFamily: theme.fonts.body ? `"${theme.fonts.body}", system-ui, sans-serif` : undefined,
-      }}
+      style={baseStyle as React.CSSProperties}
       onClick={() => onSelectSection?.(null)}
     >
       {/* Header */}

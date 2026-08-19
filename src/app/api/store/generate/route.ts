@@ -16,6 +16,13 @@ import { normalizeStore, normalizeProducts } from '@/lib/normalize-store';
 import { sanitizePrompt, extractProductCount } from '@/lib/sanitize-prompt';
 import type { Store, StoreProduct } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
+import { ensureLibraryRegistered } from '@/lib/design-library/ensure-registered';
+import { composeStore } from '@/lib/design-library/composition';
+import type { CompositionResult } from '@/lib/design-library/design-intent';
+import { buildLibraryPromptContext, buildHeroLibraryBlock, buildImageArtDirectionPrompt } from '@/lib/design-library/prompt-context';
+import { getVariantMapping } from '@/lib/design-library/variant-mapping';
+import { validateAndFixComponentMeta } from '@/lib/design-library/componentmeta-validator';
+import type { ComponentMeta } from '@/lib/store-schema';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -176,7 +183,8 @@ FORMAT RULES:
 SCHEMA (compact):
 {"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","announcementText":"<short promo like Free shipping on orders over $50 or New drops every Friday>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
 
-SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"lg","paddingX":"md","maxWidth":"xl","borderRadius":"none"},"visible":true}
+SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"lg","paddingX":"md","maxWidth":"xl","borderRadius":"none"},"visible":true,"componentMeta":{"componentId":"<family.variant>","family":"<family>","variant":"<variant>","role":"<role>"}}
+Every section MUST have a componentMeta field. Use the EXACT componentId values from the Page Composition section below. Do NOT invent componentId values.
 
 ═══ IMAGE URLS — USE THESE EXACT URLS ═══
 You MUST use these real, working image URLs. Do NOT invent or guess photo IDs.
@@ -290,9 +298,9 @@ function createFallbackStore(prompt: string): Store {
   const uid = () => crypto.randomUUID();
 
   const products = [
-    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Our signature product.', category: 'Featured', featured: true, inStock: true },
-    { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for you.', category: 'Premium', featured: false, inStock: true },
-    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: null, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Great value starter.', category: 'Starter', featured: false, inStock: true },
+    { id: uid(), name: 'Classic Edition', price: 49.99, compareAtPrice: undefined, images: ['https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600'], description: 'Our signature product.', category: 'Featured', featured: true, inStock: true },
+    { id: uid(), name: 'Premium Selection', price: 89.99, compareAtPrice: undefined, images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600'], description: 'Premium quality for you.', category: 'Premium', featured: false, inStock: true },
+    { id: uid(), name: 'Starter Kit', price: 29.99, compareAtPrice: undefined, images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600'], description: 'Great value starter.', category: 'Starter', featured: false, inStock: true },
   ];
 
   return {
@@ -448,12 +456,28 @@ export async function POST(req: NextRequest) {
         send('progress', { stage: 'generating', message: 'Generating your store...' });
         log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
 
+        // ── Library-aware composition ────────────────────────────────
+        let libraryCtx: CompositionResult | null = null;
+        let libraryPromptSection = '';
+        try {
+          ensureLibraryRegistered();
+          libraryCtx = await composeStore(sanitizedPrompt);
+          if (libraryCtx) {
+            log(`[Store Generate] Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
+            libraryPromptSection = buildLibraryPromptContext(libraryCtx);
+          }
+        } catch (e) {
+          warn(`[Store Generate] Library composition failed (non-fatal): ${e}. Using legacy generation.`);
+        }
+
         const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
 
         const phase1Result = await executeAI('store-generation', [
           { role: 'user', content: userMessage },
         ], {
-          systemPrompt: buildPhase1SystemPrompt(phase1Count, sanitizedPrompt),
+          systemPrompt: libraryCtx
+            ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
+            : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt),
           temperature: 0.6,
           timeout: 40_000,
           maxRetries: 3,
@@ -505,7 +529,19 @@ export async function POST(req: NextRequest) {
           log(`[Store Generate] Normalization: 0 fixes needed — clean output.`);
         }
 
-        const store = normResult.store;
+        let store = normResult.store;
+
+        // ── GAP 1: Validate and fix componentMeta ─────────────────────
+        if (libraryCtx) {
+          const { store: validatedStore, result: vr } = validateAndFixComponentMeta(store, libraryCtx);
+          store = validatedStore;
+          if (vr.fixedMeta > 0 || vr.errors.length > 0) {
+            log(`[Store Generate] componentMeta validation: ${vr.validMeta} valid, ${vr.fixedMeta} fixed, ${vr.attachedMissingMeta} attached, ${vr.errors.length} errors`);
+            for (const e of vr.errors) log(`  [componentMeta] ${e}`);
+          } else {
+            log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
+          }
+        }
 
         // ── Image enrichment is now LAZY (not blocking generation) ──
         // The client triggers background enrichment via /api/store/enrich-images

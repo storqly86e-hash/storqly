@@ -222,7 +222,7 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
                             borderColor: isSelected ? theme.colors.primary : theme.colors.border,
                             backgroundColor: isSelected ? theme.colors.primary + '15' : 'transparent',
                             color: isSelected ? theme.colors.primary : theme.colors.text,
-                            ringColor: theme.colors.primary,
+                            outline: isSelected ? `1px solid ${theme.colors.primary}` : '1px solid transparent',
                           }}
                           onClick={() =>
                             setSelectedOptions((prev) => ({
@@ -328,11 +328,6 @@ export function ProductDetailPage({ store, productId, onNavigate }: TemplatePage
                 <div
                   key={p.id}
                   className={`${radius} group cursor-pointer overflow-hidden border transition-shadow duration-200 hover:shadow-md`}
-                  style={{
-                    borderColor: theme.colors.border,
-                    backgroundColor: '#ffffff',
-                  }}
-                  onClick={() => onViewProduct?.(p.id)}
                 >
                   <div
                     className="relative aspect-square w-full overflow-hidden"
