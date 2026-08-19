@@ -128,3 +128,22 @@ Stage Summary:
 - The endpoint now returns anyWorking: true when z-ai SDK is available (non-production)
 - The misleading "All AI providers are currently unavailable" banner on the landing page will no longer appear
 
+---
+Task ID: 2
+Agent: main
+Task: Fix FallbackBanner auto-dismiss and verify AI generation works
+
+Work Log:
+- Tested z-ai SDK directly from Node.js: works perfectly (931ms for JSON mode)
+- Verified z-ai provider IS in the chain: dev log shows [AI Providers] Initialized 1 providers: z-ai
+- Updated FallbackBanner component to auto-check /api/ai-status on mount
+- If AI is available, FallbackBanner auto-clears the stale isFallbackStore state
+- Removed diagnostic test endpoint
+- Confirmed no new lint errors from changes
+
+Stage Summary:
+- Two files changed: /api/ai-status/route.ts (z-ai detection) and page.tsx (FallbackBanner auto-dismiss)
+- z-ai SDK confirmed working: 931ms JSON mode response
+- Provider chain: z-ai (1 provider)
+- User should refresh the page to see the fix take effect
+

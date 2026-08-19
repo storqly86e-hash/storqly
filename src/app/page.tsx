@@ -1173,8 +1173,30 @@ function FallbackBanner() {
   const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
   const fallbackReason = useStoreEditor((s) => s.fallbackReason)
   const [dismissed, setDismissed] = useState(false)
+  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
 
-  if (dismissed || !isFallbackStore) return null
+  // Auto-check if AI is actually available now — if so, clear the stale fallback state
+  useEffect(() => {
+    if (!isFallbackStore || dismissed) return
+    let cancelled = false
+    fetch('/api/ai-status')
+      .then(r => r.json())
+      .then(data => {
+        if (cancelled) return
+        if (data.anyWorking) {
+          setAiAvailable(true)
+          // Auto-clear the stale fallback flag so the misleading banner disappears
+          useStoreEditor.getState().setIsFallbackStore?.(false, '')
+        } else {
+          setAiAvailable(false)
+        }
+      })
+      .catch(() => { /* ignore */ })
+    return () => { cancelled = true }
+  }, [isFallbackStore, dismissed])
+
+  // Don't show banner if AI is now available (state just cleared) or already dismissed
+  if (dismissed || !isFallbackStore || aiAvailable === true) return null
 
   const isIncomplete = fallbackReason.includes('interrupted') || fallbackReason.includes('incomplete')
   const isProviderDown = fallbackReason.includes('All') || fallbackReason.includes('429') || fallbackReason.includes('403') || fallbackReason.includes('404') || fallbackReason.includes('providers failed')
