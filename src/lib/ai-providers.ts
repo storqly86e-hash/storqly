@@ -133,7 +133,7 @@ class ZAIProvider implements AIProvider {
 
 // ─── GROQ Provider (Primary for production) ──────────
 
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'qwen/qwen3.6-27b';
 
 class GroqProvider implements AIProvider {
   readonly name = 'groq';

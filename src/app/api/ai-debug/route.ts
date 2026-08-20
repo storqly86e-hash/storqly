@@ -9,7 +9,7 @@ import { NextResponse } from 'next/server';
 import { getProviders, getProviderDiagnostics } from '@/lib/ai-providers';
 
 // ── Runtime code fingerprint (compiled into the bundle at build time) ──
-const GROQ_MODEL = 'llama-3.3-70b-versatile';
+const GROQ_MODEL = 'qwen/qwen3.6-27b';
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
