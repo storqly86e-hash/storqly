@@ -123,9 +123,17 @@ async function tryGroqStream(
     const Groq = (await import('groq-sdk')).default;
     const client = new Groq({ apiKey });
 
+    // Fix z-ai convention: first 'assistant' message → 'system' role for Groq
+    const groqMessages = messages.map((m, idx) => {
+      if (idx === 0 && m.role === 'assistant') {
+        return { role: 'system' as const, content: m.content };
+      }
+      return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
+    });
+
     const stream = await client.chat.completions.create({
       model: GROQ_MODEL,
-      messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
+      messages: groqMessages,
       temperature: 0.8,
       stream: true,
     });

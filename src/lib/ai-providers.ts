@@ -152,10 +152,43 @@ class GroqProvider implements AIProvider {
     const client = this.getClient();
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
+    // ── Build Groq-compatible messages ──
+    // The orchestrator sends system prompts as role='assistant' (z-ai convention).
+    // Groq requires proper 'system' role. Also, Groq requires the word "json"
+    // somewhere in system/user messages when response_format=json_object is used.
+    let groqMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+
+    if (jsonMode) {
+      // Check if any message contains "json" (case-insensitive)
+      const hasJsonWord = messages.some(m => /json/i.test(m.content));
+      const jsonInstruction = 'You must return the complete response as valid JSON. Return JSON only.';
+
+      groqMessages = messages.map((m, idx) => {
+        // Convert first 'assistant' message to 'system' role (z-ai → Groq convention)
+        if (idx === 0 && m.role === 'assistant') {
+          return { role: 'system' as const, content: hasJsonWord ? m.content : jsonInstruction + '\n\n' + m.content };
+        }
+        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
+      });
+
+      // If no message had "json" and first wasn't assistant, prepend system instruction
+      if (!hasJsonWord) {
+        groqMessages.unshift({ role: 'system', content: jsonInstruction });
+      }
+    } else {
+      // Non-JSON mode: still fix role convention
+      groqMessages = messages.map((m, idx) => {
+        if (idx === 0 && m.role === 'assistant') {
+          return { role: 'system' as const, content: m.content };
+        }
+        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
+      });
+    }
+
     const completion = await Promise.race([
       client.chat.completions.create({
         model: GROQ_MODEL,
-        messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
+        messages: groqMessages,
         temperature,
         ...(maxTokens ? { max_tokens: maxTokens } : {}),
         ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
