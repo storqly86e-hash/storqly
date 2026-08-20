@@ -5,7 +5,7 @@
 // Supports auto-continue: if the proxy kills the connection mid-stream,
 // the client sends continueFrom=<partial> and the AI picks up where it left off.
 //
-// Provider priority: z-ai (sandbox) → OpenRouter (free, production primary) → GROQ → Gemini (fallback)
+// Provider priority: z-ai (sandbox) → GROQ (primary production)
 // Auth guard: returns 401 JSON before creating the SSE stream.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -105,236 +105,52 @@ async function tryZAIStream(
   }
 }
 
-// ─── OpenRouter — production primary (free models) ────────
-// General-purpose models first (better for marketing content),
-// code models as fallback. Tries streaming first, then non-streaming.
+// ─── GROQ streaming (primary production provider) ────────
+const GROQ_MODEL = 'llama-4-scout-17b-16e-instruct';
 
-// Tested 2026-08-18: poolside is the only free model with clean content output.
-// nemotron includes thinking in content — only usable for non-JSON streaming.
-const OPENROUTER_MODELS = [
-  'poolside/laguna-s-2.1:free',
-  'nvidia/nemotron-3.5-lightning:free',
-  'nvidia/nemotron-3-nano-30b-a3b:free',
-] as const;
-
-async function tryOpenRouterStream(
+async function tryGroqStream(
   messages: Array<{ role: string; content: string }>,
   onDelta: (text: string) => void,
   onProgress: (msg: string) => void,
 ): Promise<string | null> {
   try {
-    const apiKey = process.env.OPENROUTER_API_KEY;
-    if (!apiKey || apiKey === 'placeholder') return null;
-
-    let lastError: Error | null = null;
-    for (const model of OPENROUTER_MODELS) {
-      try {
-        onProgress(`Trying ${model}...`);
-        console.log(`[Marketing Kit] OpenRouter trying ${model} (streaming)...`);
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`,
-            'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://storqly.com',
-            'X-Title': 'Storqly',
-          },
-          body: JSON.stringify({
-            model,
-            messages,
-            temperature: 0.7,
-            max_tokens: 8000,
-            stream: true,
-          }),
-        });
-
-        if (!response.ok) {
-          const errText = await response.text();
-          lastError = new Error(`OpenRouter ${response.status} on ${model}: ${errText.substring(0, 300)}`);
-          console.warn(`[Marketing Kit] OpenRouter ${model} HTTP ${response.status}: ${errText.substring(0, 200)}`);
-          continue;
-        }
-
-        const reader = response.body?.getReader();
-        if (!reader) continue;
-
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullContent = '';
-        let chunkCount = 0;
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() || '';
-
-          for (const line of lines) {
-            const trimmed = line.trim();
-            if (!trimmed || !trimmed.startsWith('data: ')) continue;
-            const payload = trimmed.slice(6);
-            if (payload === '[DONE]') continue;
-            try {
-              const parsed = JSON.parse(payload);
-              // Check for error in stream
-              if (parsed.error) {
-                console.warn(`[Marketing Kit] OpenRouter stream error on ${model}:`, parsed.error.message);
-                break;
-              }
-              const delta = parsed.choices?.[0]?.delta?.content;
-              if (delta) {
-                fullContent += delta;
-                chunkCount++;
-                onDelta(delta);
-              }
-            } catch { /* skip malformed JSON */ }
-          }
-        }
-
-        const trimmed = fullContent.trim();
-        if (trimmed) {
-          console.log(`[Marketing Kit] ✅ OpenRouter ${model} streaming OK: ${trimmed.length} chars, ${chunkCount} chunks`);
-          return trimmed;
-        }
-        // Streaming returned empty — try non-streaming as fallback for this model
-        console.log(`[Marketing Kit] OpenRouter ${model} streaming empty, trying non-streaming...`);
-        const nonStreamResult = await tryOpenRouterNonStream(apiKey, model, messages);
-        if (nonStreamResult) return nonStreamResult;
-      } catch (e) {
-        lastError = e instanceof Error ? e : new Error(String(e));
-        console.warn(`[Marketing Kit] OpenRouter ${model} error:`, lastError.message);
-      }
-    }
-    console.error('[Marketing Kit] All OpenRouter models failed:', lastError?.message);
-    return null;
-  } catch (e) {
-    console.error('[Marketing Kit] OpenRouter unexpected error:', e);
-    return null;
-  }
-}
-
-// Non-streaming OpenRouter call (fallback when streaming returns empty)
-async function tryOpenRouterNonStream(
-  apiKey: string,
-  model: string,
-  messages: Array<{ role: string; content: string }>,
-): Promise<string | null> {
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://storqly.com',
-        'X-Title': 'Storqly',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.7,
-        max_tokens: 8000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.warn(`[Marketing Kit] OpenRouter non-stream ${model} HTTP ${response.status}: ${errText.substring(0, 200)}`);
-      return null;
-    }
-
-    const data = await response.json() as {
-      choices: Array<{ message?: { content?: string } }>;
-      error?: { message: string };
-    };
-
-    if (data.error) {
-      console.warn(`[Marketing Kit] OpenRouter non-stream ${model} error:`, data.error.message);
-      return null;
-    }
-
-    const content = data.choices?.[0]?.message?.content?.trim();
-    if (content) {
-      console.log(`[Marketing Kit] ✅ OpenRouter ${model} non-stream OK: ${content.length} chars`);
-      return content;
-    }
-    return null;
-  } catch (e) {
-    console.warn(`[Marketing Kit] OpenRouter non-stream error:`, e);
-    return null;
-  }
-}
-
-// ─── GROQ streaming (backup) ─────────────────────
-async function tryGroqStream(
-  messages: Array<{ role: string; content: string }>,
-  onDelta: (text: string) => void,
-): Promise<string | null> {
-  try {
     const apiKey = process.env.GROQ_API_KEY;
     if (!apiKey || apiKey === 'placeholder') return null;
+
+    onProgress('Connecting to Groq...');
+    console.log('[Marketing Kit] GROQ trying (streaming)...');
 
     const Groq = (await import('groq-sdk')).default;
     const client = new Groq({ apiKey });
 
     const stream = await client.chat.completions.create({
-      model: 'llama-4-scout-17b-16e-instruct',
+      model: GROQ_MODEL,
       messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
       temperature: 0.8,
       stream: true,
     });
 
     let fullContent = '';
+    let chunkCount = 0;
     for await (const chunk of stream) {
       const delta = chunk.choices[0]?.delta?.content;
       if (delta) {
         fullContent += delta;
+        chunkCount++;
         onDelta(delta);
       }
     }
 
-    return fullContent.trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-// ─── Gemini non-streaming fallback ───────────────────────────
-async function tryGemini(
-  messages: Array<{ role: string; content: string }>,
-): Promise<string | null> {
-  try {
-    const apiKey = process.env.GOOGLE_AI_API_KEY;
-    if (!apiKey || apiKey === 'placeholder') return null;
-
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey });
-
-    let systemInstruction: string | undefined;
-    const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
-
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        systemInstruction = msg.content;
-      } else {
-        geminiContents.push({
-          role: msg.role === 'user' ? 'user' : 'model',
-          parts: [{ text: msg.content }],
-        });
-      }
+    const trimmed = fullContent.trim();
+    if (trimmed) {
+      console.log(`[Marketing Kit] ✅ GROQ streaming OK: ${trimmed.length} chars, ${chunkCount} chunks`);
+      return trimmed;
     }
-
-    const config: Record<string, unknown> = {};
-    if (systemInstruction) config.systemInstruction = systemInstruction;
-
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: geminiContents,
-      ...(Object.keys(config).length > 0 ? { config } : {}),
-    });
-    return response.text.trim() || null;
-  } catch {
+    console.warn('[Marketing Kit] GROQ streaming returned empty');
+    return null;
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error('[Marketing Kit] GROQ streaming error:', msg);
     return null;
   }
 }
@@ -395,7 +211,7 @@ export async function POST(req: NextRequest) {
           { role: 'user' as const, content: userMessage },
         ];
 
-        // Try providers in order: z-ai → OpenRouter → GROQ → Gemini
+        // Try providers in order: z-ai → GROQ
         let result: string | null = null;
 
         // 1. Try z-ai (sandbox streaming)
@@ -405,36 +221,17 @@ export async function POST(req: NextRequest) {
           if (result) console.log('[Marketing Kit] ✅ z-ai succeeded');
         }
 
-        // 2. Try OpenRouter (production primary — free models)
+        // 2. Try GROQ (primary production provider)
         if (!result && !timedOut()) {
-          console.log('[Marketing Kit] Trying OpenRouter (free models)...');
-          result = await tryOpenRouterStream(
+          result = await tryGroqStream(
             messages,
             (delta) => send('delta', { content: delta }),
             (msg) => send('progress', { message: msg }),
           );
         }
 
-        // 3. Try GROQ (backup streaming)
-        if (!result && !timedOut()) {
-          console.log('[Marketing Kit] Trying GROQ provider...');
-          result = await tryGroqStream(messages, (delta) => send('delta', { content: delta }));
-          if (result) console.log('[Marketing Kit] ✅ GROQ succeeded');
-        }
-
-        // 4. Try Gemini (fallback, non-streaming)
-        if (!result && !timedOut()) {
-          console.log('[Marketing Kit] Trying Gemini provider (non-streaming)...');
-          send('progress', { message: 'Trying backup AI provider...' });
-          result = await tryGemini(messages);
-          if (result) {
-            console.log('[Marketing Kit] ✅ Gemini succeeded');
-            send('delta', { content: result });
-          }
-        }
-
         if (!result) {
-          send('error', { message: 'AI generation failed. Please try again in a moment. If this persists, check that OPENROUTER_API_KEY is set correctly in your deployment.' });
+          send('error', { message: 'AI generation failed. Please try again. If this persists, check that GROQ_API_KEY is set correctly in your deployment.' });
           return;
         }
 

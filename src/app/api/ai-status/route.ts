@@ -38,19 +38,13 @@ function checkByFormat(): ProviderStatus[] {
     results.push({ name: 'z-ai', ok: true, latencyMs: Date.now() - start, method: 'format' });
   }
 
-  // OpenRouter
-  const orKey = process.env.OPENROUTER_API_KEY;
-  if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
-    results.push({ name: 'openrouter', ok: true, latencyMs: Date.now() - start, method: 'format' });
-  }
-
-  // Groq
+  // Groq (primary production provider)
   const gKey = process.env.GROQ_API_KEY;
   if (gKey && gKey !== 'placeholder' && gKey.startsWith('gsk_')) {
     results.push({ name: 'groq', ok: true, latencyMs: Date.now() - start, method: 'format' });
   }
 
-  // Gemini
+  // Gemini (only if valid API key configured)
   const gemKey = process.env.GOOGLE_AI_API_KEY;
   if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
     results.push({ name: 'gemini', ok: true, latencyMs: Date.now() - start, method: 'format' });
@@ -70,7 +64,7 @@ async function pingProvider(provider: PingableProvider): Promise<ProviderStatus>
   try {
     await provider.call({
       messages: [{ role: 'user', content: 'hi' }],
-      timeout: 10_000,
+      timeout: 15_000,
     });
     return { name: provider.name, ok: true, latencyMs: Date.now() - start, method: 'ping' };
   } catch (err: unknown) {
@@ -115,18 +109,13 @@ export async function GET(req: NextRequest) {
     const env = process.env;
     if (env.GROQ_API_KEY && env.GROQ_API_KEY !== 'placeholder') {
       if (!results.find(r => r.name === 'groq')) {
-        results.push({ name: 'groq', ok: false, error: 'Key format invalid or revoked', latencyMs: 0, method: 'format' });
+        results.push({ name: 'groq', ok: false, error: 'Key format invalid (needs gsk_)', latencyMs: 0, method: 'format' });
       }
     }
     if (env.GOOGLE_AI_API_KEY && env.GOOGLE_AI_API_KEY !== 'placeholder') {
       if (!results.find(r => r.name === 'gemini')) {
         const isOAuth = env.GOOGLE_AI_API_KEY!.startsWith('AQ.');
         results.push({ name: 'gemini', ok: false, error: isOAuth ? 'OAuth token (need AIzaSy key)' : 'Key format invalid', latencyMs: 0, method: 'format' });
-      }
-    }
-    if (env.OPENROUTER_API_KEY && env.OPENROUTER_API_KEY !== 'placeholder') {
-      if (!results.find(r => r.name === 'openrouter')) {
-        results.push({ name: 'openrouter', ok: false, error: 'Key format invalid (needs sk-or-)', latencyMs: 0, method: 'format' });
       }
     }
   }

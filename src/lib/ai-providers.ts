@@ -1,11 +1,10 @@
 // ========================================
 // AI Provider Abstraction Layer
 // ========================================
-// Multi-provider failover chain:
+// Provider chain:
 //   1. z-ai (sandbox-only, local dev)
-//   2. OpenRouter (free models — primary for production)
-//   3. GROQ (backup, if key valid)
-//   4. Gemini (backup, if key valid)
+//   2. GROQ (primary for production)
+//   3. Gemini (disabled until valid API key is configured)
 
 import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
@@ -45,7 +44,7 @@ export function isAuthError(err: unknown): boolean {
   return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized') || msg.includes('API_KEY_INVALID');
 }
 
-// ─── z-ai Provider (Sandbox-only, gracefully disabled on Render) ──
+// ─── z-ai Provider (Sandbox-only, gracefully disabled in production) ──
 
 // Detect if z-ai SDK is available (only in Z.ai sandbox)
 let zaiCreate: (() => Promise<unknown>) | null = null;
@@ -132,118 +131,9 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── OpenRouter Provider (Free models — Primary for production) ──
-// OpenAI-compatible API at https://openrouter.ai/api/v1
-// Free models: cohere/north-mini-code, poolside/laguna-s-2.1, inclusionai/ling-3.0-flash
-// Rate limits: 50 req/day (free account), 1000 req/day ($10 credit)
+// ─── GROQ Provider (Primary for production) ──────────
 
-// Tested 2026-08-18: Only poolside/laguna-s-2.1 returns clean content + supports JSON mode.
-// Others either return null content (reasoning-only) or inject thinking into content.
-const OPENROUTER_MODELS = [
-  'poolside/laguna-s-2.1:free',            // Primary: clean output, JSON mode works
-  'nvidia/nemotron-3.5-lightning:free',    // Backup: includes thinking in content (no JSON mode)
-] as const;
-
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-class OpenRouterProvider implements AIProvider {
-  readonly name = 'openrouter';
-  private lastWorkingModel = 0; // index into OPENROUTER_MODELS
-
-  private getApiKey(): string {
-    const key = process.env.OPENROUTER_API_KEY;
-    if (!key || key === 'placeholder') throw new Error('OPENROUTER_API_KEY not configured');
-    return key;
-  }
-
-  private async callWithParams(
-    options: ProviderCallOptions,
-    useJsonMode: boolean,
-  ): Promise<string> {
-    const apiKey = this.getApiKey();
-    const { messages, temperature = 0.7, maxTokens, timeout = 30_000 } = options;
-
-    // Convert messages: treat first 'assistant' message as system prompt
-    const openaiMessages: Array<{ role: string; content: string }> = [];
-    for (const msg of messages) {
-      if (msg.role === 'assistant' && openaiMessages.length === 0) {
-        openaiMessages.push({ role: 'system', content: msg.content });
-      } else {
-        openaiMessages.push({ role: msg.role, content: msg.content });
-      }
-    }
-
-    const body: Record<string, unknown> = {
-      model: OPENROUTER_MODELS[this.lastWorkingModel],
-      messages: openaiMessages,
-      temperature,
-      max_tokens: maxTokens || 8000,
-      ...(useJsonMode ? { response_format: { type: 'json_object' } } : {}),
-    };
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
-
-    try {
-      const response = await fetch(OPENROUTER_API_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': process.env.NEXTAUTH_URL || 'https://storqly.com',
-          'X-Title': 'Storqly',
-        },
-        body: JSON.stringify(body),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const errBody = await response.text().catch(() => '');
-        const errStr = errBody.substring(0, 300);
-
-        // If rate-limited on this model, try next model
-        if (response.status === 429 && this.lastWorkingModel < OPENROUTER_MODELS.length - 1) {
-          this.lastWorkingModel++;
-          console.warn(`[OpenRouter] Rate limited on ${body.model}, falling back to ${OPENROUTER_MODELS[this.lastWorkingModel]}`);
-          return this.callWithParams(options, useJsonMode);
-        }
-
-        // If 400 and json_mode is on, model might not support response_format — retry without it
-        if (response.status === 400 && useJsonMode && errStr.includes('response_format')) {
-          console.warn(`[OpenRouter] ${body.model} does not support response_format, retrying without json_mode`);
-          return this.callWithParams({ ...options, jsonMode: false }, false);
-        }
-
-        throw new Error(`OpenRouter ${response.status}: ${errStr.substring(0, 200)}`);
-      }
-
-      const data = await response.json() as {
-        choices: Array<{ message?: { content?: string } }>;
-        error?: { message: string };
-      };
-
-      if (data.error) {
-        throw new Error(`OpenRouter error: ${data.error.message}`);
-      }
-
-      const content = data.choices?.[0]?.message?.content;
-      if (!content || content.trim().length === 0) throw new Error('Empty response');
-      return content.trim();
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  async call(options: ProviderCallOptions): Promise<string> {
-    return this.callWithParams(options, !!options.jsonMode);
-  }
-
-  reset() {
-    this.lastWorkingModel = 0;
-  }
-}
-
-// ─── GROQ Provider (Backup 1) ──────────
+const GROQ_MODEL = 'llama-4-scout-17b-16e-instruct';
 
 class GroqProvider implements AIProvider {
   readonly name = 'groq';
@@ -264,7 +154,7 @@ class GroqProvider implements AIProvider {
 
     const completion = await Promise.race([
       client.chat.completions.create({
-        model: 'llama-4-scout-17b-16e-instruct',
+        model: GROQ_MODEL,
         messages: messages.map(m => ({ role: m.role as 'user' | 'assistant' | 'system', content: m.content })),
         temperature,
         ...(maxTokens ? { max_tokens: maxTokens } : {}),
@@ -285,7 +175,8 @@ class GroqProvider implements AIProvider {
   }
 }
 
-// ─── Google AI Studio / Gemini Provider (Backup 2) ──
+// ─── Google AI Studio / Gemini Provider (DISABLED — no valid key) ──
+// Will be re-enabled when a valid GOOGLE_AI_API_KEY (starting with 'AIzaSy') is configured.
 
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -297,21 +188,15 @@ class GeminiProvider implements AIProvider {
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
 
       // Validate key format: Gemini API keys MUST start with 'AIzaSy'.
-      // OAuth tokens (AQ..., ya29...) sent as apiKey cause ACCESS_TOKEN_TYPE_UNSUPPORTED.
       if (!apiKey.startsWith('AIzaSy')) {
         throw new Error(
           `GOOGLE_AI_API_KEY has invalid format (starts with '${apiKey.slice(0, 6)}'). ` +
-          `Gemini API keys must start with 'AIzaSy'. Get one at https://aistudio.google.com/apikey. ` +
-          `If this is an OAuth token, it will NOT work — you need a permanent API key.`,
+          `Gemini API keys must start with 'AIzaSy'. Get one at https://aistudio.google.com/apikey.`,
         );
       }
 
-      // Bypass the @google/genai SDK's complex auth (which can fall through to
-      // GoogleAuth/ADC and send OAuth Bearer tokens). Use direct fetch with
-      // x-goog-api-key header to guarantee API-key-only auth.
       this.client = new GoogleGenAI({
         apiKey,
-        // Explicitly disable any Google Cloud / ADC auth path
         googleAuthOptions: { scopes: [] },
       });
     }
@@ -322,7 +207,6 @@ class GeminiProvider implements AIProvider {
     const ai = this.getClient();
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
 
-    // Gemini uses a different message format: system instruction + user/assistant history
     let systemInstruction: string | undefined;
     const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
 
@@ -378,34 +262,28 @@ function createProviders(): AIProvider[] {
     chain.push(new ZAIProvider());
   }
 
-  // OpenRouter: primary for production — free models, no credit card needed.
-  // Get your key at https://openrouter.ai/keys
-  if (process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY !== 'placeholder') {
-    chain.push(new OpenRouterProvider());
-  }
-
-  // GROQ: add if API key is configured
+  // GROQ: primary provider for production.
+  // Get your key at https://console.groq.com/keys
   if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder') {
     chain.push(new GroqProvider());
   }
 
-  // Gemini: add if API key is configured
-  if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder') {
+  // Gemini: ONLY enabled when a valid API key is configured.
+  // Disabled by default — no key means no fallback to a broken provider.
+  if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder' && process.env.GOOGLE_AI_API_KEY.startsWith('AIzaSy')) {
     chain.push(new GeminiProvider());
   }
 
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
-    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'set (' + process.env.OPENROUTER_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
     console.error(`[AI Providers]   GROQ_API_KEY: ${process.env.GROQ_API_KEY ? 'set (' + process.env.GROQ_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
     console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${process.env.GOOGLE_AI_API_KEY ? 'set (' + process.env.GOOGLE_AI_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Set at least one. OpenRouter free key: https://openrouter.ai/keys');
+    console.error('[AI Providers] Fix: Set GROQ_API_KEY. Get one at https://console.groq.com/keys');
   }
 
   providers = chain;
   const details = chain.map(p => {
-    if (p.name === 'openrouter') return `openrouter(key=${process.env.OPENROUTER_API_KEY?.slice(0, 8)}...)`;
-    if (p.name === 'groq') return `groq(key=${process.env.GROQ_API_KEY?.slice(0, 8)}...)`;
+    if (p.name === 'groq') return `groq(key=${process.env.GROQ_API_KEY?.slice(0, 8)}..., model=${GROQ_MODEL})`;
     if (p.name === 'gemini') {
       const k = process.env.GOOGLE_AI_API_KEY;
       return `gemini(key=${k?.slice(0, 8)}..., format=${k?.startsWith('AIzaSy') ? 'VALID' : 'SUSPECT'})`;
@@ -433,7 +311,7 @@ export function getProviderDiagnostics(): {
   env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
-  openrouterModels: readonly string[];
+  groqModel: string;
 } {
   const maskKey = (v: string | undefined) => {
     if (!v || v === 'placeholder') return false;
@@ -442,7 +320,6 @@ export function getProviderDiagnostics(): {
   };
   return {
     env: {
-      OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY),
       GROQ_API_KEY: maskKey(process.env.GROQ_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
@@ -451,6 +328,6 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
-    openrouterModels: [...OPENROUTER_MODELS],
+    groqModel: GROQ_MODEL,
   };
 }
