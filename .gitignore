@@ -59,4 +59,24 @@ server.log
 
 # Skills directory
 /skills/tool-results/
-test-*.png\ntest-results/\nvlm-result.json\n.zscripts/dev.pid
+
+# Test artifacts (root level)
+test-*.ts
+test-*.mjs
+test-*.sh
+test-*.py
+test-*.png
+test-*.csv
+test-*.pid
+test-results/
+vlm-result.json
+batch-test*.ts
+batch-test*.sh
+run-batch.py
+run-tests*.sh
+run-short.sh
+
+# Agent work files
+agent-ctx/
+.zscripts/
+worklog.md
