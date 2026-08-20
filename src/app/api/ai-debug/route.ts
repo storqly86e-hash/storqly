@@ -13,8 +13,8 @@ const GROQ_MODEL = 'llama-4-scout-17b-16e-instruct';
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
-const OPENROUTER_MODELS = ['cohere/north-mini-code:free', 'poolside/laguna-s-2.1:free', 'inclusionai/ling-3.0-flash:free'];
-const FINGERPRINT = 'v5-openrouter-2026-08-18';
+const OPENROUTER_MODELS = ['poolside/laguna-s-2.1:free', 'nvidia/nemotron-3.5-lightning:free'];
+const FINGERPRINT = 'v6-per-provider-errors-2026-08-20';
 
 function analyzeGeminiKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Set GOOGLE_AI_API_KEY in Railway, then redeploy.' };

@@ -512,7 +512,11 @@ export async function POST(req: NextRequest) {
 
         if (!phase1Result.success || !phase1Result.content) {
           logErr(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
-          send('error', { message: `AI generation failed after ${phase1Result.attempts} attempts. ${phase1Result.error || 'Please try again.'}` });
+          // Include per-provider error details so the user knows EXACTLY what failed
+          const providerDetails = phase1Result.providerErrors
+            ?.map(e => `• ${e.provider}: ${e.error}`)
+            .join('\n') || phase1Result.error || 'Unknown error';
+          send('error', { message: `AI generation failed. Each provider error:\n${providerDetails}`, providerErrors: phase1Result.providerErrors });
           return;
         }
 

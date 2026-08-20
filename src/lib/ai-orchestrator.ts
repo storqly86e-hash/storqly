@@ -69,6 +69,8 @@ export interface AIOrchestratorResult {
   attempts: number;
   taskType: AITaskType;
   provider?: string;
+  /** Per-provider failure details (only when success=false) */
+  providerErrors?: Array<{ provider: string; error: string; attempts: number }>;
 }
 
 // ─── Global Rate Limiter ──────────────────────────────────────
@@ -402,6 +404,8 @@ export async function executeAI(
 
   let totalAttempts = 0;
   let lastError = 'Unknown error';
+  // Track per-provider errors for actionable diagnostics
+  const providerErrors: Array<{ provider: string; error: string; attempts: number }> = [];
 
   for (let pi = 0; pi < providers.length; pi++) {
     const provider = providers[pi];
@@ -412,6 +416,7 @@ export async function executeAI(
       provider.reset(); // Fresh connection for new provider
     }
 
+    let providerAttempts = 0;
     for (let ri = 0; ri < retriesPerProvider; ri++) {
       totalAttempts++;
       const temp = totalAttempts === 1 ? primaryTemp : Math.max(0.2, primaryTemp - 0.1 * (totalAttempts - 1));
@@ -455,38 +460,50 @@ export async function executeAI(
         lastError = err instanceof Error ? err.message : String(err);
         const is429 = isRateLimitError(lastError);
         const isTimeout = isTimeoutError(lastError);
+        providerAttempts++;
 
-        console.warn(`[AI Orchestrator] [${provider.name}] Attempt ${ri + 1}/${retriesPerProvider} failed for ${taskType}: ${lastError.substring(0, 120)}`);
+        console.warn(`[AI Orchestrator] [${provider.name}] Attempt ${providerAttempts}/${retriesPerProvider} failed for ${taskType}: ${lastError.substring(0, 200)}`);
 
         // Track failed call for rate limiting
         lastAICallTime = Date.now();
         if (is429) lastAICallTime += 2_000;
 
-        // On auth error: reset provider and retry (don't skip to next on first attempt)
+        // On auth error: skip to next provider (auth errors are not retryable without key change)
         const isAuth = isAuthError(lastError);
         if (isAuth) {
-          console.warn(`[AI Orchestrator] [${provider.name}] Auth error — resetting and retrying...`);
+          console.warn(`[AI Orchestrator] [${provider.name}] Auth error — skipping to next provider`);
           provider.reset();
-          if (ri === 0) continue; // Retry with fresh instance
+          providerErrors.push({ provider: provider.name, error: lastError.substring(0, 200), attempts: providerAttempts });
+          break;
         }
 
         // On rate limit or timeout: skip remaining retries on this provider, go to next
-        if ((is429 || isTimeout) && ri === 0) {
+        if ((is429 || isTimeout) && providerAttempts === 1) {
           console.warn(`[AI Orchestrator] [${provider.name}] ${is429 ? 'Rate limited' : 'Timed out'} — skipping to next provider`);
-          break; // Exit retry loop, move to next provider
+          providerErrors.push({ provider: provider.name, error: lastError.substring(0, 200), attempts: providerAttempts });
+          break;
         }
       }
     }
+
+    // Record error for this provider if not already recorded
+    if (!providerErrors.find(e => e.provider === provider.name)) {
+      providerErrors.push({ provider: provider.name, error: lastError.substring(0, 200), attempts: providerAttempts });
+    }
   }
 
-  // All providers exhausted
-  console.error(`[AI Orchestrator] ❌ All ${providers.length} providers failed for ${taskType}. Providers tried: ${providers.map(p => p.name).join(', ')}`);
+  // All providers exhausted — build actionable error message
+  const errorLines = providerErrors.map(e => `  ${e.provider}: ${e.error} (${e.attempts} attempt${e.attempts > 1 ? 's' : ''})`);
+  const detailedError = `All ${providers.length} providers failed for ${taskType}:
+${errorLines.join('\n')}`;
+  console.error(`[AI Orchestrator] ❌ ${detailedError}`);
   resetAllProviders();
 
   return {
     success: false,
     content: null,
-    error: `All ${providers.length} providers failed for ${taskType}. Last: ${lastError}`,
+    error: detailedError,
+    providerErrors,
     attempts: totalAttempts,
     taskType,
   };

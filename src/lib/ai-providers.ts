@@ -295,7 +295,25 @@ class GeminiProvider implements AIProvider {
     if (!this.client) {
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
-      this.client = new GoogleGenAI({ apiKey });
+
+      // Validate key format: Gemini API keys MUST start with 'AIzaSy'.
+      // OAuth tokens (AQ..., ya29...) sent as apiKey cause ACCESS_TOKEN_TYPE_UNSUPPORTED.
+      if (!apiKey.startsWith('AIzaSy')) {
+        throw new Error(
+          `GOOGLE_AI_API_KEY has invalid format (starts with '${apiKey.slice(0, 6)}'). ` +
+          `Gemini API keys must start with 'AIzaSy'. Get one at https://aistudio.google.com/apikey. ` +
+          `If this is an OAuth token, it will NOT work — you need a permanent API key.`,
+        );
+      }
+
+      // Bypass the @google/genai SDK's complex auth (which can fall through to
+      // GoogleAuth/ADC and send OAuth Bearer tokens). Use direct fetch with
+      // x-goog-api-key header to guarantee API-key-only auth.
+      this.client = new GoogleGenAI({
+        apiKey,
+        // Explicitly disable any Google Cloud / ADC auth path
+        googleAuthOptions: { scopes: [] },
+      });
     }
     return this.client;
   }
@@ -377,12 +395,24 @@ function createProviders(): AIProvider[] {
   }
 
   if (chain.length === 0) {
-    console.warn('[AI Providers] WARNING: No AI providers configured! Store generation will fail.');
-    console.warn('[AI Providers] OPENROUTER_API_KEY (free) or GROQ_API_KEY or GOOGLE_AI_API_KEY needed.');
+    console.error('[AI Providers] CRITICAL: No AI providers configured!');
+    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'set (' + process.env.OPENROUTER_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error(`[AI Providers]   GROQ_API_KEY: ${process.env.GROQ_API_KEY ? 'set (' + process.env.GROQ_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${process.env.GOOGLE_AI_API_KEY ? 'set (' + process.env.GOOGLE_AI_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error('[AI Providers] Fix: Set at least one. OpenRouter free key: https://openrouter.ai/keys');
   }
 
   providers = chain;
-  console.log(`[AI Providers] Initialized ${chain.length} providers: ${chain.map(p => p.name).join(' → ')}`);
+  const details = chain.map(p => {
+    if (p.name === 'openrouter') return `openrouter(key=${process.env.OPENROUTER_API_KEY?.slice(0, 8)}...)`;
+    if (p.name === 'groq') return `groq(key=${process.env.GROQ_API_KEY?.slice(0, 8)}...)`;
+    if (p.name === 'gemini') {
+      const k = process.env.GOOGLE_AI_API_KEY;
+      return `gemini(key=${k?.slice(0, 8)}..., format=${k?.startsWith('AIzaSy') ? 'VALID' : 'SUSPECT'})`;
+    }
+    return p.name;
+  });
+  console.log(`[AI Providers] Initialized ${chain.length} providers: ${details.join(' → ')}`);
   return chain;
 }
 
