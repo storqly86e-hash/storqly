@@ -91,7 +91,7 @@ class ZAIProvider implements AIProvider {
         const zai = await this.getInstance() as {
           chat: {
             completions: {
-              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>; }
+              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
             }
           }
         };

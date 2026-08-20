@@ -115,7 +115,7 @@ fi
 
 echo ""
 echo "=== AI-RELATED LOG LINES ==="
-grep -E '(Store Generate|AI Orchestrator|z-ai|groq|gemini|Enrich|enrichProduct)' e2e-server.log 2>/dev/null || echo '(none)'
+grep -E '(Store Generate|AI Orchestrator|z-ai|gemini|Enrich|enrichProduct)' e2e-server.log 2>/dev/null || echo '(none)'
 
 echo ""
 echo "=== PAGE STATE (first 40 lines) ==="

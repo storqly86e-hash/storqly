@@ -8,7 +8,7 @@
 // If ?ping=true query param, also do a live API test.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getProviders } from '@/lib/ai-providers';
+import { getProviders, type AIProvider } from '@/lib/ai-providers';
 
 // Detect z-ai SDK (same logic as ai-providers.ts)
 let zaiSdkAvailable = false;
@@ -48,12 +48,8 @@ function checkByFormat(): ProviderStatus[] {
 }
 
 // ── Live API ping (only when ?ping=true) ──
-interface PingableProvider {
-  name: string;
-  call: (opts: { messages: Array<{ role: string; content: string }>; timeout: number }) => Promise<string>;
-}
 
-async function pingProvider(provider: PingableProvider): Promise<ProviderStatus> {
+async function pingProvider(provider: AIProvider): Promise<ProviderStatus> {
   const start = Date.now();
   try {
     await provider.call({
