@@ -5,7 +5,7 @@
 // Supports auto-continue: if the proxy kills the connection mid-stream,
 // the client sends continueFrom=<partial> and the AI picks up where it left off.
 //
-// Provider priority: z-ai (sandbox) → GROQ (primary production)
+// Provider priority: z-ai (sandbox)
 // Auth guard: returns 401 JSON before creating the SSE stream.
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -33,8 +33,6 @@ CRITICAL RULES:
 3. Match the style, tone, and formatting of the existing content perfectly.
 4. Continue until ALL originally requested sections are complete.
 5. Use the same Markdown formatting (##, ###, bullets, etc.).`;
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // ─── Try z-ai SDK (sandbox only) ───────────────────────────
 let zaiInstance: unknown = null;
@@ -105,64 +103,6 @@ async function tryZAIStream(
   }
 }
 
-// ─── GROQ streaming (primary production provider) ────────
-const GROQ_MODEL = 'openai/gpt-oss-120b';
-
-async function tryGroqStream(
-  messages: Array<{ role: string; content: string }>,
-  onDelta: (text: string) => void,
-  onProgress: (msg: string) => void,
-): Promise<string | null> {
-  try {
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey || apiKey === 'placeholder') return null;
-
-    onProgress('Connecting to Groq...');
-    console.log('[Marketing Kit] GROQ trying (streaming)...');
-
-    const Groq = (await import('groq-sdk')).default;
-    const client = new Groq({ apiKey });
-
-    // Fix z-ai convention: first 'assistant' message → 'system' role for Groq
-    const groqMessages = messages.map((m, idx) => {
-      if (idx === 0 && m.role === 'assistant') {
-        return { role: 'system' as const, content: m.content };
-      }
-      return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
-    });
-
-    const stream = await client.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: groqMessages,
-      temperature: 0.8,
-      stream: true,
-    });
-
-    let fullContent = '';
-    let chunkCount = 0;
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        fullContent += delta;
-        chunkCount++;
-        onDelta(delta);
-      }
-    }
-
-    const trimmed = fullContent.trim();
-    if (trimmed) {
-      console.log(`[Marketing Kit] ✅ GROQ streaming OK: ${trimmed.length} chars, ${chunkCount} chunks`);
-      return trimmed;
-    }
-    console.warn('[Marketing Kit] GROQ streaming returned empty');
-    return null;
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[Marketing Kit] GROQ streaming error:', msg);
-    return null;
-  }
-}
-
 // ─── POST handler ────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
@@ -219,27 +159,17 @@ export async function POST(req: NextRequest) {
           { role: 'user' as const, content: userMessage },
         ];
 
-        // Try providers in order: z-ai → GROQ
+        // Try z-ai provider (sandbox streaming)
         let result: string | null = null;
 
-        // 1. Try z-ai (sandbox streaming)
-        if (!result && !timedOut()) {
+        if (!timedOut()) {
           console.log('[Marketing Kit] Trying z-ai provider...');
           result = await tryZAIStream(messages, (delta) => send('delta', { content: delta }));
           if (result) console.log('[Marketing Kit] ✅ z-ai succeeded');
         }
 
-        // 2. Try GROQ (primary production provider)
-        if (!result && !timedOut()) {
-          result = await tryGroqStream(
-            messages,
-            (delta) => send('delta', { content: delta }),
-            (msg) => send('progress', { message: msg }),
-          );
-        }
-
         if (!result) {
-          send('error', { message: 'AI generation failed. Please try again. If this persists, check that GROQ_API_KEY is set correctly in your deployment.' });
+          send('error', { message: 'AI generation failed. No AI provider is currently available.' });
           return;
         }
 

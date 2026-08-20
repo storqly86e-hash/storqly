@@ -38,12 +38,6 @@ function checkByFormat(): ProviderStatus[] {
     results.push({ name: 'z-ai', ok: true, latencyMs: Date.now() - start, method: 'format' });
   }
 
-  // Groq (primary production provider)
-  const gKey = process.env.GROQ_API_KEY;
-  if (gKey && gKey !== 'placeholder' && gKey.startsWith('gsk_')) {
-    results.push({ name: 'groq', ok: true, latencyMs: Date.now() - start, method: 'format' });
-  }
-
   // Gemini (only if valid API key configured)
   const gemKey = process.env.GOOGLE_AI_API_KEY;
   if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
@@ -107,11 +101,6 @@ export async function GET(req: NextRequest) {
     results = checkByFormat();
     // Also report providers that are configured but have wrong format
     const env = process.env;
-    if (env.GROQ_API_KEY && env.GROQ_API_KEY !== 'placeholder') {
-      if (!results.find(r => r.name === 'groq')) {
-        results.push({ name: 'groq', ok: false, error: 'Key format invalid (needs gsk_)', latencyMs: 0, method: 'format' });
-      }
-    }
     if (env.GOOGLE_AI_API_KEY && env.GOOGLE_AI_API_KEY !== 'placeholder') {
       if (!results.find(r => r.name === 'gemini')) {
         const isOAuth = env.GOOGLE_AI_API_KEY!.startsWith('AQ.');

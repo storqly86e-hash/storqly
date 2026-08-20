@@ -3,10 +3,8 @@
 // ========================================
 // Provider chain:
 //   1. z-ai (sandbox-only, local dev)
-//   2. GROQ (primary for production)
-//   3. Gemini (disabled until valid API key is configured)
+//   2. Gemini (disabled until valid API key is configured)
 
-import Groq from 'groq-sdk';
 import { GoogleGenAI } from '@google/genai';
 
 // ─── Provider Interface ───────────────────────────────────────
@@ -60,6 +58,10 @@ try {
   zaiCreate = null;
 }
 
+export function isZAiLoaded(): boolean {
+  return !!zaiCreate;
+}
+
 class ZAIProvider implements AIProvider {
   readonly name = 'z-ai';
   private instance: Awaited<ReturnType<typeof zaiCreate>> | null = null;
@@ -89,7 +91,7 @@ class ZAIProvider implements AIProvider {
         const zai = await this.getInstance() as {
           chat: {
             completions: {
-              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
+              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>; }
             }
           }
         };
@@ -128,73 +130,6 @@ class ZAIProvider implements AIProvider {
   reset() {
     this.instance = null;
     this.available = true;
-  }
-}
-
-// ─── GROQ Provider (Primary for production) ──────────
-
-const GROQ_MODEL = 'openai/gpt-oss-120b';
-
-class GroqProvider implements AIProvider {
-  readonly name = 'groq';
-  private client: Groq | null = null;
-
-  private getClient(): Groq {
-    if (!this.client) {
-      const apiKey = process.env.GROQ_API_KEY;
-      if (!apiKey || apiKey === 'placeholder') throw new Error('GROQ_API_KEY not configured');
-      this.client = new Groq({ apiKey });
-    }
-    return this.client;
-  }
-
-  async call(options: ProviderCallOptions): Promise<string> {
-    const client = this.getClient();
-    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
-
-    // ── Build Groq-compatible messages ──
-    // The orchestrator sends system prompts as role='assistant' (z-ai convention).
-    // Groq requires proper 'system' role. Also, Groq requires the word "json"
-    // somewhere in system/user messages when response_format=json_object is used.
-    let groqMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
-
-    const JSON_INSTRUCTION = 'You must return the complete response as valid JSON. Return JSON only.';
-    const hasJsonWord = messages.some(m => /json/i.test(m.content));
-
-    // Step 1: Convert first 'assistant' message to 'system' role (z-ai → Groq convention)
-    groqMessages = messages.map((m, idx) => {
-      if (idx === 0 && m.role === 'assistant') {
-        return { role: 'system' as const, content: m.content };
-      }
-      return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
-    });
-
-    // Step 2: When jsonMode, guarantee "json" word exists in a system/user message
-    if (jsonMode && !hasJsonWord) {
-      // Prepend as a system message so Groq's validation passes
-      groqMessages.unshift({ role: 'system', content: JSON_INSTRUCTION });
-    }
-
-    const completion = await Promise.race([
-      client.chat.completions.create({
-        model: GROQ_MODEL,
-        messages: groqMessages,
-        temperature,
-        ...(maxTokens ? { max_tokens: maxTokens } : {}),
-        ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), timeout)
-      ),
-    ]);
-
-    const content = completion.choices[0]?.message?.content;
-    if (!content || content.trim().length === 0) throw new Error('Empty response');
-    return content.trim();
-  }
-
-  reset() {
-    this.client = null;
   }
 }
 
@@ -285,12 +220,6 @@ function createProviders(): AIProvider[] {
     chain.push(new ZAIProvider());
   }
 
-  // GROQ: primary provider for production.
-  // Get your key at https://console.groq.com/keys
-  if (process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder') {
-    chain.push(new GroqProvider());
-  }
-
   // Gemini: ONLY enabled when a valid API key is configured.
   // Disabled by default — no key means no fallback to a broken provider.
   if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder' && process.env.GOOGLE_AI_API_KEY.startsWith('AIzaSy')) {
@@ -299,14 +228,13 @@ function createProviders(): AIProvider[] {
 
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
-    console.error(`[AI Providers]   GROQ_API_KEY: ${process.env.GROQ_API_KEY ? 'set (' + process.env.GROQ_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error(`[AI Providers]   z-ai SDK: ${zaiCreate ? 'loaded (sandbox only)' : 'not available'}`);
     console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${process.env.GOOGLE_AI_API_KEY ? 'set (' + process.env.GOOGLE_AI_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Set GROQ_API_KEY. Get one at https://console.groq.com/keys');
+    console.error('[AI Providers] Fix: Provide a valid GOOGLE_AI_API_KEY (starts with AIzaSy).');
   }
 
   providers = chain;
   const details = chain.map(p => {
-    if (p.name === 'groq') return `groq(key=${process.env.GROQ_API_KEY?.slice(0, 8)}..., model=${GROQ_MODEL})`;
     if (p.name === 'gemini') {
       const k = process.env.GOOGLE_AI_API_KEY;
       return `gemini(key=${k?.slice(0, 8)}..., format=${k?.startsWith('AIzaSy') ? 'VALID' : 'SUSPECT'})`;
@@ -334,7 +262,6 @@ export function getProviderDiagnostics(): {
   env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
-  groqModel: string;
 } {
   const maskKey = (v: string | undefined) => {
     if (!v || v === 'placeholder') return false;
@@ -343,7 +270,6 @@ export function getProviderDiagnostics(): {
   };
   return {
     env: {
-      GROQ_API_KEY: maskKey(process.env.GROQ_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
@@ -351,6 +277,5 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
-    groqModel: GROQ_MODEL,
   };
 }

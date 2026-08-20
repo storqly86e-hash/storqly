@@ -2,7 +2,7 @@
 // Storqly AI Orchestrator
 // ========================================
 // Routing layer that sends requests to the correct AI model.
-// v3: Multi-provider failover (z-ai → GROQ → Gemini).
+// v4: Multi-provider failover (z-ai → Gemini).
 // JSON repair/normalization is provider-agnostic.
 
 import {
@@ -366,7 +366,7 @@ export async function executeAI(
     timeout?: number;
     maxRetries?: number;
     responseFormat?: 'json_object';
-    /** Force a specific provider (for testing: 'groq', 'gemini', 'z-ai') */
+    /** Force a specific provider (for testing: 'gemini', 'z-ai') */
     forceProvider?: string;
   }
 ): Promise<AIOrchestratorResult> {

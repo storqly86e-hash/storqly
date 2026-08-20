@@ -26,8 +26,8 @@ export async function GET() {
     uptime: process.uptime(),
     database: { ok: dbOk, error: dbError || undefined },
     env: {
+      GOOGLE_AI_API_KEY: !!(process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.startsWith('AIzaSy')),
       DATABASE_URL: !!process.env.DATABASE_URL,
-      GROQ_API_KEY: !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY !== 'placeholder'),
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
       NEXTAUTH_URL: !!process.env.NEXTAUTH_URL,
       NODE_ENV: process.env.NODE_ENV || 'not set',
