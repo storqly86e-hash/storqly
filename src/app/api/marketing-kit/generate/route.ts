@@ -106,7 +106,7 @@ async function tryZAIStream(
 }
 
 // ─── GROQ streaming (primary production provider) ────────
-const GROQ_MODEL = 'llama-4-scout-17b-16e-instruct';
+const GROQ_MODEL = 'meta-llama/llama-4-scout-17b-16e-instruct';
 
 async function tryGroqStream(
   messages: Array<{ role: string; content: string }>,
