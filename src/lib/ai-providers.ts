@@ -158,31 +158,21 @@ class GroqProvider implements AIProvider {
     // somewhere in system/user messages when response_format=json_object is used.
     let groqMessages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
 
-    if (jsonMode) {
-      // Check if any message contains "json" (case-insensitive)
-      const hasJsonWord = messages.some(m => /json/i.test(m.content));
-      const jsonInstruction = 'You must return the complete response as valid JSON. Return JSON only.';
+    const JSON_INSTRUCTION = 'You must return the complete response as valid JSON. Return JSON only.';
+    const hasJsonWord = messages.some(m => /json/i.test(m.content));
 
-      groqMessages = messages.map((m, idx) => {
-        // Convert first 'assistant' message to 'system' role (z-ai → Groq convention)
-        if (idx === 0 && m.role === 'assistant') {
-          return { role: 'system' as const, content: hasJsonWord ? m.content : jsonInstruction + '\n\n' + m.content };
-        }
-        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
-      });
-
-      // If no message had "json" and first wasn't assistant, prepend system instruction
-      if (!hasJsonWord) {
-        groqMessages.unshift({ role: 'system', content: jsonInstruction });
+    // Step 1: Convert first 'assistant' message to 'system' role (z-ai → Groq convention)
+    groqMessages = messages.map((m, idx) => {
+      if (idx === 0 && m.role === 'assistant') {
+        return { role: 'system' as const, content: m.content };
       }
-    } else {
-      // Non-JSON mode: still fix role convention
-      groqMessages = messages.map((m, idx) => {
-        if (idx === 0 && m.role === 'assistant') {
-          return { role: 'system' as const, content: m.content };
-        }
-        return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
-      });
+      return { role: m.role as 'user' | 'assistant' | 'system', content: m.content };
+    });
+
+    // Step 2: When jsonMode, guarantee "json" word exists in a system/user message
+    if (jsonMode && !hasJsonWord) {
+      // Prepend as a system message so Groq's validation passes
+      groqMessages.unshift({ role: 'system', content: JSON_INSTRUCTION });
     }
 
     const completion = await Promise.race([
