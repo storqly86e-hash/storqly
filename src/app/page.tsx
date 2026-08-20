@@ -298,7 +298,6 @@ function LandingPage() {
     isGenerating,
     setIsGenerating,
     setStore,
-    setStoreWithFallback,
   } = useStoreEditor()
 
   // Local UI state (not in Zustand — this is view-level)
@@ -544,23 +543,12 @@ function LandingPage() {
                   finishWithError('The AI response was missing store data.')
                   return
                 }
-                console.log('[Storqly] Store generated via SSE. isFallback:', data._isFallback, 'name:', data.store.name)
+                console.log('[Storqly] Store generated via SSE. name:', data.store.name, 'products:', data.store.products?.length)
                 resolved = true
 
-                if (data._isFallback) {
-                  const reason = data._fallbackReason || 'AI generation failed'
-                  console.error('[Storqly] Generation returned fallback. Reason:', reason)
-                  // Show a short, actionable message — no raw error dump
-                  toast.error(
-                    'AI generation failed — please try again',
-                    { description: 'The AI service was temporarily unavailable. Your store template is ready to edit manually or you can regenerate.', duration: 8000 }
-                  )
-                  setStoreWithFallback(data.store, true, reason)
-                } else {
-                  setStore(data.store)
-                  // Trigger lazy background image enrichment (non-blocking)
-                  triggerBackgroundImageEnrichment(data.store)
-                }
+                setStore(data.store)
+                // Trigger lazy background image enrichment (non-blocking)
+                triggerBackgroundImageEnrichment(data.store)
 
                 // Soft cap toast
                 if (data._productCapHit) {
@@ -621,7 +609,7 @@ function LandingPage() {
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
-  }, [promptText, session, setIsGenerating, setStore, setStoreWithFallback, clearTimers, setAuthOpen])
+  }, [promptText, session, setIsGenerating, setStore, clearTimers, setAuthOpen])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -1051,7 +1039,6 @@ function PreviewPanel() {
 
 function EditorView() {
   const store = useStoreEditor((s) => s.store)
-  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
   const [showLeft, setShowLeft] = useState(true)
   const [showRight, setShowRight] = useState(true)
   const leftPanelRef = useRef<ImperativePanelHandle>(null)
@@ -1106,8 +1093,6 @@ function EditorView() {
     <div className="flex h-screen flex-col bg-zinc-950">
       <EditorToolbar onToggleLeft={setShowLeft} onToggleRight={setShowRight} showLeft={showLeft} showRight={showRight} />
 
-      {isFallbackStore && <FallbackBanner />}
-
       <div className="flex-1 overflow-hidden">
         <PanelGroup direction="horizontal" id="storqly-editor-layout">
           <Panel
@@ -1157,86 +1142,6 @@ function EditorView() {
             </div>
           </Panel>
         </PanelGroup>
-      </div>
-    </div>
-  )
-}
-
-// ─── Fallback Banner ──────────────────────────────────────────────
-// Shows when: (1) AI returned a fallback template, or
-// (2) the store ended up in a broken/incomplete state (e.g. server
-//     crashed mid-generation leaving only placeholder sections).
-
-function FallbackBanner() {
-  const reset = useStoreEditor((s) => s.reset)
-  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
-  const fallbackReason = useStoreEditor((s) => s.fallbackReason)
-  const [dismissed, setDismissed] = useState(false)
-  const [aiAvailable, setAiAvailable] = useState<boolean | null>(null)
-
-  // Auto-check if AI is actually available now — if so, clear the stale fallback state
-  useEffect(() => {
-    if (!isFallbackStore || dismissed) return
-    let cancelled = false
-    fetch('/api/ai-status')
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return
-        if (data.anyWorking) {
-          setAiAvailable(true)
-          // Auto-clear the stale fallback flag so the misleading banner disappears
-          useStoreEditor.getState().setIsFallbackStore?.(false, '')
-        } else {
-          setAiAvailable(false)
-        }
-      })
-      .catch(() => { /* ignore */ })
-    return () => { cancelled = true }
-  }, [isFallbackStore, dismissed])
-
-  // Don't show banner if AI is now available (state just cleared) or already dismissed
-  if (dismissed || !isFallbackStore || aiAvailable === true) return null
-
-  const isIncomplete = fallbackReason.includes('interrupted') || fallbackReason.includes('incomplete')
-  const isProviderDown = fallbackReason.includes('All') || fallbackReason.includes('429') || fallbackReason.includes('403') || fallbackReason.includes('404') || fallbackReason.includes('providers failed')
-
-  // Determine message based on failure type
-  let bannerMessage: string
-  if (isIncomplete) {
-    bannerMessage = 'Generation was interrupted — your store is incomplete. Please try regenerating.'
-  } else if (isProviderDown) {
-    bannerMessage = 'All AI providers are currently unavailable — you are viewing a starter template.'
-  } else {
-    bannerMessage = `AI couldn\'t generate a custom store — you\'re viewing a starter template. Reason: ${fallbackReason}`
-  }
-
-  return (
-    <div className={`flex items-center gap-3 border-b px-4 py-2.5 ${isIncomplete ? 'border-red-500/30 bg-red-500/10' : 'border-amber-500/30 bg-amber-500/10'}`}>
-      {isIncomplete ? (
-        <AlertCircle className="h-4 w-4 shrink-0 text-red-400" />
-      ) : (
-        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-400" />
-      )}
-      <p className={`flex-1 text-sm ${isIncomplete ? 'text-red-200' : 'text-amber-200'}`}>
-        {bannerMessage}
-        <span className="hidden sm:inline"> Edit it manually or try regenerating later.</span>
-      </p>
-      <div className="flex items-center gap-2">
-        <Button
-          size="sm"
-          className={`h-7 gap-1.5 rounded-lg px-3 text-xs font-medium ${isIncomplete ? 'bg-red-500/20 text-red-200 hover:bg-red-500/30' : 'bg-amber-500/20 text-amber-200 hover:bg-amber-500/30'}`}
-          onClick={() => { reset() }}
-        >
-          <RotateCcw className="h-3 w-3" />
-          Regenerate with AI
-        </Button>
-        <button
-          onClick={() => setDismissed(true)}
-          className="text-zinc-500 hover:text-zinc-300"
-          aria-label="Dismiss"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
       </div>
     </div>
   )
@@ -1635,42 +1540,6 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
   )
 }
 
-// ─── Stale Fallback Recovery ──────────────────────────────────────
-// If the user has a stale fallback store from a previous failed generation,
-// and AI is now available, automatically reset to the landing page.
-// This prevents the user from being stuck on the misleading error banner.
-
-function StaleFallbackRecovery() {
-  const view = useStoreEditor((s) => s.view)
-  const isFallbackStore = useStoreEditor((s) => s.isFallbackStore)
-  const reset = useStoreEditor((s) => s.reset)
-
-  useEffect(() => {
-    // Only run in editor view with a fallback store
-    if (view !== 'editor' || !isFallbackStore) return
-
-    let cancelled = false
-    fetch('/api/ai-status')
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return
-        if (data.anyWorking) {
-          // AI is available — clear the stale fallback and go back to landing
-          console.log('[Storqly] AI is back online. Clearing stale fallback state.')
-          toast.success('AI is back online! You can now generate your store.', { duration: 4000 })
-          // Small delay so the toast is visible before the view switches
-          setTimeout(() => {
-            if (!cancelled) reset()
-          }, 800)
-        }
-      })
-      .catch(() => { /* silently ignore */ })
-    return () => { cancelled = true }
-  }, [view, isFallbackStore, reset])
-
-  return null // This component renders nothing
-}
-
 // ─── Page Root ────────────────────────────────────────────────────────
 
 export default function Home() {
@@ -1689,7 +1558,6 @@ export default function Home() {
   return (
     <>
       <main className={view === 'editor' ? 'h-screen w-screen overflow-hidden' : 'min-h-screen flex flex-col bg-[#09090b] text-white'}>
-        {view === 'editor' && <StaleFallbackRecovery />}
         {view === 'landing' ? <LandingPage /> : <EditorView />}
 
         {view === 'landing' && (

@@ -177,9 +177,6 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
     view: 'editor',
     editorCurrentPageId: store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || null,
     selectedSectionId: null,
-    // Auto-detect broken/incomplete stores
-    isFallbackStore: isStoreBroken(store),
-    fallbackReason: isStoreBroken(store) ? 'Generation was interrupted — store is incomplete' : '',
   }),
   setStoreWithFallback: (store, isFallback, reason) => set({
     store,

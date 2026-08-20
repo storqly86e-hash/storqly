@@ -464,8 +464,8 @@ export async function POST(req: NextRequest) {
 
         // ── Check time budget ──
         if (elapsed() > TOTAL_TIME_BUDGET_MS) {
-          warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms). Returning fallback.`);
-          send('result', { store: createFallbackStore(trimmedPrompt), _isFallback: true, _fallbackReason: 'Time budget exceeded.' });
+          warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms).`);
+          send('error', { message: 'Generation timed out before AI could respond. Please try again.' });
           return;
         }
 
@@ -512,9 +512,7 @@ export async function POST(req: NextRequest) {
 
         if (!phase1Result.success || !phase1Result.content) {
           logErr(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
-          send('progress', { stage: 'fallback', message: 'AI service unavailable. Creating starter template...' });
-          const fallback = createFallbackStore(trimmedPrompt);
-          send('result', { store: fallback, _isFallback: true, _fallbackReason: phase1Result.error });
+          send('error', { message: `AI generation failed after ${phase1Result.attempts} attempts. ${phase1Result.error || 'Please try again.'}` });
           return;
         }
 
@@ -527,8 +525,7 @@ export async function POST(req: NextRequest) {
           parsed = JSON.parse(phase1Result.content);
         } catch (e) {
           logErr(`[Store Generate] Phase 1 JSON parse failed:`, e);
-          const fallback = createFallbackStore(trimmedPrompt);
-          send('result', { store: fallback, _isFallback: true, _fallbackReason: 'JSON parse failed.' });
+          send('error', { message: 'AI returned invalid data. Please try again.' });
           return;
         }
 
@@ -538,10 +535,8 @@ export async function POST(req: NextRequest) {
         const normResult = normalizeStore(parsed, trimmedPrompt, phase1Count);
 
         if (!normResult) {
-          warn(`[Store Generate] normalizeStore returned null. Returning fallback.`);
-          send('progress', { stage: 'fallback', message: 'AI response was not valid. Creating starter template...' });
-          const fallback = createFallbackStore(trimmedPrompt);
-          send('result', { store: fallback, _isFallback: true, _fallbackReason: 'AI response was not a JSON object.' });
+          warn(`[Store Generate] normalizeStore returned null.`);
+          send('error', { message: 'AI response could not be processed into a valid store. Please try again.' });
           return;
         }
 
@@ -702,7 +697,6 @@ export async function POST(req: NextRequest) {
 
         send('result', {
           store,
-          _isFallback: false,
           _normalizations: normResult.normalizationCount,
           _productCapHit: wasCapped,
           _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
@@ -711,8 +705,7 @@ export async function POST(req: NextRequest) {
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         logErr(`[Store Generate] Unexpected error after ${elapsed()}ms:`, msg);
-        const fallback = createFallbackStore('My Store');
-        send('result', { store: fallback, _isFallback: true, _fallbackReason: `Unexpected error: ${msg}` });
+        send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
       } finally {
         clearInterval(heartbeat);
         try { controller.close(); } catch { /* already closed */ }
