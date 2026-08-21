@@ -1,9 +1,14 @@
 // ========================================
 // AI Provider Abstraction Layer
 // ========================================
-// Provider chain:
-//   1. z-ai (sandbox-only, local dev)
-//   2. Gemini (disabled until valid API key is configured)
+// Provider chain (production):
+//   1. OpenRouter (free-tier, primary production provider)
+//   2. Gemini (if valid API key configured, secondary)
+//
+// Provider chain (sandbox / local dev):
+//   1. z-ai (sandbox-only, fastest)
+//   2. OpenRouter (fallback)
+//   3. Gemini (if valid key, final fallback)
 
 import { GoogleGenAI } from '@google/genai';
 
@@ -27,6 +32,16 @@ export interface AIProvider {
   reset(): void;
 }
 
+/** OpenRouter streaming options (for marketing-kit SSE) */
+export interface OpenRouterStreamOptions {
+  messages: Array<{ role: string; content: string }>;
+  temperature?: number;
+  maxTokens?: number;
+  onDelta: (text: string) => void;
+  timeout?: number;
+  signal?: AbortSignal;
+}
+
 // ─── Error classification ──────────────────────────────────────
 
 export function isRateLimitError(err: unknown): boolean {
@@ -41,7 +56,7 @@ export function isTimeoutError(err: unknown): boolean {
 
 export function isAuthError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized') || msg.includes('API_KEY_INVALID');
+  return msg.includes('401') || msg.includes('missing X-Token') || msg.includes('unauthorized') || msg.includes('Unauthorized') || msg.includes('API_KEY_INVALID') || msg.includes('invalid_api_key');
 }
 
 // ─── z-ai Provider (Sandbox-only, gracefully disabled in production) ──
@@ -135,8 +150,255 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── Google AI Studio / Gemini Provider (DISABLED — no valid key) ──
-// Will be re-enabled when a valid GOOGLE_AI_API_KEY (starting with 'AIzaSy') is configured.
+// ─── OpenRouter Provider (Production primary — free tier) ──────────
+// Uses OpenRouter's OpenAI-compatible API.
+// Free models (no billing required): deepseek/deepseek-chat-v3-0324:free
+// API key: free from https://openrouter.ai/keys (format: sk-or-v1-...)
+
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+// Default model: DeepSeek V3 — excellent at structured JSON, free tier
+const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-chat-v3-0324:free';
+
+// Fallback free models if primary is unavailable
+const OPENROUTER_FALLBACK_MODELS = [
+  'google/gemma-3-27b-it:free',
+  'meta-llama/llama-4-maverick:free',
+  'qwen/qwen3-235b-a22b:free',
+];
+
+class OpenRouterProvider implements AIProvider {
+  readonly name = 'openrouter';
+  private _apiKey: string | null = null;
+
+  private getApiKey(): string {
+    if (!this._apiKey) {
+      const key = process.env.OPENROUTER_API_KEY;
+      if (!key || key === 'placeholder') {
+        throw new Error('OPENROUTER_API_KEY not configured. Get a free key at https://openrouter.ai/keys');
+      }
+      // Validate format: OpenRouter keys start with 'sk-or-'
+      if (!key.startsWith('sk-or-')) {
+        throw new Error(
+          `OPENROUTER_API_KEY invalid format (starts with '${key.slice(0, 6)}'). ` +
+          `Keys must start with 'sk-or-'. Get one at https://openrouter.ai/keys.`,
+        );
+      }
+      this._apiKey = key;
+    }
+    return this._apiKey;
+  }
+
+  private getModel(): string {
+    return process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+  }
+
+  async call(options: ProviderCallOptions): Promise<string> {
+    const apiKey = this.getApiKey();
+    const model = this.getModel();
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 90_000 } = options;
+
+    // Convert orchestrator message format to OpenAI format
+    // Orchestrator uses 'assistant' for system prompts (z-ai convention)
+    const openaiMessages: Array<{ role: string; content: string }> = [];
+    let systemPrompt: string | undefined;
+
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && openaiMessages.length === 0) {
+        // First 'assistant' message is the system prompt in orchestrator convention
+        systemPrompt = msg.content;
+      } else {
+        openaiMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    // Build the request body
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        ...openaiMessages,
+      ],
+      temperature,
+    };
+
+    if (maxTokens) body.max_tokens = maxTokens;
+    if (jsonMode) body.response_format = { type: 'json_object' };
+
+    // Try primary model, then fallbacks on rate limit
+    const modelsToTry = [model, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== model)];
+
+    for (let mi = 0; mi < modelsToTry.length; mi++) {
+      const tryModel = modelsToTry[mi];
+      body.model = tryModel;
+
+      try {
+        const response = await Promise.race([
+          fetch(OPENROUTER_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+              'HTTP-Referer': 'https://storqly.com',
+              'X-Title': 'Storqly',
+            },
+            body: JSON.stringify(body),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => '');
+          const errMsg = `OpenRouter ${response.status}: ${errBody.substring(0, 200)}`;
+
+          // On 429 rate limit with fallback models available, try next model
+          if (response.status === 429 && mi < modelsToTry.length - 1) {
+            console.warn(`[OpenRouter] ${tryModel} rate limited, trying next model...`);
+            continue;
+          }
+          // On 402 (insufficient credits) with fallbacks, try next
+          if (response.status === 402 && mi < modelsToTry.length - 1) {
+            console.warn(`[OpenRouter] ${tryModel} no credits, trying next model...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json() as {
+          choices: Array<{ message?: { content?: string } }>;
+          error?: { message: string };
+        };
+
+        if (data.error) throw new Error(`OpenRouter error: ${data.error.message}`);
+
+        const content = data.choices?.[0]?.message?.content;
+        if (!content || content.trim().length === 0) throw new Error('Empty response from OpenRouter');
+
+        if (mi > 0) {
+          console.log(`[OpenRouter] ✅ Fallback model ${tryModel} succeeded`);
+        }
+
+        return content.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Only re-throw if this was the last model or a non-rate-limit error
+        if (mi === modelsToTry.length - 1 || (!msg.includes('429') && !msg.includes('402'))) {
+          throw err;
+        }
+      }
+    }
+
+    throw new Error('OpenRouter: all models exhausted');
+  }
+
+  reset() {
+    this._apiKey = null;
+  }
+}
+
+// ─── OpenRouter Streaming (for marketing-kit SSE) ─────────────────
+// Exported separately so the marketing-kit route can call it directly
+// without going through the orchestrator (which doesn't support streaming).
+
+export async function streamOpenRouter(
+  options: OpenRouterStreamOptions,
+): Promise<string | null> {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey || apiKey === 'placeholder' || !apiKey.startsWith('sk-or-')) return null;
+
+  const model = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+  const { messages, temperature = 0.8, maxTokens, onDelta, timeout = 180_000, signal } = options;
+
+  // Extract system prompt if present
+  const openaiMessages: Array<{ role: string; content: string }> = [];
+  let systemPrompt: string | undefined;
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemPrompt = msg.content;
+    } else {
+      openaiMessages.push(msg);
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      ...openaiMessages,
+    ],
+    temperature,
+    stream: true,
+  };
+
+  if (maxTokens) body.max_tokens = maxTokens;
+
+  try {
+    const response = await Promise.race([
+      fetch(OPENROUTER_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+          'HTTP-Referer': 'https://storqly.com',
+          'X-Title': 'Storqly',
+        },
+        body: JSON.stringify(body),
+        signal,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), timeout)
+      ),
+    ]);
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error(`[OpenRouter Stream] ${response.status}: ${errBody.substring(0, 200)}`);
+      return null;
+    }
+
+    if (!response.body) return null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullContent += delta;
+            onDelta(delta);
+          }
+        } catch { /* skip malformed chunks */ }
+      }
+    }
+
+    return fullContent.trim() || null;
+  } catch (err: unknown) {
+    if (signal?.aborted) return null;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[OpenRouter Stream] Error: ${msg}`);
+    return null;
+  }
+}
+
+// ─── Google AI Studio / Gemini Provider (secondary, if key available) ──
 
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
@@ -222,24 +484,37 @@ function createProviders(): AIProvider[] {
     chain.push(new ZAIProvider());
   }
 
-  // Gemini: ONLY enabled when a valid API key is configured.
-  // Disabled by default — no key means no fallback to a broken provider.
-  if (process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY !== 'placeholder' && process.env.GOOGLE_AI_API_KEY.startsWith('AIzaSy')) {
+  // OpenRouter: Primary production provider. Free tier, works everywhere.
+  // Requires OPENROUTER_API_KEY (format: sk-or-v1-...) — free from openrouter.ai/keys
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
+    chain.push(new OpenRouterProvider());
+  }
+
+  // Gemini: Secondary fallback if a valid API key is configured.
+  const gemKey = process.env.GOOGLE_AI_API_KEY;
+  if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
     chain.push(new GeminiProvider());
   }
 
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
     console.error(`[AI Providers]   z-ai SDK: ${zaiCreate ? 'loaded (sandbox only)' : 'not available'}`);
-    console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${process.env.GOOGLE_AI_API_KEY ? 'set (' + process.env.GOOGLE_AI_API_KEY.slice(0, 8) + '...)' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Provide a valid GOOGLE_AI_API_KEY (starts with AIzaSy).');
+    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set (' + orKey.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${gemKey ? 'set (' + gemKey.slice(0, 8) + '...)' : 'NOT SET'}`);
+    console.error('[AI Providers] Fix: Set OPENROUTER_API_KEY (free from https://openrouter.ai/keys)');
   }
 
   providers = chain;
   const details = chain.map(p => {
+    if (p.name === 'openrouter') {
+      const k = process.env.OPENROUTER_API_KEY;
+      const m = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
+      return `openrouter(key=${k?.slice(0, 8)}..., model=${m})`;
+    }
     if (p.name === 'gemini') {
       const k = process.env.GOOGLE_AI_API_KEY;
-      return `gemini(key=${k?.slice(0, 8)}..., format=${k?.startsWith('AIzaSy') ? 'VALID' : 'SUSPECT'})`;
+      return `gemini(key=${k?.slice(0, 8)}...)`;
     }
     return p.name;
   });
@@ -254,9 +529,7 @@ export function getProviders(): AIProvider[] {
 
 /** Reset all provider instances (e.g., on auth errors) */
 export function resetAllProviders(): void {
-  for (const p of getProviders()) {
-    try { p.reset(); } catch { /* ignore */ }
-  }
+  providers = null; // Force re-creation (picks up env var changes)
 }
 
 /** Diagnostic info (no API calls) — useful for debugging env-var issues on deploy */
@@ -264,6 +537,7 @@ export function getProviderDiagnostics(): {
   env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
+  openrouterModel: string;
 } {
   const maskKey = (v: string | undefined) => {
     if (!v || v === 'placeholder') return false;
@@ -272,6 +546,7 @@ export function getProviderDiagnostics(): {
   };
   return {
     env: {
+      OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,
@@ -279,5 +554,6 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
+    openrouterModel: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
   };
 }

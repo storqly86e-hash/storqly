@@ -26,6 +26,7 @@ export async function GET() {
     uptime: process.uptime(),
     database: { ok: dbOk, error: dbError || undefined },
     env: {
+      OPENROUTER_API_KEY: !!(process.env.OPENROUTER_API_KEY && process.env.OPENROUTER_API_KEY.startsWith('sk-or-')),
       GOOGLE_AI_API_KEY: !!(process.env.GOOGLE_AI_API_KEY && process.env.GOOGLE_AI_API_KEY.startsWith('AIzaSy')),
       DATABASE_URL: !!process.env.DATABASE_URL,
       NEXTAUTH_SECRET: !!process.env.NEXTAUTH_SECRET,

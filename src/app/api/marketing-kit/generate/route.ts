@@ -5,11 +5,12 @@
 // Supports auto-continue: if the proxy kills the connection mid-stream,
 // the client sends continueFrom=<partial> and the AI picks up where it left off.
 //
-// Provider priority: z-ai (sandbox)
+// Provider priority: z-ai (sandbox) → OpenRouter (production)
 // Auth guard: returns 401 JSON before creating the SSE stream.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
+import { streamOpenRouter } from '@/lib/ai-providers';
 
 const TIMEOUT_MS = 180_000;
 
@@ -159,17 +160,30 @@ export async function POST(req: NextRequest) {
           { role: 'user' as const, content: userMessage },
         ];
 
-        // Try z-ai provider (sandbox streaming)
         let result: string | null = null;
 
+        // 1. Try z-ai provider (sandbox streaming)
         if (!timedOut()) {
           console.log('[Marketing Kit] Trying z-ai provider...');
           result = await tryZAIStream(messages, (delta) => send('delta', { content: delta }));
           if (result) console.log('[Marketing Kit] ✅ z-ai succeeded');
         }
 
+        // 2. Try OpenRouter (works in production)
+        if (!result && !timedOut()) {
+          console.log('[Marketing Kit] Trying OpenRouter provider...');
+          send('progress', { message: 'Connecting to AI...' });
+          result = await streamOpenRouter({
+            messages,
+            temperature: 0.8,
+            onDelta: (delta) => send('delta', { content: delta }),
+            timeout: TIMEOUT_MS - (Date.now() - startTime),
+          });
+          if (result) console.log(`[Marketing Kit] ✅ OpenRouter succeeded (${result.length} chars)`);
+        }
+
         if (!result) {
-          send('error', { message: 'AI generation failed. No AI provider is currently available.' });
+          send('error', { message: 'AI generation failed. No AI provider is currently available. Set OPENROUTER_API_KEY in your environment.' });
           return;
         }
 

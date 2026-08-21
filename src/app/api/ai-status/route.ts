@@ -26,6 +26,7 @@ type ProviderStatus = {
   error?: string;
   latencyMs: number;
   method: 'format' | 'ping';
+  model?: string;
 };
 
 // ── Quick format-based check (no API call) ──
@@ -38,10 +39,43 @@ function checkByFormat(): ProviderStatus[] {
     results.push({ name: 'z-ai', ok: true, latencyMs: Date.now() - start, method: 'format' });
   }
 
-  // Gemini (only if valid API key configured)
+  // OpenRouter (primary production provider)
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey && orKey !== 'placeholder') {
+    if (orKey.startsWith('sk-or-')) {
+      results.push({
+        name: 'openrouter',
+        ok: true,
+        latencyMs: Date.now() - start,
+        method: 'format',
+        model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3-0324:free',
+      });
+    } else {
+      results.push({
+        name: 'openrouter',
+        ok: false,
+        error: `Invalid key format (starts with '${orKey.slice(0, 6)}', needs 'sk-or-')`,
+        latencyMs: Date.now() - start,
+        method: 'format',
+      });
+    }
+  }
+
+  // Gemini (secondary provider)
   const gemKey = process.env.GOOGLE_AI_API_KEY;
-  if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
-    results.push({ name: 'gemini', ok: true, latencyMs: Date.now() - start, method: 'format' });
+  if (gemKey && gemKey !== 'placeholder') {
+    if (gemKey.startsWith('AIzaSy')) {
+      results.push({ name: 'gemini', ok: true, latencyMs: Date.now() - start, method: 'format' });
+    } else {
+      const isOAuth = gemKey.startsWith('AQ.');
+      results.push({
+        name: 'gemini',
+        ok: false,
+        error: isOAuth ? 'OAuth token (need AIzaSy key)' : `Key format invalid (starts with '${gemKey.slice(0, 6)}')`,
+        latencyMs: Date.now() - start,
+        method: 'format',
+      });
+    }
   }
 
   return results;
@@ -64,8 +98,10 @@ async function pingProvider(provider: AIProvider): Promise<ProviderStatus> {
       shortError = 'Rate limited';
     } else if (msg.includes('403') || msg.includes('Forbidden')) {
       shortError = 'Access denied';
-    } else if (msg.includes('401') || msg.includes('API_KEY_INVALID') || msg.includes('not valid')) {
+    } else if (msg.includes('401') || msg.includes('API_KEY_INVALID') || msg.includes('invalid_api_key') || msg.includes('not valid')) {
       shortError = 'Invalid API key';
+    } else if (msg.includes('402')) {
+      shortError = 'Insufficient credits';
     } else if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) {
       shortError = 'Timed out';
     } else if (msg.includes('404') || msg.includes('not found')) {
@@ -95,14 +131,6 @@ export async function GET(req: NextRequest) {
   } else {
     // Default: fast format check (no API calls, no rate limit risk)
     results = checkByFormat();
-    // Also report providers that are configured but have wrong format
-    const env = process.env;
-    if (env.GOOGLE_AI_API_KEY && env.GOOGLE_AI_API_KEY !== 'placeholder') {
-      if (!results.find(r => r.name === 'gemini')) {
-        const isOAuth = env.GOOGLE_AI_API_KEY!.startsWith('AQ.');
-        results.push({ name: 'gemini', ok: false, error: isOAuth ? 'OAuth token (need AIzaSy key)' : 'Key format invalid', latencyMs: 0, method: 'format' });
-      }
-    }
   }
 
   const anyWorking = results.some(r => r.ok);
