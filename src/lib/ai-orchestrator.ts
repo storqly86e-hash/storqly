@@ -35,9 +35,9 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'store-generation': {
     label: 'Store Generation',
     temperature: 0.7,
-    timeout: 60_000,
-    maxTokens: 8000,
-    retriesPerProvider: 2,
+    timeout: 90_000,
+    maxTokens: 16000,
+    retriesPerProvider: 3,
   },
   'chat-edit': {
     label: 'Chat Edit',
@@ -49,9 +49,9 @@ const TASK_CONFIGS: Record<AITaskType, TaskConfig> = {
   'coding-task': {
     label: 'Coding Task',
     temperature: 0.3,
-    timeout: 45_000,
-    maxTokens: 8000,
-    retriesPerProvider: 1,
+    timeout: 60_000,
+    maxTokens: 12000,
+    retriesPerProvider: 2,
   },
   'product-batch': {
     label: 'Product Batch Generation',
@@ -368,6 +368,8 @@ export async function executeAI(
     responseFormat?: 'json_object';
     /** Force a specific provider (for testing: 'gemini', 'z-ai') */
     forceProvider?: string;
+    /** Enable chain-of-thought reasoning (uses thinking budget for complex tasks) */
+    enableThinking?: boolean;
   }
 ): Promise<AIOrchestratorResult> {
   const config = TASK_CONFIGS[taskType];
@@ -443,6 +445,7 @@ export async function executeAI(
           maxTokens: config.maxTokens,
           jsonMode: useJsonMode,
           timeout,
+          thinking: options?.enableThinking,
         });
 
         lastAICallTime = Date.now();

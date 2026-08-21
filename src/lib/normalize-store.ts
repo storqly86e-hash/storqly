@@ -406,12 +406,33 @@ function normalizeSection(raw: unknown, log: ReturnType<typeof createLogger>): S
     type = 'text-banner';
   }
 
+  // Preserve componentMeta if provided by AI
+  let componentMeta: Section['componentMeta'];
+  if (s.componentMeta && typeof s.componentMeta === 'object') {
+    const cm = s.componentMeta as Record<string, unknown>;
+    componentMeta = {
+      family: cm.family !== undefined ? str(cm.family, '') : undefined,
+      variant: cm.variant !== undefined ? str(cm.variant, '') : undefined,
+      componentId: cm.componentId !== undefined ? str(cm.componentId, '') : undefined,
+      role: cm.role !== undefined ? str(cm.role, '') : undefined,
+      tags: Array.isArray(cm.tags) ? (cm.tags as string[]).slice(0, 10) : undefined,
+    };
+    // Strip undefined fields
+    if (componentMeta) {
+      (componentMeta as Record<string, unknown>) = Object.fromEntries(
+        Object.entries(componentMeta).filter(([_, v]) => v !== undefined)
+      ) as typeof componentMeta;
+      if (Object.keys(componentMeta).length === 0) componentMeta = undefined;
+    }
+  }
+
   return {
     id: isUUID(str(s.id, '')) ? str(s.id, '') : uuid(),
     type,
     content: normalizeSectionContent(type, s.content, log),
     style: normalizeSectionStyle(s.style, log),
     visible: bool(s.visible, true),
+    componentMeta,
   };
 }
 
@@ -513,9 +534,9 @@ function normalizePage(raw: unknown, log: ReturnType<typeof createLogger>): Stor
  *  @param maxProducts - If provided, cap products to this number. If undefined, don't cap products.
  */
 function enforceOutputCaps(store: Store, log: ReturnType<typeof createLogger>, maxProducts?: number, maxSections?: number): void {
-  // Default section cap: high enough for design library recipes (up to 12 nodes)
+  // Default section cap: high enough for complex stores (up to 20 sections)
   // while still protecting against unreasonable AI output.
-  const MAX_SECTIONS = maxSections ?? 14;
+  const MAX_SECTIONS = maxSections ?? 20;
 
   // ── Cap products (only if maxProducts is specified) ──
   if (maxProducts !== undefined && store.products.length > maxProducts) {

@@ -15,6 +15,8 @@ export interface ProviderCallOptions {
   maxTokens?: number;
   jsonMode?: boolean;
   timeout?: number;
+  /** Enable chain-of-thought for complex reasoning tasks */
+  thinking?: boolean;
 }
 
 export interface AIProvider {
@@ -83,7 +85,7 @@ class ZAIProvider implements AIProvider {
   }
 
   async call(options: ProviderCallOptions): Promise<string> {
-    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 60_000, thinking } = options;
 
     // Try with existing instance, then with fresh instance on 401/auth errors
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -100,7 +102,7 @@ class ZAIProvider implements AIProvider {
           zai.chat.completions.create({
             messages,
             temperature,
-            thinking: { type: 'disabled' },
+            thinking: thinking ? { type: 'enabled', budget_tokens: 2000 } : { type: 'disabled' },
             ...(maxTokens ? { max_tokens: maxTokens } : {}),
             ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
           }),
@@ -163,7 +165,7 @@ class GeminiProvider implements AIProvider {
 
   async call(options: ProviderCallOptions): Promise<string> {
     const ai = this.getClient();
-    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 30_000 } = options;
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 60_000 } = options;
 
     let systemInstruction: string | undefined;
     const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];

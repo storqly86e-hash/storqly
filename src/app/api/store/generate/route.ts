@@ -42,12 +42,11 @@ const MAX_PRACTICAL_PRODUCTS = 30;
 const TOTAL_TIME_BUDGET_MS = 300_000; // 5 min total
 const MIN_REMAINING_MS = 20_000;      // Abort remaining batches if < 20s left
 
-// ─── Phase 1 System Prompt (full store + first batch of products) ─────
-// CRITICAL: heroImages MUST use REAL Unsplash URLs from the curated set below.
-// The LLM cannot generate valid Unsplash photo IDs. Providing real URLs is essential.
-// Each category has 3+ URLs — the LLM picks the best ones for the store theme.
+// ─── Unsplash Image Database ────────────────────────────────
+// Comprehensive image URLs organized by store category.
+// Each category has hero images (w=1400) and product images (w=600).
 
-const REAL_UNSPLASH_HERO_URLS = {
+const HERO_URLS: Record<string, string[]> = {
   'skincare/beauty/spa': [
     'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=1400',
     'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1400',
@@ -72,8 +71,8 @@ const REAL_UNSPLASH_HERO_URLS = {
   'food/coffee/bakery': [
     'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
     'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=1400',
-    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
     'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=1400',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1400',
   ],
   'furniture/home/decor': [
     'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1400',
@@ -90,6 +89,41 @@ const REAL_UNSPLASH_HERO_URLS = {
     'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=1400',
     'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1400',
   ],
+  'books/education/stationery': [
+    'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1400',
+    'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=1400',
+    'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=1400',
+  ],
+  'pets/animals': [
+    'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=1400',
+    'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=1400',
+    'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=1400',
+  ],
+  'automotive/cars': [
+    'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=1400',
+    'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=1400',
+    'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=1400',
+  ],
+  'travel/luggage/adventure': [
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=1400',
+    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=1400',
+    'https://images.unsplash.com/photo-1503220317266-8e5b70a21ed6?w=1400',
+  ],
+  'plants/garden/eco': [
+    'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=1400',
+    'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=1400',
+    'https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?w=1400',
+  ],
+  'kids/baby/toys': [
+    'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=1400',
+    'https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=1400',
+    'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=1400',
+  ],
+  'music/instruments/art': [
+    'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1400',
+    'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1400',
+    'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1400',
+  ],
   'general/lifestyle': [
     'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1400',
     'https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?w=1400',
@@ -97,7 +131,7 @@ const REAL_UNSPLASH_HERO_URLS = {
   ],
 };
 
-const REAL_UNSPLASH_PRODUCT_URLS = {
+const PRODUCT_URLS: Record<string, string[]> = {
   'skincare/beauty': [
     'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=600',
     'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600',
@@ -139,6 +173,16 @@ const REAL_UNSPLASH_PRODUCT_URLS = {
     'https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600',
     'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600',
   ],
+  'books/education': [
+    'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=600',
+    'https://images.unsplash.com/photo-1507842217343-583bb7270b66?w=600',
+    'https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600',
+  ],
+  'pets/animals': [
+    'https://images.unsplash.com/photo-1548199973-03cce0bbc87b?w=600',
+    'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=600',
+    'https://images.unsplash.com/photo-1601758228041-f3b2795255f1?w=600',
+  ],
   'general': [
     'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600',
     'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',
@@ -146,9 +190,11 @@ const REAL_UNSPLASH_PRODUCT_URLS = {
   ],
 };
 
+// ─── Category Detection ─────────────────────────────────────
+
 function pickCategory(keys: string[]): string {
   const lower = keys.join(' ').toLowerCase();
-  for (const [cat, ] of Object.entries(REAL_UNSPLASH_HERO_URLS)) {
+  for (const [cat, ] of Object.entries(HERO_URLS)) {
     const catParts = cat.split('/');
     if (catParts.some(p => lower.includes(p))) return cat;
   }
@@ -159,108 +205,238 @@ function formatUrlsForPrompt(urls: string[]): string {
   return urls.map((u, i) => `  URL ${i+1}: ${u}`).join('\n');
 }
 
+// ─── Phase 1 System Prompt (SUPERCHARGED for complex stores) ──
+
 function buildPhase1SystemPrompt(productCount: number, userPrompt: string): string {
-  // Detect store category from user prompt for curated URLs
   const promptWords = userPrompt.toLowerCase();
   const category = pickCategory([promptWords]);
-  const heroUrls = REAL_UNSPLASH_HERO_URLS[category] || REAL_UNSPLASH_HERO_URLS['general/lifestyle'];
-  const productUrls = REAL_UNSPLASH_PRODUCT_URLS[category] || REAL_UNSPLASH_PRODUCT_URLS['general'];
+  const heroUrls = HERO_URLS[category] || HERO_URLS['general/lifestyle'];
+  const productUrls = PRODUCT_URLS[category] || PRODUCT_URLS['general'];
 
-  return `You are an e-commerce store builder. Your job is to faithfully translate the user's design specification into a structured store.
+  // Detect complexity signals from the prompt
+  const isComplex = (
+    promptWords.includes('multi-page') || promptWords.includes('multiple page') ||
+    promptWords.includes('about us') || promptWords.includes('contact') || promptWords.includes('shop all') ||
+    promptWords.includes('collection') || promptWords.includes('gallery') || promptWords.includes('categories') ||
+    promptWords.includes('story') || promptWords.includes('brand') || promptWords.includes('faq') ||
+    promptWords.includes('testimonials') || promptWords.includes('reviews') ||
+    promptWords.includes('luxury') || promptWords.includes('premium') || promptWords.includes('editorial') ||
+    promptWords.includes('campaign') || promptWords.includes('complex') || promptWords.includes('comprehensive')
+  );
 
-CRITICAL PRINCIPLE — USER INTENT IS LAW:
-- The user prompt is the DESIGN SPECIFICATION. Every explicit requirement MUST appear in the output.
-- AI fills in unspecified details intelligently. AI does NOT replace explicit requirements with generic defaults.
-- If the user says "premium editorial hero with 3 campaign images", the hero MUST have 3 heroImages with editorial backgroundTreatment.
-- If the user says "only hero and products, no testimonials", do NOT add testimonials or newsletter.
-- If the user specifies a layout (split-left, minimal, etc.), use THAT layout, not a default.
+  return `You are a world-class e-commerce store architect. You build stunning, conversion-optimized Shopify stores from design specifications.
 
-FORMAT RULES:
-1. Raw JSON ONLY. No markdown fences.
-2. NEVER put newlines or double-quotes inside any string. Use single quotes for emphasis.
-3. Fresh UUIDs for all "id" fields.
-4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
+═══ CORE PRINCIPLES ═══
+1. USER INTENT IS LAW: Every explicit requirement in the user prompt MUST appear in the output. AI fills in unspecified details intelligently but NEVER replaces explicit requirements with generic defaults.
+2. VISUAL IMPACT: Every section must be visually rich and professionally composed. No generic or empty-looking sections.
+3. COHESIVE DESIGN: All sections share the same design language — consistent colors, spacing, typography, and visual rhythm.
+4. REALISM: Use realistic product names, prices, descriptions. No placeholder text.
+5. COMPLETENESS: Every section must have ALL its required fields populated with meaningful content.
 
-SCHEMA (compact):
-{"id":"<uuid>","name":"<store name>","slug":"<url-safe>","description":"<1 sentence>","announcementText":"<short promo like Free shipping on orders over $50 or New drops every Friday>","theme":{"colors":{"primary":"#hex","secondary":"#hex","accent":"#hex","background":"#hex","surface":"#hex","text":"#hex","textMuted":"#hex","border":"#hex"},"fonts":{"heading":"<font>","body":"<font>"},"spacing":"normal","borderRadius":"md"},"pages":[{"id":"<uuid>","name":"Home","slug":"","isHomepage":true,"sections":[...]}],"products":[...],"published":false,"createdAt":"<ISO>","updatedAt":"<ISO>"}
+═══ OUTPUT FORMAT ═══
+- Raw JSON ONLY. No markdown fences. No explanation.
+- NEVER put newlines or double-quotes inside any string value. Use single quotes for emphasis.
+- Fresh UUIDs (crypto.randomUUID format) for all "id" fields.
+- KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
+- Return a SINGLE JSON object, not an array.
 
-SECTION: {"id":"<uuid>","type":"<type>","content":{...},"style":{"paddingY":"lg","paddingX":"md","maxWidth":"xl","borderRadius":"none"},"visible":true,"componentMeta":{"componentId":"<family.variant>","family":"<family>","variant":"<variant>","role":"<role>"}}
-Every section MUST have a componentMeta field. Use the EXACT componentId values from the Page Composition section below. Do NOT invent componentId values.
+═══ TOP-LEVEL SCHEMA ═══
+{
+  "id": "<uuid>",
+  "name": "<store name>",
+  "slug": "<url-safe-slug>",
+  "description": "<compelling 1-sentence description>",
+  "announcementText": "<short promo like 'Free shipping on orders over $50'>",
+  "theme": { ... },
+  "pages": [ ... ],
+  "products": [ ... ],
+  "published": false,
+  "createdAt": "<ISO>",
+  "updatedAt": "<ISO>"
+}
+
+═══ THEME DESIGN SYSTEM ═══
+The theme must perfectly match the brand aesthetic. Generate a COHESIVE color palette:
+{
+  "colors": {
+    "primary": "<brand's primary hex — most used color>",
+    "secondary": "<complementary hex — used for accents, badges, hover states>",
+    "accent": "<CTA/highlight hex — buttons, links, important elements>",
+    "background": "<page background hex — usually white or near-white>",
+    "surface": "<card/section background hex — slightly different from background>",
+    "text": "<primary text hex — high contrast on background>",
+    "textMuted": "<secondary text hex — for descriptions, labels>",
+    "border": "<border/divider hex — subtle, matches surface>",
+  },
+  "fonts": {
+    "heading": "<font name: Inter, Playfair Display, Montserrat, Poppins, DM Sans, Crimson Text, Oswald, Space Grotesk, or similar>",
+    "body": "<font name: Inter, Open Sans, Lato, Source Sans Pro, DM Sans, or similar>"
+  },
+  "spacing": "normal",
+  "borderRadius": "md"
+}
+
+TYPOGRAPHY RULES:
+- Luxury/premium stores: heading='Playfair Display' or 'Crimson Text', body='Inter' or 'Lato'
+- Modern/tech stores: heading='Space Grotesk' or 'Montserrat', body='Inter' or 'DM Sans'
+- Fashion/editorial: heading='Montserrat' or 'Oswald', body='Inter' or 'Open Sans'
+- Organic/natural: heading='DM Sans' or 'Poppins', body='Lato' or 'Source Sans Pro'
+- Bold/energetic: heading='Oswald' or 'Montserrat', body='Inter' or 'Poppins'
+
+COLOR PALETTE STRATEGY:
+- Analyze the brand mood from the prompt and generate a matching palette.
+- Dark/moody brands: dark backgrounds (#111827, #0f172a), light text, vivid accents
+- Luxury brands: neutral backgrounds, gold/silver accents, elegant typography
+- Bright/energetic: white backgrounds, vibrant primary + secondary, playful accent
+- Minimal/clean: white/light gray backgrounds, one accent color, lots of whitespace
+- Nature/organic: earthy tones (greens, browns, warm grays), cream backgrounds
+
+═══ SECTION SYSTEM ═══
+Each section: {"id":"<uuid>","type":"<type>","content":{...},"style":{...},"visible":true,"componentMeta":{...}}
+
+COMPONENTMETA — Required for EVERY section:
+{"componentId":"<family.variant>","family":"<family>","variant":"<variant>","role":"<role>"}
+
+SECTION STYLE defaults (use these unless user overrides):
+{"paddingY":"lg","paddingX":"md","maxWidth":"xl","borderRadius":"none"}
+
+═══ HERO SECTION — THE STAR ═══
+The hero is the PRIMARY visual statement. It MUST be visually stunning.
+
+CONTENT FIELDS: headline, subheadline, ctaText, ctaLink, alignment (left/center/right), height (sm/md/lg/xl), badge (uppercase label), secondaryCtaText (optional), layout, visualPriority, backgroundTreatment, vignette, heroImages, carouselEnabled, carouselInterval
+
+LAYOUT SELECTION (choose based on brand, NOT default):
+- "minimal": Full-bleed background image + centered text overlay. NO product column. BEST for: luxury, editorial, campaigns, skincare, cosmetics, fashion campaigns, premium brands. Use when prompt says "editorial", "premium", "campaign", "lifestyle".
+- "split-left": Text 50% left + product image 50% right. Good for product-focused stores.
+- "split-right": Product image 50% left + text 50% right. Mirror of split-left.
+- "product-first": Product image 60% dominant + text 40%. Use when product is the hero.
+- "text-first": Text 60% dominant + product image 40%. Use when message is the hero.
+
+HERO IMAGE SYSTEM (CRITICAL):
+- heroImages: Array of EXACTLY 3 objects: {"src":"<URL from list>","alt":"<descriptive>","role":"<one of: product-hero, editorial-lifestyle, product-detail, campaign, brand-atmosphere>"}
+- Assign DISTINCT, MEANINGFUL roles to each image.
+- carouselEnabled: true (always)
+- carouselInterval: 5 (always)
+- style.backgroundImage: 1st hero image URL
+- style.overlay: true
+- backgroundTreatment: "editorial" for premium/fashion, "dramatic" for bold campaigns, "soft" for gentle brands, "none" only if user says no treatment
+- vignette: true
+- height: "xl" for editorial/premium, "lg" for standard
+- visualPriority: "headline" for minimal, "balanced" for split, "product" for product-first
+
+═══ ALL SECTION TYPES — DETAILED SPECS ═══
+
+1. HERO (always first section, non-negotiable):
+   See above. Must be visually impactful.
+
+2. FEATURED-PRODUCTS:
+   {headline, subtitle, productIds: [array of product IDs], columns: 3 or 4, showPrice: true, showAddToCart: true}
+   - This is the main product showcase section. Always include it.
+
+3. PRODUCT-GRID (alternative to featured-products for larger catalogs):
+   {headline, columns: 3 or 4, showPrice: true, showAddToCart: true}
+   - Use this when there are many products or when showing all products.
+
+4. TEXT-BANNER:
+   {headline, body, alignment, size}
+   - Great for brand statements, value propositions, or transitions between sections.
+   - body should be 1-2 compelling sentences.
+
+5. CTA (call-to-action):
+   {headline, body, ctaText, ctaLink, style: "solid"|"outline"|"gradient"}
+   - High-impact conversion section. Place before newsletter or at end.
+   - Use "gradient" style for premium brands, "solid" for standard.
+
+6. TESTIMONIALS:
+   {headline, items: [{id, quote (realistic customer words), author, role (e.g. 'Verified Buyer'), rating: 4-5}]}
+   - Include 3 testimonials with diverse, realistic quotes.
+   - Style: backgroundColor should be surface color or a subtle tint.
+
+7. NEWSLETTER:
+   {headline, subtitle, placeholderText, buttonText}
+   - Style: backgroundColor = primary color, textColor = white.
+
+8. IMAGE-GALLERY:
+   {images: [{src, alt, caption}], columns: 3 or 4, gap: "md"}
+   - Great for lifestyle brands, lookbooks, behind-the-scenes.
+   - Use Unsplash URLs from the hero list for gallery images.
+
+9. CATEGORIES:
+   {headline, items: [{id, name, image, slug, productCount}], columns: 3 or 4}
+   - Perfect for stores with multiple product categories.
+   - Generate 3-6 categories based on the store's product range.
+
+10. FAQ:
+    {headline, items: [{id, question (realistic), answer (helpful, 1-2 sentences)}]}
+    - Include 4-6 FAQs relevant to the store's niche.
+    - Questions should address real customer concerns (shipping, returns, materials, sizing).
+
+11. BRAND-STATEMENT:
+    {headline, body (2-3 sentences about brand story/mission), backgroundImage, alignment}
+    - Use for 'About Us' content inline on the home page.
+
+═══ PAGE COMPOSITION STRATEGY ═══
+For a HOME page, build a visual narrative flow:
+1. HERO (always first — sets the visual tone)
+2. FEATURED-PRODUCTS or CATEGORIES (show what you sell)
+3. TEXT-BANNER or BRAND-STATEMENT (tell your story)
+4. IMAGE-GALLERY (show lifestyle/aspiration) — optional
+5. TESTIMONIALS (social proof)
+6. CTA (conversion push)
+7. NEWSLETTER (retention)
+
+${isComplex ? `COMPLEX STORE GUIDANCE:
+- This is a complex store request. Include MORE sections (7-10 sections).
+- Use diverse section types to create a rich, multi-layered page.
+- Include CATEGORIES section with 4-6 product categories.
+- Include IMAGE-GALLERY for lifestyle/lookbook content.
+- Include FAQ with 4-6 relevant questions.
+- Consider adding TEXT-BANNER sections as visual transitions between content blocks.
+- Make the hero extra impactful — use "minimal" or "split-left" layout.
+- Use richer, more detailed content in every section.`
+: `STANDARD STORE: Include 4-6 sections. Focus on hero + products + 1-2 supporting sections + newsletter.`}
+
+═══ PRODUCT SCHEMA ═══
+{id:"<uuid>", name:"<short, realistic name>", price:<number>, compareAtPrice:null, images:["<one REAL URL from product list>"], description:"<max 8 words, compelling>", category:"<category>", featured:false, inStock:true}
+
+PRODUCT RULES:
+- Generate EXACTLY ${productCount} products. Mark 1 as featured.
+- Descriptions max 8 words. Make them compelling (not generic).
+- Names should be creative and realistic for the niche.
+- Prices should vary realistically (e.g., $29-$299 for mid-range, $100-$2000+ for luxury).
+- Cycle through the product image URLs. Do NOT invent URLs.
+- NO "variants" field on products.
 
 ═══ IMAGE URLS — USE THESE EXACT URLS ═══
-You MUST use these real, working image URLs. Do NOT invent or guess photo IDs.
-Pick the 3 most relevant URLs from the appropriate category for heroImages.
-For products, pick 1 URL per product from the product list, cycling through them.
-
-HERO BACKGROUND IMAGES (pick 3 for heroImages, use 1st also as style.backgroundImage):
+HERO IMAGES (pick 3 for heroImages, use 1st also as style.backgroundImage):
 ${formatUrlsForPrompt(heroUrls)}
 
 PRODUCT IMAGES (cycle through these for each product):
 ${formatUrlsForPrompt(productUrls)}
 
-═══ HERO SECTION — CRITICAL ═══
-The hero is the PRIMARY visual statement of the store. It MUST be visually impactful.
+═══ DESIGN LIBRARY COMPONENT IDs ═══
+Use these exact componentId values in componentMeta:
+- Hero sections: "hero.editorial_product_still_life" or "hero.premium_invitation" or "hero.minimalist_centered"
+- Product sections: "featured-product.grid_3col" or "featured-product.carousel"
+- Testimonials: "testimonials.cards_3col"
+- CTA: "cta.full_width_banner"
+- Newsletter: "newsletter.standard_form"
+- Brand Statement: "brand-story.full_width"
+- Image Gallery: "gallery.masonry_grid" or "gallery.stripe_grid"
+- Categories: "collection.grid_3col"
+- FAQ: "faq.accordion"
+- Text Banner: "feature-benefits.icon_rows"
 
-HERO CONTENT FIELDS:
-headline, subheadline, ctaText, ctaLink, alignment (left/center/right), height (sm/md/lg/xl), badge (short uppercase label), secondaryCtaText (optional)
-
-HERO LAYOUT — choose based on user prompt, NOT a default:
-- minimal: Full-bleed background image + text overlay. NO separate product image column. Best for: premium brands, editorial campaigns, luxury, skincare, cosmetics, fashion campaigns. Use this when user says "editorial", "premium", "campaign", "lifestyle", or when heroImages are campaign-style.
-- split-left: Text left 50% + product image right 50%. Use when user explicitly wants a split or product showcase.
-- split-right: Product image left 50% + text right 50%. Mirror of split-left.
-- product-first: Product image 60% dominant + text 40%. Use when user emphasizes the product.
-- text-first: Text 60% dominant + product image 40%. Use when user emphasizes the message.
-- DO NOT use "centered" — use "minimal" for centered text-over-image.
-
-HERO IMAGE SYSTEM:
-- heroImages: Array of exactly 3 objects. Each has "src" (URL from the list above), "alt" (descriptive), and "role" (one of: "product-hero", "editorial-lifestyle", "product-detail", "campaign", "brand-atmosphere").
-- Assign distinct, meaningful roles to each image based on user's requirements.
-- carouselEnabled: true (always)
-- carouselInterval: 5 (always, unless user specifies differently)
-- style.backgroundImage: use the 1st hero image URL
-- style.overlay: true
-- backgroundTreatment: "editorial" for premium/fashion/skincare, "dramatic" for bold campaigns, "soft" for gentle brands, "none" only if user says no treatment
-- vignette: true
-- height: "xl" for editorial/premium, "lg" for standard, "md" only if user says compact
-- visualPriority: "headline" for minimal layout, "balanced" for split layouts, "product" for product-first
-
-HERO RULES — NON-NEGOTIABLE:
+═══ NON-NEGOTIABLE RULES ═══
 1. heroImages MUST have exactly 3 objects with REAL URLs from the list above.
-2. Each heroImage MUST have a "role" field describing its semantic purpose.
-3. Do NOT set heroImage (singular foreground product image) when using minimal layout — the background images ARE the visuals.
-4. carouselEnabled MUST be true, carouselInterval MUST be 5.
-
-═══ SECTIONS — FOLLOW USER INTENT ═══
-- ONLY create sections the user explicitly requested, plus a hero (always first) and featured-products.
-- Do NOT automatically add testimonials, newsletter, or FAQ unless the user's prompt implies they are appropriate.
-- Section order must match the user's described flow.
-- Each section's style.maxWidth should be "xl" (not "lg") for a professional, expansive feel.
-
-AVAILABLE SECTION TYPES:
-- hero: {headline, subheadline, ctaText, ctaLink, alignment, height, badge, secondaryCtaText, layout, visualPriority, backgroundTreatment, vignette, heroImages, carouselEnabled, carouselInterval}
-- featured-products: {headline, subtitle, productIds, columns, showPrice, showAddToCart}
-- product-grid: {headline, columns, showPrice, showAddToCart}
-- text-banner: {headline, body, alignment, size}
-- cta: {headline, body, ctaText, ctaLink, style}
-- testimonials: {headline, items: [{id, quote, author, role, rating}]}
-- newsletter: {headline, subtitle, placeholderText, buttonText}
-- image-gallery: {images, columns, gap}
-- categories: {headline, items: [{id, name, image, slug}], columns}
-- faq: {headline, items: [{id, question, answer}]}
-- brand-statement: {headline, body, backgroundImage, alignment}
-
-PRODUCT (NO variants field):
-{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["<one of the REAL product URLs above>"], description: "<max 8 words>", category: "<category>", featured: false, inStock: true}
-
-GENERATION RULES:
-- Generate EXACTLY ${productCount} products. Mark 1 as featured. Descriptions max 8 words.
-- Use REAL image URLs from the lists above. Do NOT make up photo IDs.
-- Theme colors MUST match the brand aesthetic described in the prompt.
-- If the user specifies exact colors, use those exactly.
-- If the user specifies a visual style (minimal, luxury, editorial, etc.), match it.
-- Include a relevant announcementText.
-- Do NOT add header, footer, spacer, or divider sections.
-- NO variants field on products.
+2. Each heroImage MUST have a "role" field.
+3. carouselEnabled MUST be true, carouselInterval MUST be 5.
+4. Do NOT add header, footer, spacer, or divider sections.
+5. NO variants field on products.
+6. Every section MUST have componentMeta with a valid componentId.
+7. style.maxWidth should be "xl" for professional, expansive feel.
+8. Theme colors MUST match the brand aesthetic described in the prompt.
+9. If user specifies exact colors/fonts/layout, use THOSE exactly.
 
 USER PROMPT (this is the design specification — follow it precisely):
 ${userPrompt}`;
@@ -282,13 +458,14 @@ FORMAT RULES:
 4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
 
 Each product must be:
-{id: "<uuid>", name: "<short name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, one line>", category: "<category>", featured: false, inStock: true}
+{id: "<uuid>", name: "<short realistic name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, compelling>", category: "<category>", featured: false, inStock: true}
 
 RULES:
 - Generate EXACTLY ${count} products for the ${storeName} store (${storeDescription}).
 - Each product must be UNIQUE — do NOT duplicate any of these existing products: ${existingProductNames.join(', ')}.
 - NO variants field.
-- Prices should vary realistically for the product category.`;
+- Prices should vary realistically for the product category.
+- Product names should be creative and realistic, not generic.`;
 }
 
 // ─── Fallback: generate a valid starter store without AI ───────
@@ -337,23 +514,15 @@ function createFallbackStore(prompt: string): Store {
 /** Extract a short, clean store name from the user prompt. */
 function extractStoreName(prompt: string): string {
   const text = prompt.trim();
-
-  // Pattern 1: Quoted name — highest priority, most reliable
   const quotedMatch = text.match(/["']([^"']{2,40})["']/);
   if (quotedMatch?.[1]) return quotedMatch[1].trim();
-
-  // Pattern 2: "called X" or "named X" — capture just the first word (the actual name)
   const calledMatch = text.match(/(?:called|named|known\s+as)\s+([A-Za-z][\w&'\-]*)/i);
   if (calledMatch?.[1] && calledMatch[1].length >= 2) return calledMatch[1].trim();
-
-  // Pattern 3: "brand X" or "store X" — capture title-case words after type keyword
   const afterType = text.match(/\b(store|shop|boutique|brand)\s+([A-Z][\w&'\-]*(?:\s+[A-Z][\w&'\-]*){0,2})/);
   if (afterType?.[2]) {
     const name = afterType[2].replace(/\s+(selling|with|that|for|using|featuring|and)\s*$/i, '').trim();
     if (name.length >= 2 && name.length <= 40) return name;
   }
-
-  // Pattern 4: Find longest title-case run (e.g., "StrideFit" in "a footwear brand StrideFit selling...")
   const stripped = text
     .replace(/^(build|create|make|design|set\s+up)\s+(a|an|the|my)\s+/i, '')
     .replace(/\b(online|e-commerce|ecommerce)\s+(store|shop|boutique)\b/gi, '')
@@ -377,13 +546,11 @@ function extractStoreName(prompt: string): string {
     const candidate = bestRun.slice(0, 3).join(' ');
     if (candidate.length >= 2 && candidate.length <= 40) return candidate;
   }
-
   return 'My Store';
 }
 
 // ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
-  // Auth guard — checked BEFORE creating the SSE stream.
   try {
     await requireAuth();
   } catch (e) {
@@ -391,10 +558,6 @@ export async function POST(req: NextRequest) {
     throw e;
   }
 
-  // ── Read request body BEFORE creating the ReadableStream ──
-  // Reading req.json() inside ReadableStream.start() is unsafe: start() runs
-  // asynchronously after the Response is returned, and the request body may
-  // already be consumed or invalidated by the runtime in some environments.
   let prompt: string | undefined;
   try {
     const body = await req.json();
@@ -422,7 +585,6 @@ export async function POST(req: NextRequest) {
         }
       };
 
-      // Heartbeat: send keepalive every 4s to prevent proxy timeouts
       const heartbeat = setInterval(() => {
         try { controller.enqueue(encoder.encode(': heartbeat\n\n')); }
         catch { clearInterval(heartbeat); }
@@ -442,14 +604,12 @@ export async function POST(req: NextRequest) {
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
         let requestedCount = extractProductCount(trimmedPrompt);
 
-        // Soft cap: if user requested more than 30, cap at 30 and notify
         const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
         if (wasCapped) {
           console.log(`[Store Generate] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
           requestedCount = MAX_PRACTICAL_PRODUCTS;
         }
 
-        // Determine phase 1 product count (capped at PHASE1_BATCH_SIZE)
         const phase1Count = Math.min(requestedCount, PHASE1_BATCH_SIZE);
         const needsPhase2 = requestedCount > PHASE1_BATCH_SIZE;
         const phase2BatchCount = needsPhase2
@@ -459,10 +619,9 @@ export async function POST(req: NextRequest) {
         log(`[Store Generate] Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
 
         if (sanitizedPrompt.length < trimmedPrompt.length) {
-          log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} → ${sanitizedPrompt.length} chars (long lists collapsed)`);
+          log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
         }
 
-        // ── Check time budget ──
         if (elapsed() > TOTAL_TIME_BUDGET_MS) {
           warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms).`);
           send('error', { message: 'Generation timed out before AI could respond. Please try again.' });
@@ -472,9 +631,8 @@ export async function POST(req: NextRequest) {
         // ═══════════════════════════════════════════════════════════
         // PHASE 1: Store Structure + First Batch of Products
         // ═══════════════════════════════════════════════════════════
-        // Log provider chain for diagnostics (visible in Render logs)
         const providerChain = getProviders();
-        log(`[Store Generate] Provider chain: ${providerChain.map(p => p.name).join(' → ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
+        log(`[Store Generate] Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
 
         send('progress', { stage: 'generating', message: 'Generating your store...' });
         log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
@@ -505,24 +663,24 @@ export async function POST(req: NextRequest) {
         ], {
           systemPrompt,
           temperature: 0.6,
-          timeout: 40_000,
+          timeout: 90_000,
           maxRetries: 3,
           responseFormat: 'json_object',
+          enableThinking: true,
         });
 
         if (!phase1Result.success || !phase1Result.content) {
           logErr(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
-          // Include per-provider error details so the user knows EXACTLY what failed
           const providerDetails = phase1Result.providerErrors
-            ?.map(e => `• ${e.provider}: ${e.error}`)
+            ?.map(e => `* ${e.provider}: ${e.error}`)
             .join('\n') || phase1Result.error || 'Unknown error';
           send('error', { message: `AI generation failed. Each provider error:\n${providerDetails}`, providerErrors: phase1Result.providerErrors });
           return;
         }
 
-        log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts)`);
+        log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
 
-        // ── Parse JSON (json_object mode guarantees valid syntax) ──
+        // ── Parse JSON ──
         send('progress', { stage: 'parsing', message: 'Processing store data...' });
         let parsed: unknown;
         try {
@@ -534,8 +692,6 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Normalize to Store schema ──
-        // For Phase 1, pass maxProducts = phase1Count so the normalizer caps at our intended count.
-        // (If AI returned more, the normalizer truncates. If fewer, padProducts fills to min 1.)
         const normResult = normalizeStore(parsed, trimmedPrompt, phase1Count);
 
         if (!normResult) {
@@ -544,7 +700,6 @@ export async function POST(req: NextRequest) {
           return;
         }
 
-        // Log normalization
         if (normResult.normalizationCount > 0) {
           log(`[Store Generate] Normalization applied (${normResult.summary}):`);
           for (const line of normResult.log) {
@@ -556,7 +711,7 @@ export async function POST(req: NextRequest) {
 
         let store = normResult.store;
 
-        // ── GAP 1: Validate and fix componentMeta ─────────────────────
+        // ── Validate and fix componentMeta ─────────────────────
         if (libraryCtx) {
           const { store: validatedStore, result: vr } = validateAndFixComponentMeta(store, libraryCtx);
           store = validatedStore;
@@ -568,15 +723,10 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── Image enrichment is now LAZY (not blocking generation) ──
-        // The client triggers background enrichment via /api/store/enrich-images
-        // after the store is loaded in the editor. This reduces generation from
-        // 9+ API calls to exactly 1, preventing rate-limit exhaustion.
-
-        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms (no image enrichment — lazy)`);
+        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
 
         // ═══════════════════════════════════════════════════════════
-        // PHASE 2: Additional Product Batches (if requested > PHASE1_BATCH_SIZE)
+        // PHASE 2: Additional Product Batches
         // ═══════════════════════════════════════════════════════════
         if (needsPhase2) {
           const productsStillNeeded = requestedCount - store.products.length;
@@ -593,7 +743,6 @@ export async function POST(req: NextRequest) {
               const thisBatchSize = Math.min(PHASE2_BATCH_SIZE, requestedCount - offset);
               const batchRange = `${offset + 1}-${offset + thisBatchSize}`;
 
-              // Time budget check before each batch
               if (remaining() < MIN_REMAINING_MS) {
                 warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
                 break;
@@ -614,15 +763,14 @@ export async function POST(req: NextRequest) {
                   ),
                   responseFormat: 'json_object',
                   maxRetries: 1,
-                  timeout: 30_000,
+                  timeout: 45_000,
                 });
 
                 if (!batchResult.success || !batchResult.content) {
                   warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
-                  break; // Graceful degradation — keep all previous products
+                  break;
                 }
 
-                // Parse the batch response — should be a JSON array
                 let batchParsed: unknown;
                 try {
                   batchParsed = JSON.parse(batchResult.content);
@@ -631,13 +779,11 @@ export async function POST(req: NextRequest) {
                   break;
                 }
 
-                // Handle case where AI wraps array in an object
                 let batchProducts: unknown[];
                 if (Array.isArray(batchParsed)) {
                   batchProducts = batchParsed;
                 } else if (batchParsed && typeof batchParsed === 'object' && !Array.isArray(batchParsed)) {
                   const obj = batchParsed as Record<string, unknown>;
-                  // Try common wrapper keys
                   batchProducts = Array.isArray(obj.products) ? obj.products
                     : Array.isArray(obj.items) ? obj.items
                     : Array.isArray(obj.data) ? obj.data
@@ -646,7 +792,6 @@ export async function POST(req: NextRequest) {
                   batchProducts = [];
                 }
 
-                // Normalize batch products
                 const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
 
                 if (normalizedBatch.length === 0) {
@@ -654,9 +799,6 @@ export async function POST(req: NextRequest) {
                   break;
                 }
 
-                // Phase 2 image enrichment is lazy (same as Phase 1)
-
-                // Accumulate products into store
                 for (const p of normalizedBatch) {
                   existingNames.push(p.name);
                   store.products.push(p);
@@ -667,7 +809,7 @@ export async function POST(req: NextRequest) {
               } catch (batchErr) {
                 const batchMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
                 warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
-                break; // Graceful degradation
+                break;
               }
             }
           } else {
@@ -675,13 +817,11 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── Fix product references in featured-products sections to include all products ──
-        // (Phase 2 products were added after normalization ran, so we need to update references)
+        // ── Fix product references in featured-products sections ──
         const allProductIds = store.products.map(p => p.id);
         for (const page of store.pages) {
           for (const section of page.sections) {
             if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
-              // Keep existing valid IDs, then fill with any missing product IDs
               const validIds = (section.content.productIds as string[]).filter(id => allProductIds.includes(id));
               const usedIds = new Set(validIds);
               for (const pid of allProductIds) {
@@ -697,7 +837,7 @@ export async function POST(req: NextRequest) {
 
         // ── Final result ──
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
-        log(`[Store Generate] ✅ Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+        log(`[Store Generate] Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
 
         send('result', {
           store,
