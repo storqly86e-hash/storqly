@@ -2,15 +2,18 @@
 // AI Provider Abstraction Layer
 // ========================================
 // Provider chain (production):
-//   1. OpenRouter (free-tier, primary production provider)
-//   2. Gemini (if valid API key configured, secondary)
+//   1. GLM / Zhipu AI (primary — free tier, no credits)
+//   2. OpenRouter (fallback, requires credits)
+//   3. Gemini (if valid API key configured, secondary)
 //
 // Provider chain (sandbox / local dev):
 //   1. z-ai (sandbox-only, fastest)
-//   2. OpenRouter (fallback)
-//   3. Gemini (if valid key, final fallback)
+//   2. GLM (fallback)
+//   3. OpenRouter (fallback)
+//   4. Gemini (if valid key, final fallback)
 
 import { GoogleGenAI } from '@google/genai';
+import { createHmac } from 'crypto';
 
 // ─── Provider Interface ───────────────────────────────────────
 
@@ -32,8 +35,8 @@ export interface AIProvider {
   reset(): void;
 }
 
-/** OpenRouter streaming options (for marketing-kit SSE) */
-export interface OpenRouterStreamOptions {
+/** Streaming options (for marketing-kit SSE) */
+export interface StreamOptions {
   messages: Array<{ role: string; content: string }>;
   temperature?: number;
   maxTokens?: number;
@@ -108,8 +111,7 @@ class ZAIProvider implements AIProvider {
         const zai = await this.getInstance() as {
           chat: {
             completions: {
-              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }>;
-            }
+              create(opts: Record<string, unknown>): Promise<{ choices: Array<{ message?: { content?: string } }> }> };
           }
         };
 
@@ -150,18 +152,272 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── OpenRouter Provider (Production primary — free tier) ──────────
-// OpenRouter's OpenAI-compatible API.
-// Default model: deepseek/deepseek-chat-v3-0324 (structured JSON, fast).
-// API key: from https://openrouter.ai/keys (format: sk-or-v1-...)
+// ─── GLM / Zhipu AI Provider (Production primary — free tier) ──────────
+// API: OpenAI-compatible at https://open.bigmodel.cn/api/paas/v4/chat/completions
+// Auth: JWT token generated from API key (format: {id}.{secret})
+// Free models: glm-4-flash, glm-4-air, glm-4-plus
+// Get a key at https://open.bigmodel.cn (free tokens for new users)
+
+const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
+const DEFAULT_GLM_MODEL = 'glm-4-flash';
+
+const GLM_FALLBACK_MODELS = [
+  'glm-4-plus',
+  'glm-4-air',
+];
+
+/** Generate a Zhipu AI JWT token from an API key (format: {id}.{secret}) */
+function generateGLMToken(apiKey: string): string {
+  const dotIndex = apiKey.indexOf('.');
+  if (dotIndex === -1) throw new Error('GLM_API_KEY invalid format: expected {id}.{secret}');
+
+  const id = apiKey.slice(0, dotIndex);
+  const secret = apiKey.slice(dotIndex + 1);
+
+  const now = Date.now();
+  const exp = now + 3600_000; // 1 hour expiry
+
+  const header = Buffer.from(JSON.stringify({ alg: 'HS256', sign_type: 'SIGN' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ api_key: id, exp, timestamp: now })).toString('base64url');
+
+  const signature = createHmac('sha256', secret)
+    .update(`${header}.${payload}`)
+    .digest('base64url');
+
+  return `${header}.${payload}.${signature}`;
+}
+
+class GLMProvider implements AIProvider {
+  readonly name = 'glm';
+  private _apiKey: string | null = null;
+  private _token: string | null = null;
+  private _tokenExpiry = 0;
+
+  private getApiKey(): string {
+    if (!this._apiKey) {
+      const key = process.env.GLM_API_KEY;
+      if (!key || key === 'placeholder') {
+        throw new Error('GLM_API_KEY not configured. Get a free key at https://open.bigmodel.cn');
+      }
+      if (!key.includes('.')) {
+        throw new Error('GLM_API_KEY invalid format. Expected {id}.{secret}. Get one at https://open.bigmodel.cn');
+      }
+      this._apiKey = key;
+    }
+    return this._apiKey;
+  }
+
+  private getToken(): string {
+    const now = Date.now();
+    // Regenerate token if expired or not yet generated
+    if (!this._token || now >= this._tokenExpiry) {
+      this._token = generateGLMToken(this.getApiKey());
+      this._tokenExpiry = now + 3500_000; // Regenerate 5 min before expiry
+    }
+    return this._token;
+  }
+
+  private getModel(): string {
+    return process.env.GLM_MODEL || DEFAULT_GLM_MODEL;
+  }
+
+  async call(options: ProviderCallOptions): Promise<string> {
+    const token = this.getToken();
+    const model = this.getModel();
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 90_000 } = options;
+
+    // Convert orchestrator message format to OpenAI format
+    const openaiMessages: Array<{ role: string; content: string }> = [];
+    let systemPrompt: string | undefined;
+
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && openaiMessages.length === 0) {
+        systemPrompt = msg.content;
+      } else {
+        openaiMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        ...openaiMessages,
+      ],
+      temperature,
+    };
+
+    if (maxTokens) body.max_tokens = maxTokens;
+    if (jsonMode) body.response_format = { type: 'json_object' };
+
+    // Try primary model, then fallbacks
+    const modelsToTry = [model, ...GLM_FALLBACK_MODELS.filter(m => m !== model)];
+
+    for (let mi = 0; mi < modelsToTry.length; mi++) {
+      const tryModel = modelsToTry[mi];
+      body.model = tryModel;
+
+      try {
+        const response = await Promise.race([
+          fetch(GLM_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify(body),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => '');
+          const errMsg = `GLM ${response.status}: ${errBody.substring(0, 300)}`;
+
+          if (response.status === 429 && mi < modelsToTry.length - 1) {
+            console.warn(`[GLM] ${tryModel} rate limited, trying next model...`);
+            continue;
+          }
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json() as {
+          choices: Array<{ message?: { content?: string } }>;
+          error?: { message: string };
+        };
+
+        if (data.error) throw new Error(`GLM error: ${data.error.message}`);
+
+        const content = data.choices?.[0]?.message?.content;
+        if (!content || content.trim().length === 0) throw new Error('Empty response from GLM');
+
+        if (mi > 0) console.log(`[GLM] ✅ Fallback model ${tryModel} succeeded`);
+
+        return content.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (mi === modelsToTry.length - 1 || !msg.includes('429')) throw err;
+      }
+    }
+
+    throw new Error('GLM: all models exhausted');
+  }
+
+  reset() {
+    this._token = null;
+    this._tokenExpiry = 0;
+  }
+}
+
+// ─── GLM Streaming (for marketing-kit SSE) ─────────────────────────
+
+export async function streamGLM(
+  options: StreamOptions,
+): Promise<string | null> {
+  const apiKey = process.env.GLM_API_KEY;
+  if (!apiKey || apiKey === 'placeholder' || !apiKey.includes('.')) return null;
+
+  const model = process.env.GLM_MODEL || DEFAULT_GLM_MODEL;
+  const { messages, temperature = 0.8, maxTokens, onDelta, timeout = 180_000, signal } = options;
+
+  let token: string;
+  try {
+    token = generateGLMToken(apiKey);
+  } catch {
+    return null;
+  }
+
+  const openaiMessages: Array<{ role: string; content: string }> = [];
+  let systemPrompt: string | undefined;
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemPrompt = msg.content;
+    } else {
+      openaiMessages.push(msg);
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    messages: [
+      ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+      ...openaiMessages,
+    ],
+    temperature,
+    stream: true,
+  };
+
+  if (maxTokens) body.max_tokens = maxTokens;
+
+  try {
+    const response = await Promise.race([
+      fetch(GLM_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+        signal,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), timeout)
+      ),
+    ]);
+
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      console.error(`[GLM Stream] ${response.status}: ${errBody.substring(0, 200)}`);
+      return null;
+    }
+
+    if (!response.body) return null;
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let fullContent = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || !trimmed.startsWith('data: ')) continue;
+        const payload = trimmed.slice(6);
+        if (payload === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(payload);
+          const delta = parsed.choices?.[0]?.delta?.content;
+          if (delta) {
+            fullContent += delta;
+            onDelta(delta);
+          }
+        } catch { /* skip malformed chunks */ }
+      }
+    }
+
+    return fullContent.trim() || null;
+  } catch (err: unknown) {
+    if (signal?.aborted) return null;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[GLM Stream] Error: ${msg}`);
+    return null;
+  }
+}
+
+// ─── OpenRouter Provider (Fallback — requires credits) ──────────
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-// Default model: DeepSeek V3 — excellent at structured JSON.
-// NOTE: Do NOT append ':free' suffix — those slugs return 404.
 const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-chat-v3-0324';
 
-// Fallback models if primary is unavailable (no ':free' suffix — those slugs return 404)
 const OPENROUTER_FALLBACK_MODELS = [
   'google/gemma-3-27b-it',
   'meta-llama/llama-4-maverick',
@@ -176,14 +432,10 @@ class OpenRouterProvider implements AIProvider {
     if (!this._apiKey) {
       const key = process.env.OPENROUTER_API_KEY;
       if (!key || key === 'placeholder') {
-        throw new Error('OPENROUTER_API_KEY not configured. Get a free key at https://openrouter.ai/keys');
+        throw new Error('OPENROUTER_API_KEY not configured');
       }
-      // Validate format: OpenRouter keys start with 'sk-or-'
       if (!key.startsWith('sk-or-')) {
-        throw new Error(
-          `OPENROUTER_API_KEY invalid format (starts with '${key.slice(0, 6)}'). ` +
-          `Keys must start with 'sk-or-'. Get one at https://openrouter.ai/keys.`,
-        );
+        throw new Error(`OPENROUTER_API_KEY invalid format (starts with '${key.slice(0, 6)}')`);
       }
       this._apiKey = key;
     }
@@ -199,21 +451,17 @@ class OpenRouterProvider implements AIProvider {
     const model = this.getModel();
     const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 90_000 } = options;
 
-    // Convert orchestrator message format to OpenAI format
-    // Orchestrator uses 'assistant' for system prompts (z-ai convention)
     const openaiMessages: Array<{ role: string; content: string }> = [];
     let systemPrompt: string | undefined;
 
     for (const msg of messages) {
       if (msg.role === 'assistant' && openaiMessages.length === 0) {
-        // First 'assistant' message is the system prompt in orchestrator convention
         systemPrompt = msg.content;
       } else {
         openaiMessages.push({ role: msg.role, content: msg.content });
       }
     }
 
-    // Build the request body
     const body: Record<string, unknown> = {
       model,
       messages: [
@@ -226,7 +474,6 @@ class OpenRouterProvider implements AIProvider {
     if (maxTokens) body.max_tokens = maxTokens;
     if (jsonMode) body.response_format = { type: 'json_object' };
 
-    // Try primary model, then fallbacks on rate limit
     const modelsToTry = [model, ...OPENROUTER_FALLBACK_MODELS.filter(m => m !== model)];
 
     for (let mi = 0; mi < modelsToTry.length; mi++) {
@@ -253,17 +500,8 @@ class OpenRouterProvider implements AIProvider {
         if (!response.ok) {
           const errBody = await response.text().catch(() => '');
           const errMsg = `OpenRouter ${response.status}: ${errBody.substring(0, 200)}`;
-
-          // On 429 rate limit with fallback models available, try next model
-          if (response.status === 429 && mi < modelsToTry.length - 1) {
-            console.warn(`[OpenRouter] ${tryModel} rate limited, trying next model...`);
-            continue;
-          }
-          // On 402 (insufficient credits) with fallbacks, try next
-          if (response.status === 402 && mi < modelsToTry.length - 1) {
-            console.warn(`[OpenRouter] ${tryModel} no credits, trying next model...`);
-            continue;
-          }
+          if (response.status === 429 && mi < modelsToTry.length - 1) continue;
+          if (response.status === 402 && mi < modelsToTry.length - 1) continue;
           throw new Error(errMsg);
         }
 
@@ -277,17 +515,10 @@ class OpenRouterProvider implements AIProvider {
         const content = data.choices?.[0]?.message?.content;
         if (!content || content.trim().length === 0) throw new Error('Empty response from OpenRouter');
 
-        if (mi > 0) {
-          console.log(`[OpenRouter] ✅ Fallback model ${tryModel} succeeded`);
-        }
-
         return content.trim();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        // Only re-throw if this was the last model or a non-rate-limit error
-        if (mi === modelsToTry.length - 1 || (!msg.includes('429') && !msg.includes('402'))) {
-          throw err;
-        }
+        if (mi === modelsToTry.length - 1 || (!msg.includes('429') && !msg.includes('402'))) throw err;
       }
     }
 
@@ -299,12 +530,10 @@ class OpenRouterProvider implements AIProvider {
   }
 }
 
-// ─── OpenRouter Streaming (for marketing-kit SSE) ─────────────────
-// Exported separately so the marketing-kit route can call it directly
-// without going through the orchestrator (which doesn't support streaming).
+// ─── OpenRouter Streaming (for marketing-kit SSE fallback) ─────────
 
 export async function streamOpenRouter(
-  options: OpenRouterStreamOptions,
+  options: StreamOptions,
 ): Promise<string | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey || apiKey === 'placeholder' || !apiKey.startsWith('sk-or-')) return null;
@@ -312,7 +541,6 @@ export async function streamOpenRouter(
   const model = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
   const { messages, temperature = 0.8, maxTokens, onDelta, timeout = 180_000, signal } = options;
 
-  // Extract system prompt if present
   const openaiMessages: Array<{ role: string; content: string }> = [];
   let systemPrompt: string | undefined;
 
@@ -409,19 +637,13 @@ class GeminiProvider implements AIProvider {
     if (!this.client) {
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
-
-      // Validate key format: Gemini API keys MUST start with 'AIzaSy'.
       if (!apiKey.startsWith('AIzaSy')) {
         throw new Error(
-          `GOOGLE_AI_API_KEY has invalid format (starts with '${apiKey.slice(0, 6)}'). ` +
-          `Gemini API keys must start with 'AIzaSy'. Get one at https://aistudio.google.com/apikey.`,
+          `GOOGLE_AI_API_KEY invalid format (starts with '${apiKey.slice(0, 6)}'). ` +
+          `Must start with 'AIzaSy'.`,
         );
       }
-
-      this.client = new GoogleGenAI({
-        apiKey,
-        googleAuthOptions: { scopes: [] },
-      });
+      this.client = new GoogleGenAI({ apiKey, googleAuthOptions: { scopes: [] } });
     }
     return this.client;
   }
@@ -480,13 +702,19 @@ function createProviders(): AIProvider[] {
 
   const chain: AIProvider[] = [];
 
-  // z-ai: ONLY in sandbox (non-production) environments where the SDK backend is reachable.
+  // z-ai: ONLY in sandbox (non-production) environments.
   if (zaiCreate && process.env.NODE_ENV !== 'production') {
     chain.push(new ZAIProvider());
   }
 
-  // OpenRouter: Primary production provider. Free tier, works everywhere.
-  // Requires OPENROUTER_API_KEY (format: sk-or-v1-...) — free from openrouter.ai/keys
+  // GLM / Zhipu AI: Primary production provider. Free tier, no credits needed.
+  // Requires GLM_API_KEY (format: {id}.{secret}) — free from https://open.bigmodel.cn
+  const glmKey = process.env.GLM_API_KEY;
+  if (glmKey && glmKey !== 'placeholder' && glmKey.includes('.')) {
+    chain.push(new GLMProvider());
+  }
+
+  // OpenRouter: Fallback (requires credits).
   const orKey = process.env.OPENROUTER_API_KEY;
   if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
     chain.push(new OpenRouterProvider());
@@ -501,13 +729,19 @@ function createProviders(): AIProvider[] {
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
     console.error(`[AI Providers]   z-ai SDK: ${zaiCreate ? 'loaded (sandbox only)' : 'not available'}`);
-    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set (' + orKey.slice(0, 8) + '...)' : 'NOT SET'}`);
-    console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${gemKey ? 'set (' + gemKey.slice(0, 8) + '...)' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Set OPENROUTER_API_KEY (free from https://openrouter.ai/keys)');
+    console.error(`[AI Providers]   GLM_API_KEY: ${glmKey ? 'set' : 'NOT SET'}`);
+    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set' : 'NOT SET'}`);
+    console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${gemKey ? 'set' : 'NOT SET'}`);
+    console.error('[AI Providers] Fix: Set GLM_API_KEY (free from https://open.bigmodel.cn)');
   }
 
   providers = chain;
   const details = chain.map(p => {
+    if (p.name === 'glm') {
+      const k = process.env.GLM_API_KEY;
+      const m = process.env.GLM_MODEL || DEFAULT_GLM_MODEL;
+      return `glm(key=${k?.slice(0, 4)}..., model=${m})`;
+    }
     if (p.name === 'openrouter') {
       const k = process.env.OPENROUTER_API_KEY;
       const m = process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL;
@@ -530,23 +764,25 @@ export function getProviders(): AIProvider[] {
 
 /** Reset all provider instances (e.g., on auth errors) */
 export function resetAllProviders(): void {
-  providers = null; // Force re-creation (picks up env var changes)
+  providers = null;
 }
 
-/** Diagnostic info (no API calls) — useful for debugging env-var issues on deploy */
+/** Diagnostic info (no API calls) */
 export function getProviderDiagnostics(): {
   env: Record<string, boolean | string>;
   zaiSdkLoaded: boolean;
   nodeEnv: string;
+  glmModel: string;
   openrouterModel: string;
 } {
-  const maskKey = (v: string | undefined) => {
+  const maskKey = (v: string | undefined, minLen = 8) => {
     if (!v || v === 'placeholder') return false;
-    if (v.length < 8) return `TOO_SHORT(${v.length}chars)`;
+    if (v.length < minLen) return `TOO_SHORT(${v.length}chars)`;
     return `${v.slice(0, 4)}...${v.slice(-4)}`;
   };
   return {
     env: {
+      GLM_API_KEY: maskKey(process.env.GLM_API_KEY),
       OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
       DATABASE_URL: !!process.env.DATABASE_URL,
@@ -555,6 +791,7 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
+    glmModel: process.env.GLM_MODEL || DEFAULT_GLM_MODEL,
     openrouterModel: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
   };
 }

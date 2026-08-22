@@ -11,44 +11,45 @@ import { getProviders, getProviderDiagnostics, isZAiLoaded } from '@/lib/ai-prov
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
-const OPENROUTER_DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324';
-const FINGERPRINT = 'v9-openrouter-added-2026-08-21';
+const GLM_DEFAULT_MODEL = 'glm-4-flash';
+const FINGERPRINT = 'v10-glm-primary-2026-08-22';
 
-function analyzeKey(value: string | undefined, name: string) {
-  if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: `Not configured. ${name} is disabled until a valid key is provided.` };
-  return { format: `${value.slice(0, 8)}...${value.slice(-4)}`, isValid: true, advice: '✅ Key detected.' };
+function analyzeGLMKey(value: string | undefined) {
+  if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured. Get a free key at https://open.bigmodel.cn' };
+  if (value.includes('.')) return { format: `${value.slice(0, 4)}...${value.slice(-4)}`, isValid: true, advice: '✅ Correct format ({id}.{secret}).' };
+  return { format: `${value.slice(0, 8)}...`, isValid: false, advice: '❌ Invalid format. Expected {id}.{secret}.' };
 }
 
 function analyzeOpenRouterKey(value: string | undefined) {
-  if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured. Get a free key at https://openrouter.ai/keys — no billing required.' };
+  if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured.' };
   if (value.startsWith('sk-or-')) return { format: `${value.slice(0, 8)}...${value.slice(-4)}`, isValid: true, advice: '✅ Correct format.' };
-  return { format: `${value.slice(0, 8)}...${value.slice(-4)}`, isValid: false, advice: `❌ Invalid format. Must start with 'sk-or-'. Get one at https://openrouter.ai/keys` };
+  return { format: `${value.slice(0, 8)}...${value.slice(-4)}`, isValid: false, advice: `❌ Invalid format.` };
 }
 
 function analyzeGeminiKey(value: string | undefined) {
-  if (!value || value === 'placeholder') return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Not configured (disabled until valid key is provided).' };
-  if (value.startsWith('AIzaSy')) return { format: 'AIzaSy... (permanent API key)', isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Correct format.' };
-  if (value.startsWith('AQ.')) return { format: 'AQ.... (OAuth token)', isLikelyOAuth: true, isLikelyApiKey: false, advice: '❌ OAuth token (~1hr). Get real key at https://aistudio.google.com/apikey' };
-  return { format: `${value.slice(0, 6)}...${value.slice(-4)}`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Unknown format. Should start with AIzaSy.' };
+  if (!value || value === 'placeholder') return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Not configured.' };
+  if (value.startsWith('AIzaSy')) return { format: 'AIzaSy... (API key)', isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Correct format.' };
+  if (value.startsWith('AQ.')) return { format: 'AQ.... (OAuth token)', isLikelyOAuth: true, isLikelyApiKey: false, advice: '❌ OAuth token, not API key.' };
+  return { format: `${value.slice(0, 6)}...`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Unknown format.' };
 }
 
 export async function GET() {
   const diagnostics = getProviderDiagnostics();
   const providers = getProviders();
 
-  const openRouterAnalysis = analyzeOpenRouterKey(process.env.OPENROUTER_API_KEY);
+  const glmAnalysis = analyzeGLMKey(process.env.GLM_API_KEY);
+  const orAnalysis = analyzeOpenRouterKey(process.env.OPENROUTER_API_KEY);
   const geminiAnalysis = analyzeGeminiKey(process.env.GOOGLE_AI_API_KEY);
 
-  // Build verdict
   let verdict: string;
   if (isZAiLoaded() && process.env.NODE_ENV !== 'production') {
-    verdict = '✅ z-ai SDK available (sandbox). OpenRouter: ' + (openRouterAnalysis.isValid ? 'configured' : 'not set');
-  } else if (openRouterAnalysis.isValid) {
-    verdict = '✅ OpenRouter key detected. Check /api/ai-status?ping=true for live test.';
-  } else if (geminiAnalysis.isLikelyApiKey) {
-    verdict = '✅ Gemini key detected. Check /api/ai-status?ping=true for live test.';
+    verdict = '✅ z-ai SDK available (sandbox).';
+  } else if (glmAnalysis.isValid) {
+    verdict = '✅ GLM key detected. Check /api/ai-status?ping=true for live test.';
+  } else if (orAnalysis.isValid) {
+    verdict = '⚠️ OpenRouter key detected (requires credits).';
   } else {
-    verdict = '❌ No AI providers available. Set OPENROUTER_API_KEY (free from https://openrouter.ai/keys).';
+    verdict = '❌ No AI providers available. Set GLM_API_KEY (free from https://open.bigmodel.cn).';
   }
 
   return NextResponse.json({
@@ -57,10 +58,11 @@ export async function GET() {
       geminiModel: GEMINI_MODEL,
       geminiSdk: GEMINI_SDK,
       zaiExcludedInProd: ZAI_EXCLUDED_IN_PROD,
-      openrouterDefaultModel: OPENROUTER_DEFAULT_MODEL,
+      glmDefaultModel: GLM_DEFAULT_MODEL,
     },
     keyAnalysis: {
-      openrouter: { format: openRouterAnalysis.format, isValid: openRouterAnalysis.isValid, advice: openRouterAnalysis.advice },
+      glm: { format: glmAnalysis.format, isValid: glmAnalysis.isValid, advice: glmAnalysis.advice },
+      openrouter: { format: orAnalysis.format, isValid: orAnalysis.isValid },
       gemini: { format: geminiAnalysis.format, isLikelyOAuth: geminiAnalysis.isLikelyOAuth, isLikelyApiKey: geminiAnalysis.isLikelyApiKey, advice: geminiAnalysis.advice },
     },
     ...diagnostics,
