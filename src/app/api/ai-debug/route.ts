@@ -12,7 +12,7 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
 const GLM_DEFAULT_MODEL = 'glm-4.5-air';
-const FINGERPRINT = 'v12-gemini-new-key-format-2026-08-22';
+const FINGERPRINT = 'v13-gemini-aq-prefix-2026-08-22';
 
 function analyzeGLMKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured. Get a free key at https://open.bigmodel.cn' };
@@ -28,13 +28,11 @@ function analyzeOpenRouterKey(value: string | undefined) {
 
 function analyzeGeminiKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Not configured.' };
-  // Google changed API key format in 2026 — no longer always starts with AIzaSy.
-  // Accept any key >= 20 chars that isn't an obvious OAuth token.
-  if (value.length >= 20 && !value.startsWith('AQ.')) {
+  // Google changed API key format in 2026 — accepts various prefixes (AIzaSy, AQ., etc.)
+  if (value.length >= 20) {
     return { format: value.slice(0, 6) + '...' + value.slice(-4), isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Valid API key.' };
   }
-  if (value.startsWith('AQ.')) return { format: 'AQ.... (OAuth token)', isLikelyOAuth: true, isLikelyApiKey: false, advice: '❌ OAuth token, not API key.' };
-  return { format: `${value.slice(0, 6)}...`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Too short or unknown format.' };
+  return { format: `${value.slice(0, 6)}...`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Too short.' };
 }
 
 export async function GET() {
