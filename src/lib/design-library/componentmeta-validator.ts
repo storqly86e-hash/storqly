@@ -143,23 +143,61 @@ export function validateAndFixComponentMeta(
       // Skip spacers/dividers — they don't get componentMeta
       if (section.type === 'spacer' || section.type === 'divider') continue;
 
-      // ── Strategy 1: If composition context exists, attach the correct meta ──
-      if (compNodes.length > 0 && i < compNodes.length) {
-        const compNode = compNodes[i];
-        const compVariant = compVariants.find(v => v.componentId === compNode.component_id);
-        const [family, variant] = compNode.component_id.split('.');
+      // ── Strategy 1: If composition context exists, match by type compatibility ──
+      // Build a family compatibility map from composition nodes.
+      // Instead of matching by position (which causes hero meta on product sections),
+      // we match composition nodes to generated sections by compatible section type.
+      if (compNodes.length > 0) {
+        const sectionType = section.type;
+        const sectionFamily = SECTION_TYPE_FAMILY_MAP[sectionType];
 
-        const meta: ComponentMeta = {
-          componentId: compNode.component_id,
-          family,
-          variant,
-          role: compNode.role,
-        };
+        // Find all composition nodes whose family is compatible with this section's type.
+        // A composition node's family is the part before the '.' in component_id.
+        const compatibleNodes = compNodes.filter(node => {
+          const [nodeFamily] = node.component_id.split('.');
+          // Direct family match: hero→hero, cta→cta, etc.
+          if (nodeFamily === sectionFamily) return true;
+          // Cross-family type compatibility: featured-product and product-grid can both map to product sections
+          if ((nodeFamily === 'featured-product' || nodeFamily === 'product-grid') &&
+              (sectionType === 'featured-products' || sectionType === 'product-grid')) return true;
+          // collection/category → categories
+          if ((nodeFamily === 'collection' || nodeFamily === 'category') && sectionType === 'categories') return true;
+          // trust/promotion → text-banner
+          if ((nodeFamily === 'trust' || nodeFamily === 'promotion') && sectionType === 'text-banner') return true;
+          // feature-benefits → faq
+          if (nodeFamily === 'feature-benefits' && sectionType === 'faq') return true;
+          return false;
+        });
 
-        section.componentMeta = meta;
-        result.attachedMissingMeta++;
-        result.sectionsWithMeta++;
-        continue;
+        if (compatibleNodes.length > 0) {
+          // Pick the first compatible node that hasn't been assigned yet.
+          // Use position within compatible set as tiebreaker.
+          const usedComponentIds = new Set<string>();
+          // Scan previous sections for already-assigned composition IDs
+          for (const prevPage of store.pages) {
+            for (const prevSection of prevPage.sections) {
+              if (prevSection.componentMeta?.componentId && prevSection !== section) {
+                usedComponentIds.add(prevSection.componentMeta.componentId);
+              }
+            }
+          }
+
+          const availableNode = compatibleNodes.find(n => !usedComponentIds.has(n.component_id))
+            ?? compatibleNodes[0];
+
+          const [family, variant] = availableNode.component_id.split('.');
+          const meta: ComponentMeta = {
+            componentId: availableNode.component_id,
+            family,
+            variant,
+            role: availableNode.role,
+          };
+          section.componentMeta = meta;
+          result.attachedMissingMeta++;
+          result.sectionsWithMeta++;
+          continue;
+        }
+        // No compatible node found — fall through to Strategy 2/3
       }
 
       // ── Strategy 2: Validate AI-generated componentMeta ──

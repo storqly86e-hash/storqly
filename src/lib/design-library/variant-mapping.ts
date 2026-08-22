@@ -69,12 +69,13 @@ const MAPPINGS: Array<VariantMapping> = [
   {
     componentId: 'hero.asymmetric_offset_product',
     sectionType: 'hero',
-    isNewComponent: true,
-    newComponentPath: '@/components/library-variants/hero-asymmetric-offset',
+    isNewComponent: false,
     configOverrides: {
-      layout: 'minimal',
+      layout: 'split-left',
+      backgroundTreatment: 'none',
+      headlineSize: 'lg',
     },
-    description: 'Asymmetric offset product hero. Requires a custom component for the non-standard offset composition.',
+    description: 'Asymmetric offset product hero. Renders via default hero section with variant-config-resolver providing unique CSS vars for offset composition.',
   },
   {
     componentId: 'hero.product_stack_vertical',
@@ -89,12 +90,12 @@ const MAPPINGS: Array<VariantMapping> = [
   {
     componentId: 'hero.collection_rail',
     sectionType: 'hero',
-    isNewComponent: true,
-    newComponentPath: '@/components/library-variants/hero-collection-rail',
+    isNewComponent: false,
     configOverrides: {
       layout: 'minimal',
+      headlineSize: 'lg',
     },
-    description: 'Collection rail hero with horizontal product scroll. Custom component needed for the rail interaction.',
+    description: 'Collection rail hero. Renders via default hero section with variant-config-resolver CSS vars for rail-style layout.',
   },
   {
     componentId: 'hero.editorial_masthead',
@@ -109,32 +110,32 @@ const MAPPINGS: Array<VariantMapping> = [
   {
     componentId: 'hero.dark_campaign_statement',
     sectionType: 'hero',
-    isNewComponent: true,
-    newComponentPath: '@/components/library-variants/hero-dark-campaign',
+    isNewComponent: false,
     configOverrides: {
       layout: 'minimal',
+      backgroundTreatment: 'dramatic',
     },
-    description: 'Dark campaign statement hero with high contrast. Custom component for the dark brand system treatment.',
+    description: 'Dark campaign statement hero. Renders via default hero section with dark contrast mode, grain overlay, and strong typography from variant-config-resolver.',
   },
   {
     componentId: 'hero.ingredient_focus',
     sectionType: 'hero',
-    isNewComponent: true,
-    newComponentPath: '@/components/library-variants/hero-ingredient-focus',
+    isNewComponent: false,
     configOverrides: {
       layout: 'split-left',
+      backgroundTreatment: 'soft',
     },
-    description: 'Ingredient-focused hero for science-backed brands. Custom component for ingredient visual layering.',
+    description: 'Ingredient-focused hero for science-backed brands. Renders via default hero section with centered product treatment from variant-config-resolver.',
   },
   {
     componentId: 'hero.ugc_collage',
     sectionType: 'hero',
-    isNewComponent: true,
-    newComponentPath: '@/components/library-variants/hero-ugc-collage',
+    isNewComponent: false,
     configOverrides: {
-      layout: 'minimal',
+      layout: 'split-left',
+      backgroundTreatment: 'soft',
     },
-    description: 'UGC collage hero. Custom component for the multi-image collage composition.',
+    description: 'UGC collage hero. Renders via default hero section with variant-config-resolver CSS vars for collage-style multi-image composition.',
   },
   {
     componentId: 'hero.category_portal',

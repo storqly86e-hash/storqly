@@ -519,7 +519,7 @@ export function HeaderSection({
 // - 3 CTA styles: filled, outline, gradient
 // - Mobile-first responsive recomposition (not just shrinking)
 
-export function HeroSection({ section, theme, selectedSectionId, onSelectSection, products }: SectionRendererProps) {
+export function HeroSection({ section, theme, selectedSectionId, onSelectSection, products, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as HeroContent;
   const style = section.style;
   const isSelected = selectedSectionId === section.id;
@@ -527,6 +527,41 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const ctaStyle = content.ctaStyle || 'filled';
   const productTreatment = content.productTreatment || 'floating';
   const badgeStyle = content.badgeStyle || 'outlined';
+
+  // ── Variant CSS variable consumption (Design Library) ──
+  // Safe reads with fallback to current hardcoded defaults.
+  const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
+  const vNum = (key: string, fallback: number = 0) => {
+    const raw = variantCssVars?.[key];
+    return raw !== undefined ? parseFloat(raw) : fallback;
+  };
+  const vBool = (key: string, fallback: boolean = false) => {
+    const raw = variantCssVars?.[key];
+    if (raw === undefined) return fallback;
+    return raw === 'true' || raw === '1';
+  };
+
+  // Variant-aware overrides
+  const heroOverlay = v('--hero-overlay');
+  const heroTextPosition = v('--hero-text-position');
+  const heroTextMaxWidth = v('--hero-text-max-width');
+  const heroVignetteStrength = vNum('--hero-vignette-strength');
+  const heroHeadlineWeight = v('--hero-headline-weight');
+  const heroHeadlineLetterSpacing = v('--hero-headline-letter-spacing');
+  const heroHeadlineTransform = v('--hero-headline-text-transform');
+  const heroBadgeSize = v('--hero-badge-size');
+  const heroBadgePadding = v('--hero-badge-padding');
+  const heroProductShadow = v('--hero-product-shadow');
+  const heroProductScale = vNum('--hero-product-scale', 1);
+  const heroProductOffset = v('--hero-product-offset');
+  const heroProductOverlap = vBool('--hero-product-overlap');
+  const heroContrastMode = v('--hero-contrast-mode');
+  const heroImageFit = v('--hero-image-fit');
+  const heroAccentColor = v('--hero-accent-color');
+  const heroCountdownVisible = vBool('--hero-countdown-visible');
+  const heroUgcCollage = vBool('--hero-ugc-collage');
+  const heroRailEnabled = vBool('--hero-rail-enabled');
+  const heroGrainStrength = vNum('--hero-grain-strength');
 
   const isCentered = layout === 'centered' || layout === 'minimal';
   const hasProductLayout = layout === 'split-left' || layout === 'split-right' || layout === 'product-first' || layout === 'text-first';
@@ -547,9 +582,20 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     : (heightMap[content.height] || heightMap.lg);
 
   // ── Alignment (centered / minimal layouts) ──
-  const alignClass = isCentered
+  // ── Alignment: variant --hero-text-position can override ──
+  // Format: "left 4% top 30%" or "center" or "center bottom 12%"
+  const getAlignmentFromPosition = (): string | undefined => {
+    if (!heroTextPosition) return undefined;
+    const pos = heroTextPosition.toLowerCase().trim();
+    if (pos.startsWith('right')) return 'items-end text-right';
+    if (pos.startsWith('left')) return 'items-start text-left';
+    return 'items-center text-center';
+  };
+  const variantAlignClass = getAlignmentFromPosition();
+
+  const alignClass = variantAlignClass || (isCentered
     ? ({ left: 'items-start text-left', center: 'items-center text-center', right: 'items-end text-right' } as const)[content.alignment]
-    : 'items-center';
+    : 'items-center');
 
   // ── Hero Image Carousel ──
   const heroImages = content.heroImages && Array.isArray(content.heroImages) && content.heroImages.length > 0
@@ -593,9 +639,15 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     }
   })();
 
+  // Grain overlay for dark_campaign_statement variant
+  const showGrain = heroGrainStrength > 0;
+
   // ── Directional overlay (varies by layout for depth) ──
+  // Variant CSS var --hero-overlay takes priority when available.
   const overlayGradient = (() => {
     if (!effectiveHasBgImage) return undefined;
+    // VARIANT OVERRIDE: Use the library-provided overlay gradient
+    if (heroOverlay) return heroOverlay;
     // Dramatic: heavier, more cinematic
     if (content.backgroundTreatment === 'dramatic') {
       if (layout === 'split-right') return 'linear-gradient(to right, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.25) 60%, rgba(0,0,0,0.15) 100%)';
@@ -616,7 +668,10 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   })();
 
   // ── Colors: theme-consistent derivation ──
-  const textColor = style.textColor || '#ffffff';
+  // VARIANT OVERRIDE: dark contrast mode forces specific colors
+  const textColor = heroContrastMode === 'dark'
+    ? (style.textColor || '#ffffff')
+    : (style.textColor || '#ffffff');
   const primaryColor = theme.colors.primary;
   const accentColor = theme.colors.accent;
   const headlineColor = style.headlineColor || undefined;
@@ -639,10 +694,21 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const ctaColors = getCtaColors();
 
   // ── Text shadow (background image only) ──
-  const headlineShadow = effectiveHasBgImage ? '0 2px 24px rgba(0,0,0,0.45)' : undefined;
-  const subheadlineShadow = effectiveHasBgImage ? '0 1px 12px rgba(0,0,0,0.3)' : undefined;
+  // VARIANT: dark_campaign uses stronger shadows
+  const headlineShadow = effectiveHasBgImage
+    ? (heroContrastMode === 'dark' ? '0 4px 40px rgba(0,0,0,0.7)' : '0 2px 24px rgba(0,0,0,0.45)')
+    : undefined;
+  const subheadlineShadow = effectiveHasBgImage
+    ? (heroContrastMode === 'dark' ? '0 2px 20px rgba(0,0,0,0.5)' : '0 1px 12px rgba(0,0,0,0.3)')
+    : undefined;
 
   // ── Headline size scale (user-controllable via headlineSize content field) ──
+  // VARIANT: --hero-headline-weight, --hero-headline-letter-spacing, --hero-headline-text-transform
+  const headlineVariantStyle: React.CSSProperties = {};
+  if (heroHeadlineWeight) headlineVariantStyle.fontWeight = parseFloat(heroHeadlineWeight);
+  if (heroHeadlineLetterSpacing) headlineVariantStyle.letterSpacing = heroHeadlineLetterSpacing;
+  if (heroHeadlineTransform) headlineVariantStyle.textTransform = heroHeadlineTransform as React.CSSProperties['textTransform'];
+
   const headlineSizeClass = (() => {
     switch (content.headlineSize) {
       case 'sm':
@@ -689,11 +755,22 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   ].filter(Boolean).join(' ');
 
   // ── Product image treatment styles ──
+  // VARIANT: --hero-product-shadow overrides the default filter
   const getProductImageStyle = (): React.CSSProperties => {
     const base: React.CSSProperties = {
       maxWidth: '100%',
       height: 'auto',
     };
+    // Variant scale and offset
+    if (heroProductScale !== 1) base.transform = `scale(${heroProductScale})`;
+    if (heroProductOffset) {
+      const pct = parseFloat(heroProductOffset) || 0;
+      base.marginTop = `${pct}%`;
+    }
+    // Variant shadow override
+    if (heroProductShadow) {
+      return { ...base, filter: heroProductShadow };
+    }
     switch (productTreatment) {
       case 'framed':
         return { ...base, padding: '16px', background: 'rgba(255,255,255,0.12)', borderRadius: '16px', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.15)' };
@@ -713,15 +790,19 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
     : 'max-h-[260px] sm:max-h-[340px] lg:max-h-[450px] xl:max-h-[520px]';
 
   // ── Badge style variants ──
+  // VARIANT: --hero-badge-size and --hero-badge-padding override sizing
   const getBadgeStyle = (): React.CSSProperties => {
+    const sizeStyle: React.CSSProperties = {};
+    if (heroBadgeSize) sizeStyle.fontSize = heroBadgeSize;
+    if (heroBadgePadding) sizeStyle.padding = heroBadgePadding;
     switch (badgeStyle) {
       case 'filled':
-        return { backgroundColor: hexToRgba(primaryColor, 0.2), borderColor: hexToRgba(primaryColor, 0.3), color: textColor };
+        return { ...sizeStyle, backgroundColor: hexToRgba(primaryColor, 0.2), borderColor: hexToRgba(primaryColor, 0.3), color: textColor };
       case 'gradient':
-        return { background: `linear-gradient(135deg, ${hexToRgba(primaryColor, 0.3)} 0%, ${hexToRgba(accentColor, 0.2)} 100%)`, border: 'none', color: textColor };
+        return { ...sizeStyle, background: `linear-gradient(135deg, ${hexToRgba(primaryColor, 0.3)} 0%, ${hexToRgba(accentColor, 0.2)} 100%)`, border: 'none', color: textColor };
       case 'outlined':
       default:
-        return { backgroundColor: 'rgba(255,255,255,0.08)', borderColor: hexToRgba(textColor, 0.25), color: textColor };
+        return { ...sizeStyle, backgroundColor: 'rgba(255,255,255,0.08)', borderColor: hexToRgba(textColor, 0.25), color: textColor };
     }
   };
 
@@ -835,11 +916,23 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           <div className="absolute inset-0 pointer-events-none" style={{ background: overlayGradient }} />
         )}
 
-        {/* Vignette */}
-        {content.vignette && (
+        {/* Vignette — VARIANT: --hero-vignette-strength controls opacity */}
+        {(content.vignette || heroVignetteStrength > 0) && (
           <div
             className="absolute inset-0 pointer-events-none"
-            style={{ background: 'radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,0.45) 100%)' }}
+            style={{ background: `radial-gradient(ellipse at center, transparent 35%, rgba(0,0,0,${heroVignetteStrength > 0 ? heroVignetteStrength : 0.45}) 100%)` }}
+          />
+        )}
+
+        {/* VARIANT: Grain overlay for dark_campaign_statement */}
+        {showGrain && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='${heroGrainStrength}'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'repeat',
+              mixBlendMode: 'overlay',
+            }}
           />
         )}
 
@@ -852,7 +945,10 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         )}
 
         {/* Content area */}
-        <div className={`relative z-10 mx-auto w-full ${pxClass(style.paddingX)} ${isCentered ? maxWidthClass(style.maxWidth) : 'max-w-7xl'} ${gridClass}`}>
+        {/* VARIANT: --hero-text-max-width constrains text container width */}
+        <div className={`relative z-10 mx-auto w-full ${pxClass(style.paddingX)} ${heroTextMaxWidth && isCentered ? '' : (isCentered ? maxWidthClass(style.maxWidth) : 'max-w-7xl')} ${gridClass}`}
+          style={heroTextMaxWidth ? { maxWidth: heroTextMaxWidth, marginLeft: heroTextPosition?.startsWith('left') ? '4%' : 'auto', marginRight: heroTextPosition?.startsWith('right') ? '4%' : 'auto' } : undefined}
+        >
           {/* Text column */}
           <div className={textColClass}>
             {/* Badge */}
@@ -877,6 +973,8 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
                 ...(theme.fonts.heading && theme.fonts.heading !== theme.fonts.body
                   ? { fontFamily: `var(--sq-font-heading)` }
                   : {}),
+                // VARIANT: headline weight, letter-spacing, text-transform
+                ...headlineVariantStyle,
               }}
             >
               {content.headline}
@@ -989,26 +1087,48 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
 
 // ─── 4. Product Grid ───────────────────────────────────────────────────
 
-export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart, cardStyle }: SectionRendererProps) {
+export function ProductGridSection({ section, theme, selectedSectionId, onSelectSection, products, onViewProduct, forceHideAddToCart, cardStyle, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as ProductGridContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
+
+  // ── Variant CSS variable consumption (Design Library) ──
+  const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? '';
+  const gridGap = v('--grid-gap');
+  const gridHeadingAlignment = v('--grid-heading-alignment');
+  const gridShowPrice = v('--grid-show-price');
+  const gridShowRatings = v('--grid-show-ratings');
+  const gridFeaturedFirst = v('--grid-featured-first');
+  const gridAccentPlane = v('--grid-accent-plane');
+  const gridHeadingScale = v('--grid-heading-scale');
+
+  // Compute variant-driven styles
+  const gapClass = gridGap || 'gap-5 sm:gap-6 lg:gap-8';
+  const headingAlignClass = gridHeadingAlignment === 'left' ? 'text-left' : gridHeadingAlignment === 'center' ? 'text-center' : '';
+  const headingScaleStyle = gridHeadingScale ? { transform: `scale(${gridHeadingScale})`, transformOrigin: 'left' } : {};
 
   const filteredProducts = useMemo(() => {
     let prods = products;
     if (content.filterByCategory) {
       prods = prods.filter((p) => p.category === content.filterByCategory);
     }
+    // VARIANT: --grid-featured-first sorts featured products first
+    if (gridFeaturedFirst === 'true') {
+      prods = [...prods].sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
+    }
     return prods;
-  }, [products, content.filterByCategory]);
+  }, [products, content.filterByCategory, gridFeaturedFirst]);
 
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+        <h2 className={`mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl ${headingAlignClass}`} style={{ ...headingFontStyle(theme), ...headingScaleStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}
-      <div className={`grid ${gridCols(content.columns)} gap-5 sm:gap-6 lg:gap-8`}>
+      {/* VARIANT: --grid-gap controls grid spacing */}
+      {/* VARIANT: --grid-accent-plane adds a left accent bar */}
+      <div className={`${gridGap} ${gridAccentPlane === 'true' ? 'border-l-4 pl-6' : ''}`} style={gridAccentPlane === 'true' ? { borderColor: theme.colors.primary } : undefined}>
+        <div className={`grid ${gridCols(content.columns)}`}>
         {filteredProducts.map((product) => (
           <ProductCard
             key={product.id}
@@ -1022,6 +1142,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
             cardStyle={cardStyle as CardStyle | undefined}
           />
         ))}
+        </div>
       </div>
       {filteredProducts.length === 0 && (
         <div className="py-16 text-center opacity-65">
@@ -1267,45 +1388,80 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
 
 // ─── 8. Newsletter ──────────────────────────────────────────────────────
 
-export function NewsletterSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+export function NewsletterSection({ section, theme, selectedSectionId, onSelectSection, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as NewsletterContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
 
+  // ── Variant CSS variable consumption (Design Library) ──
+  const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
+  const nlLayout = v('--newsletter-layout');
+  const nlInputStyle = v('--newsletter-input-style');
+  const nlButtonVariant = v('--newsletter-button-variant');
+  const nlHeadingFont = v('--newsletter-heading-font');
+  const nlHeadingWeight = v('--newsletter-heading-weight');
+  const nlSectionSpacing = v('--newsletter-section-spacing');
+
+  // Compute variant-driven styles
+  const isSplit = nlLayout === 'split';
+  const isUnderlined = nlInputStyle === 'underlined';
+  const isOutline = nlButtonVariant === 'outline';
+  const headingVariantStyle: React.CSSProperties = {
+    ...(nlHeadingFont === 'serif' ? { fontFamily: 'var(--sq-font-heading)' } : {}),
+    ...(nlHeadingWeight ? { fontWeight: parseFloat(nlHeadingWeight) } : {}),
+  };
+  const spacingPy = nlSectionSpacing === 'spacious' ? '5rem' : '3rem';
+
+  // Button style driven by variant
+  const btnBg = isOutline ? 'transparent' : (section.style.buttonBackgroundColor || theme.colors.primary);
+  const btnColor = isOutline ? theme.colors.primary : (section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || theme.colors.primary));
+  const btnBorder = isOutline ? `2px solid ${theme.colors.primary}` : 'none';
+
+  const containerClass = isSplit
+    ? 'mx-auto max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center text-left'
+    : 'mx-auto max-w-xl text-center';
+
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      <div className="mx-auto max-w-xl text-center">
-        <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
-          <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
-        </div>
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
-          {content.headline}
-        </h2>
-        {content.subtitle && (
-          <p className="mt-2 text-sm opacity-65">
-            {content.subtitle}
-          </p>
+      <div className={containerClass} style={{ padding: `${spacingPy} 1.5rem` }}>
+        {!isSplit && (
+          <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
+            <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
+          </div>
         )}
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <input
-            type="email"
-            placeholder={content.placeholderText || 'Enter your email'}
-            className={`flex-1 ${borderRadius} border px-4 py-3 text-sm outline-none transition-colors`}
-            style={{
-              backgroundColor: theme.colors.background,
-              borderColor: theme.colors.border,
-              color: theme.colors.text,
-            }}
-            readOnly
-          />
-          <button
-            className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
-            style={{
-              backgroundColor: section.style.buttonBackgroundColor || theme.colors.primary,
-              color: section.style.buttonTextColor || contrastTextColor(section.style.buttonBackgroundColor || theme.colors.primary),
-            }}
-          >
-            {content.buttonText}
-          </button>
+        <div>
+          <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...headingVariantStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+            {content.headline}
+          </h2>
+          {content.subtitle && (
+            <p className="mt-2 text-sm opacity-65">
+              {content.subtitle}
+            </p>
+          )}
+        </div>
+        <div className={isSplit ? '' : 'mt-6'}>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <input
+              type="email"
+              placeholder={content.placeholderText || 'Enter your email'}
+              className={`flex-1 ${borderRadius} ${isUnderlined ? 'border-0 border-b-2 bg-transparent' : 'border'} px-4 py-3 text-sm outline-none transition-colors`}
+              style={{
+                backgroundColor: isUnderlined ? 'transparent' : theme.colors.background,
+                borderColor: isUnderlined ? theme.colors.primary : theme.colors.border,
+                color: theme.colors.text,
+              }}
+              readOnly
+            />
+            <button
+              className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+              style={{
+                backgroundColor: btnBg,
+                color: btnColor,
+                border: btnBorder,
+              }}
+            >
+              {content.buttonText || 'Subscribe'}
+            </button>
+          </div>
         </div>
       </div>
     </SectionWrapper>
@@ -1373,9 +1529,31 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection 
 
 // ─── 10. CTA ─────────────────────────────────────────────────────────────
 
-export function CTASection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+export function CTASection({ section, theme, selectedSectionId, onSelectSection, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as CTAContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
+
+  // ── Variant CSS variable consumption (Design Library) ──
+  const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
+  const ctaButtonVariant = v('--cta-button-variant');
+  const ctaHeadlineWeight = v('--cta-headline-weight');
+  const ctaHeadlineLetterSpacing = v('--cta-headline-letter-spacing');
+  const ctaBodyMaxWidth = v('--cta-body-max-width');
+  const ctaSectionSpacing = v('--cta-section-spacing');
+  const ctaUrgencyLevel = v('--cta-urgency-level');
+  const ctaContrast = v('--cta-contrast');
+  const ctaBorderMode = v('--cta-border-mode');
+  const ctaUrgencyColor = v('--cta-urgency-color');
+  const ctaProofStyle = v('--cta-proof-style');
+
+  // Compute effective styles from variant vars
+  const variantMaxWidth = ctaBodyMaxWidth || '';
+  const headlineStyle: React.CSSProperties = {
+    ...(ctaHeadlineWeight ? { fontWeight: parseFloat(ctaHeadlineWeight) } : {}),
+    ...(ctaHeadlineLetterSpacing ? { letterSpacing: ctaHeadlineLetterSpacing } : {}),
+  };
+  const spacingPy = ctaSectionSpacing === 'spacious' ? '5rem' : ctaSectionSpacing === 'generous' ? '4rem' : '3rem';
+  const urgencyBorder = ctaBorderMode === 'top-accent' ? `4px solid ${ctaUrgencyColor || '#dc2626'}` : 'none';
 
   // Build base button style from content.style variant
   const btnBgOverride = section.style.buttonBackgroundColor;
@@ -1383,6 +1561,8 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
   const effectiveBtnBg = btnBgOverride || theme.colors.primary;
   const effectiveBtnText = btnTextOverride || contrastTextColor(effectiveBtnBg);
 
+  // VARIANT: --cta-button-variant overrides content.style
+  const effectiveBtnVariant = ctaButtonVariant || content.style || 'solid';
   const btnStyleMap = {
     solid: { backgroundColor: effectiveBtnBg, color: effectiveBtnText, border: 'none' },
     outline: { backgroundColor: 'transparent', color: effectiveBtnText, border: `2px solid ${effectiveBtnBg}` },
@@ -1392,14 +1572,20 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection 
       border: 'none',
     },
   };
-  const btnStyle = btnStyleMap[content.style] || btnStyleMap.solid;
+  const btnStyle = btnStyleMap[effectiveBtnVariant] || btnStyleMap.solid;
 
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      <div className={`mx-auto max-w-2xl text-center`}
-        style={{ backgroundColor: theme.colors.surface, padding: '3rem 2rem', borderRadius: theme.borderRadius === 'none' ? '0' : '1rem' }}
+      <div className={`mx-auto text-center`}
+        style={{
+          backgroundColor: section.style.backgroundColor || theme.colors.surface,
+          padding: `${spacingPy} 2rem`,
+          borderRadius: theme.borderRadius === 'none' ? '0' : '1rem',
+          maxWidth: variantMaxWidth || undefined,
+          borderTop: urgencyBorder,
+        }}
       >
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...headlineStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
         {content.body && (

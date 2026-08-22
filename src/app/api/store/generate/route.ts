@@ -394,7 +394,7 @@ ${isComplex ? `COMPLEX STORE GUIDANCE:
 - Consider adding TEXT-BANNER sections as visual transitions between content blocks.
 - Make the hero extra impactful — use "minimal" or "split-left" layout.
 - Use richer, more detailed content in every section.`
-: `STANDARD STORE: Include 4-6 sections. Focus on hero + products + 1-2 supporting sections + newsletter.`}
+: `STANDARD STORE: Include 6-8 sections for a focused, brand-specific page. Follow the composition structure when provided.`}
 
 ═══ PRODUCT SCHEMA ═══
 {id:"<uuid>", name:"<short, realistic name>", price:<number>, compareAtPrice:null, images:["<one REAL URL from product list>"], description:"<max 8 words, compelling>", category:"<category>", featured:false, inStock:true}
@@ -415,17 +415,20 @@ PRODUCT IMAGES (cycle through these for each product):
 ${formatUrlsForPrompt(productUrls)}
 
 ═══ DESIGN LIBRARY COMPONENT IDs ═══
-Use these exact componentId values in componentMeta:
-- Hero sections: "hero.editorial_product_still_life" or "hero.premium_invitation" or "hero.minimalist_centered"
-- Product sections: "featured-product.grid_3col" or "featured-product.carousel"
-- Testimonials: "testimonials.cards_3col"
-- CTA: "cta.full_width_banner"
-- Newsletter: "newsletter.standard_form"
-- Brand Statement: "brand-story.full_width"
-- Image Gallery: "gallery.masonry_grid" or "gallery.stripe_grid"
-- Categories: "collection.grid_3col"
-- FAQ: "faq.accordion"
-- Text Banner: "feature-benefits.icon_rows"
+You MUST use the exact componentMeta values specified in the Page Composition section below.
+Each section MUST include a componentMeta object with: componentId, family, variant, role.
+These IDs come from the Design Library — NEVER invent or guess component IDs.
+If no composition is provided below, use these valid fallback IDs:
+- Hero: "hero.editorial_product_still_life" or "hero.split_context_product" or "hero.fullbleed_copy_safe_area" or "hero.editorial_masthead" or "hero.product_stack_vertical"
+- Featured Products: "featured-product.proof_led" or "featured-product.routine_builder"
+- Testimonials: "testimonials.quote_wall" or "testimonials.rating_rail" or "testimonials.ugc_rail"
+- CTA: "cta.premium_invitation" or "cta.strong_statement" or "cta.community_invite" or "cta.urgency_panel" or "cta.editorial_invite"
+- Newsletter: "newsletter.split_capture" or "newsletter.editorial_capture" or "newsletter.waitlist_capture"
+- Brand Statement: "brand-story.split_art-directed" or "brand-story.founder_note" or "brand-story.timeline"
+- Image Gallery: "gallery.editorial_masonry" or "gallery.lookbook_grid"
+- Categories: "collection.lookbook_tiles" or "collection.filter_sidebar" or "collection.story_chapters"
+- Text Banner: "trust.proof_strip" or "trust.certification_row"
+- Product Grid: "product-grid.luxury_gallery" or "product-grid.utility_dense" or "product-grid.bold_rail"
 
 ═══ NON-NEGOTIABLE RULES ═══
 1. heroImages MUST have exactly 3 objects with REAL URLs from the list above.
