@@ -11,7 +11,7 @@ export async function GET() {
   results.keyPrefix = apiKey.slice(0, 10);
   results.keyLength = apiKey.length;
 
-  const models = ['gemini-2.0-flash', 'gemini-2.5-flash-preview-05-20', 'gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-3.6-flash', 'gemini-3.0-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
 
   for (const model of models) {
     try {
