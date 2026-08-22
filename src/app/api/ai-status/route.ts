@@ -95,7 +95,7 @@ async function pingProvider(provider: AIProvider): Promise<ProviderStatus> {
     else if (msg.includes('401') || msg.includes('API_KEY_INVALID') || msg.includes('invalid_api_key')) shortError = 'Invalid API key';
     else if (msg.includes('402')) shortError = 'Insufficient credits';
     else if (msg.includes('timed out') || msg.includes('ETIMEDOUT')) shortError = 'Timed out';
-    else if (msg.includes('404')) shortError = 'Not found';
+    else if (msg.includes('404')) shortError = 'Not found: ' + msg.substring(0, 120);
     else shortError = msg.substring(0, 80);
     return { name: provider.name, ok: false, error: shortError, latencyMs: Date.now() - start, method: 'ping' };
   }
