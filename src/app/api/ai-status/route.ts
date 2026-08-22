@@ -72,10 +72,10 @@ function checkByFormat(): ProviderStatus[] {
   // Gemini
   const gemKey = process.env.GOOGLE_AI_API_KEY;
   if (gemKey && gemKey !== 'placeholder') {
-    if (gemKey.startsWith('AIzaSy')) {
+    if (gemKey.length >= 20) {
       results.push({ name: 'gemini', ok: true, latencyMs: Date.now() - start, method: 'format' });
     } else {
-      results.push({ name: 'gemini', ok: false, error: 'Invalid format', latencyMs: Date.now() - start, method: 'format' });
+      results.push({ name: 'gemini', ok: false, error: 'Too short', latencyMs: Date.now() - start, method: 'format' });
     }
   }
 

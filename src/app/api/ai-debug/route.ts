@@ -12,7 +12,7 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
 const GLM_DEFAULT_MODEL = 'glm-4.5-air';
-const FINGERPRINT = 'v11-glm-models-updated-2026-08-22';
+const FINGERPRINT = 'v12-gemini-new-key-format-2026-08-22';
 
 function analyzeGLMKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured. Get a free key at https://open.bigmodel.cn' };
@@ -28,9 +28,13 @@ function analyzeOpenRouterKey(value: string | undefined) {
 
 function analyzeGeminiKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Not configured.' };
-  if (value.startsWith('AIzaSy')) return { format: 'AIzaSy... (API key)', isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Correct format.' };
+  // Google changed API key format in 2026 — no longer always starts with AIzaSy.
+  // Accept any key >= 20 chars that isn't an obvious OAuth token.
+  if (value.length >= 20 && !value.startsWith('AQ.')) {
+    return { format: value.slice(0, 6) + '...' + value.slice(-4), isLikelyOAuth: false, isLikelyApiKey: true, advice: '✅ Valid API key.' };
+  }
   if (value.startsWith('AQ.')) return { format: 'AQ.... (OAuth token)', isLikelyOAuth: true, isLikelyApiKey: false, advice: '❌ OAuth token, not API key.' };
-  return { format: `${value.slice(0, 6)}...`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Unknown format.' };
+  return { format: `${value.slice(0, 6)}...`, isLikelyOAuth: false, isLikelyApiKey: false, advice: 'Too short or unknown format.' };
 }
 
 export async function GET() {
@@ -46,10 +50,12 @@ export async function GET() {
     verdict = '✅ z-ai SDK available (sandbox).';
   } else if (glmAnalysis.isValid) {
     verdict = '✅ GLM key detected. Check /api/ai-status?ping=true for live test.';
+  } else if (geminiAnalysis.isLikelyApiKey) {
+    verdict = '✅ Gemini key detected. Check /api/ai-status?ping=true for live test.';
   } else if (orAnalysis.isValid) {
     verdict = '⚠️ OpenRouter key detected (requires credits).';
   } else {
-    verdict = '❌ No AI providers available. Set GLM_API_KEY (free from https://open.bigmodel.cn).';
+    verdict = '❌ No AI providers available. Set GOOGLE_AI_API_KEY (free from https://aistudio.google.com/apikey).';
   }
 
   return NextResponse.json({

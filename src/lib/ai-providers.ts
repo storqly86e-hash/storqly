@@ -642,10 +642,9 @@ class GeminiProvider implements AIProvider {
     if (!this.client) {
       const apiKey = process.env.GOOGLE_AI_API_KEY;
       if (!apiKey || apiKey === 'placeholder') throw new Error('GOOGLE_AI_API_KEY not configured');
-      if (!apiKey.startsWith('AIzaSy')) {
+      if (apiKey.length < 20) {
         throw new Error(
-          `GOOGLE_AI_API_KEY invalid format (starts with '${apiKey.slice(0, 6)}'). ` +
-          `Must start with 'AIzaSy'.`,
+          `GOOGLE_AI_API_KEY too short (${apiKey.length} chars). Expected 30+ chars.`,
         );
       }
       this.client = new GoogleGenAI({ apiKey, googleAuthOptions: { scopes: [] } });
@@ -704,7 +703,7 @@ export async function streamGemini(
   options: StreamOptions,
 ): Promise<string | null> {
   const apiKey = process.env.GOOGLE_AI_API_KEY;
-  if (!apiKey || apiKey === 'placeholder' || !apiKey.startsWith('AIzaSy')) return null;
+  if (!apiKey || apiKey === 'placeholder' || apiKey.length < 20) return null;
 
   const { messages, temperature = 0.8, maxTokens, onDelta, timeout = 180_000, signal } = options;
 
@@ -782,9 +781,9 @@ function createProviders(): AIProvider[] {
   }
 
   // Gemini: FREE secondary (15 RPM free tier, no credits ever needed).
-  // Requires GOOGLE_AI_API_KEY (format: AIzaSy...) — https://aistudio.google.com/apikey
+  // Requires GOOGLE_AI_API_KEY — https://aistudio.google.com/apikey
   const gemKey = process.env.GOOGLE_AI_API_KEY;
-  if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
+  if (gemKey && gemKey !== 'placeholder' && gemKey.length >= 20) {
     chain.push(new GeminiProvider());
   }
 
