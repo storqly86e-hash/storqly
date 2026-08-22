@@ -23,6 +23,7 @@ import type { CompositionResult } from '@/lib/design-library/design-intent';
 import { buildLibraryPromptContext, buildHeroLibraryBlock, buildImageArtDirectionPrompt } from '@/lib/design-library/prompt-context';
 import { getVariantMapping } from '@/lib/design-library/variant-mapping';
 import { validateAndFixComponentMeta } from '@/lib/design-library/componentmeta-validator';
+import { bridgeSectionStyles } from '@/lib/design-library/style-bridge';
 import type { ComponentMeta } from '@/lib/store-schema';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
@@ -632,6 +633,9 @@ export async function POST(req: NextRequest) {
         }
 
         let store = normResult.store;
+
+        // ── Bridge AI style tokens → renderer-consumable fields ──
+        store = bridgeSectionStyles(store);
 
         // ── Validate and fix componentMeta ─────────────────────
         if (libraryCtx) {

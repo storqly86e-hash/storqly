@@ -17,6 +17,8 @@ import { loadDesignLibrary, getLibraryMetadata } from './loader';
 import type { LibraryComponent } from './loader';
 import { componentRegistry } from '@/lib/component-registry';
 import { isPageSection } from './variant-categories';
+import type { DesignDirection } from './design-direction';
+import { inferDesignDirection } from './design-direction';
 
 // ── Role ordering weights for page composition ─────────
 const ROLE_ORDER: DesignRole[] = [
@@ -46,6 +48,7 @@ function scoreComponent(
   profile: BrandProfile,
   requiredRole: DesignRole,
   adjacentIds: string[],
+  dd?: DesignDirection,
 ): number {
   let score = 0.5; // base
 
@@ -74,6 +77,51 @@ function scoreComponent(
   if (profile.conversion_priority === 'conversion' && component.tags?.includes('conversion')) score += W.goal_fit;
   if (profile.conversion_priority === 'awareness' && component.tags?.includes('editorial')) score += W.goal_fit;
 
+  // ── DesignDirection-aware scoring bonuses ─────────────
+  if (dd) {
+    // Aesthetic match: bonus when component's visual style aligns with dd.visual.aesthetic
+    const aestheticMatch = component.visualStyle?.some(vs =>
+      vs.includes(dd.visual.aesthetic) || dd.visual.aesthetic.includes(vs)
+    );
+    if (aestheticMatch) score += 0.1;
+
+    // Sophistication bonus: higher sophistication components get a bonus for high sophistication DD
+    if (dd.visual.sophistication === 'high' || dd.visual.sophistication === 'ultra') {
+      if (component.tags?.includes('premium') || component.tags?.includes('luxury') || component.visualStyle?.includes('refined')) {
+        score += 0.08;
+      }
+    }
+
+    // CTA strategy match for convert role
+    if (requiredRole === 'convert') {
+      if (dd.commerce.ctaStrategy === 'subtle' && component.tags?.includes('editorial')) score += 0.06;
+      if (dd.commerce.ctaStrategy === 'urgent' && component.tags?.includes('urgency')) score += 0.06;
+      if (dd.commerce.ctaStrategy === 'direct' && component.tags?.includes('conversion')) score += 0.06;
+    }
+
+    // Merchandising priority match for merchandise role
+    if (requiredRole === 'merchandise') {
+      if (dd.commerce.merchandisingPriority === 'editorial' && component.tags?.includes('editorial')) score += 0.06;
+      if (dd.commerce.merchandisingPriority === 'conversion' && component.tags?.includes('conversion')) score += 0.06;
+    }
+
+    // Preferred hero archetype bonus
+    if (requiredRole === 'orient' && dd.design.preferredHeroArchetype.length > 0) {
+      const variantId = component.id.replace(`${component.family}.`, '');
+      if (dd.design.preferredHeroArchetype.includes(variantId)) {
+        score += 0.15;
+      }
+    }
+
+    // Preferred card archetype bonus
+    if (requiredRole === 'merchandise' && dd.design.preferredCardArchetype) {
+      const variantId = component.id.replace(`${component.family}.`, '');
+      if (variantId.includes(dd.design.preferredCardArchetype)) {
+        score += 0.1;
+      }
+    }
+  }
+
   // Adjacency: penalize same-family or same-geometry adjacent
   for (const adjId of adjacentIds) {
     const adjFamily = componentRegistry.getByComponentId(adjId)?.family;
@@ -91,6 +139,7 @@ function selectVariantForRole(
   components: LibraryComponent[],
   profile: BrandProfile,
   selectedIds: string[],
+  dd?: DesignDirection,
 ): LibraryComponent | null {
   const candidates = components.filter(c => {
     // GAP 4: Only consider PAGE_SECTION components (exclude sub-components)
@@ -116,7 +165,7 @@ function selectVariantForRole(
   // Score and rank
   const scored = candidates.map(c => ({
     component: c,
-    score: scoreComponent(c, profile, role, selectedIds),
+    score: scoreComponent(c, profile, role, selectedIds, dd),
   }));
   scored.sort((a, b) => b.score - a.score);
 
@@ -128,18 +177,24 @@ function selectVariantForRole(
 
 // ── Select composition recipe ────────────────────────────────
 
-function selectRecipe(profile: BrandProfile, recipes: CompositionRecipe[]): CompositionRecipe | null {
+function selectRecipe(
+  profile: BrandProfile,
+  recipes: CompositionRecipe[],
+  dd?: DesignDirection,
+): CompositionRecipe | null {
   if (recipes.length === 0) return null;
 
   const scored = recipes.map(recipe => {
     let score = 0.5;
+
+    // ── Signal overlap scoring (0.3 weight) ────────────
     const overlap = recipe.signals.filter(s =>
       [profile.category, profile.audience, profile.positioning, profile.mood, profile.visual_energy]
         .some(p => s.includes(p))
     ).length;
     score += 0.3 * (overlap / Math.max(recipe.signals.length, 1));
 
-    // Price tier match (strip 'recipe.' prefix for comparison)
+    // ── Price tier match (reduced from 0.2 to 0.1) ──────
     const tierMap: Record<string, string[]> = {
       entry: ['fast_catalog_discovery'],
       mid: ['fast_catalog_discovery', 'approachable_home_craft'],
@@ -148,7 +203,59 @@ function selectRecipe(profile: BrandProfile, recipes: CompositionRecipe[]): Comp
       ultra_luxury: ['luxury_editorial_launch'],
     };
     const recipeBaseId = recipe.id.replace('recipe.', '');
-    if (tierMap[profile.price_tier ?? 'mid']?.includes(recipeBaseId)) score += 0.2;
+    if (tierMap[profile.price_tier ?? 'mid']?.includes(recipeBaseId)) score += 0.1;
+
+    // ── Category-aware scoring (0.25 weight) ───────────
+    if (dd) {
+      const categorySignal = dd.brand.category;
+      const aestheticSignal = dd.visual.aesthetic;
+
+      // Base category + aesthetic match against recipe signals
+      const categoryAestheticOverlap = recipe.signals.filter(s =>
+        s.includes(categorySignal) || s.includes(aestheticSignal) ||
+        categorySignal.includes(s) || aestheticSignal.includes(s)
+      ).length;
+      score += 0.25 * (categoryAestheticOverlap / Math.max(recipe.signals.length, 1));
+
+      // Special category-recipe affinities
+      if (categorySignal.includes('skincare')) {
+        if (recipeBaseId === 'science_backed_skincare') score += 0.3;
+      }
+      if (
+        (categorySignal.includes('fashion') || categorySignal.includes('clothing') || categorySignal.includes('jewelry')) &&
+        dd.visual.aesthetic === 'editorial'
+      ) {
+        if (recipeBaseId === 'luxury_editorial_launch') score += 0.2;
+      }
+      if (
+        (categorySignal.includes('fashion') || categorySignal.includes('clothing')) &&
+        dd.visual.aesthetic === 'campaign'
+      ) {
+        if (recipeBaseId === 'editorial_campaign') score += 0.2;
+      }
+      if (categorySignal.includes('fitness') || categorySignal.includes('sport')) {
+        if (recipeBaseId === 'gen_z_drop_energy') score += 0.3;
+      }
+      if (
+        (categorySignal.includes('home') || categorySignal.includes('craft') || categorySignal.includes('furniture'))
+      ) {
+        if (recipeBaseId === 'approachable_home_craft') score += 0.2;
+      }
+      if (categorySignal.includes('electronics') || categorySignal.includes('tech')) {
+        if (recipeBaseId === 'fast_catalog_discovery') score += 0.2;
+      }
+    }
+
+    // ── Negative scoring: recipe.avoid list ────────────
+    if (recipe.avoid.length > 0) {
+      const brandSignals = [
+        profile.category, profile.audience, profile.positioning, profile.mood,
+      ];
+      const avoidHits = recipe.avoid.filter(a =>
+        brandSignals.some(s => a.includes(s) || s.includes(a))
+      ).length;
+      score -= 0.2 * avoidHits;
+    }
 
     return { recipe, score };
   });
@@ -167,8 +274,11 @@ export async function composeStore(
   // Extract design intent (heuristic-based, no LLM call needed)
   const profile = extractDesignIntentHeuristic(prompt);
 
-  // Select recipe
-  const recipe = selectRecipe(profile, recipes);
+  // Infer design direction (Phase 2 enrichment)
+  const dd = inferDesignDirection(prompt, profile);
+
+  // Select recipe (now category-aware)
+  const recipe = selectRecipe(profile, recipes, dd);
   if (!recipe) return null;
 
   // Select variant for each role in the recipe
@@ -206,6 +316,7 @@ export async function composeStore(
         components,
         profile,
         selectedIds,
+        dd,
       );
     }
     if (!variant) continue;
@@ -258,6 +369,7 @@ export async function composeStore(
     imageArtDirections: artDirections,
     typographySystem: recipe.recommended_theme ?? 'modern_grotesk',
     densityPreset: profile.visual_energy === 'extreme' ? 'compact' : profile.visual_energy === 'calm' ? 'airy' : 'balanced',
+    designDirection: dd,
   };
 }
 
@@ -287,6 +399,7 @@ function extractDesignIntentHeuristic(prompt: string): BrandProfile {
   // Audience
   let audience = 'all';
   if (p.includes('luxury') || p.includes('premium') || p.includes('high-end')) audience = 'luxury buyers';
+  else if (p.includes('streetwear')) audience = 'Gen Z / young adults';
   else if (p.includes('gen z') || p.includes('genz') || p.includes('youth')) audience = 'Gen Z / young adults';
   else if (p.includes('men') || p.includes('women') || p.includes('unisex')) audience = p.includes('men') && p.includes('women') ? 'all genders' : p.includes('men') ? 'men' : 'women';
   else if (p.includes('professional') || p.includes('busy')) audience = 'busy professionals';
@@ -307,6 +420,18 @@ function extractDesignIntentHeuristic(prompt: string): BrandProfile {
   else if (p.includes('warm') || p.includes('organic') || p.includes('natural')) mood = 'warm';
   else if (p.includes('playful') || p.includes('fun') || p.includes('colorful')) mood = 'playful';
 
+  // Streetwear detection → audience + mood overrides
+  if (p.includes('streetwear')) {
+    audience = 'Gen Z / young adults';
+    mood = 'bold';
+  }
+
+  // Skincare + clinical → mood override to calm
+  if ((p.includes('skincare') || p.includes('beauty') || p.includes('serum')) &&
+      (p.includes('clinical') || p.includes('science') || p.includes('lab') || p.includes('dermatolog'))) {
+    mood = 'calm';
+  }
+
   // Visual energy
   let visual_energy: BrandProfile['visual_energy'] = 'moderate';
   if (p.includes('high energy') || p.includes('bold') || p.includes('streetwear') || p.includes('dark campaign') || p.includes('aggressive')) visual_energy = 'extreme';
@@ -321,9 +446,11 @@ function extractDesignIntentHeuristic(prompt: string): BrandProfile {
 
   // Price tier
   let price_tier: BrandProfile['price_tier'] = 'mid';
-  if (p.includes('luxury') || p.includes('ultra luxury') || p.includes('premium')) price_tier = 'luxury';
+  if (p.includes('ultra luxury')) price_tier = 'ultra_luxury';
+  else if (p.includes('luxury')) price_tier = 'luxury';
+  else if (p.includes('premium') || p.includes('high-end')) price_tier = 'premium';
   else if (p.includes('budget') || p.includes('affordable') || p.includes('entry')) price_tier = 'entry';
-  else if (p.includes('premium') || p.includes('mid-range')) price_tier = 'premium';
+  else if (p.includes('mid-range')) price_tier = 'mid';
 
   return {
     category: detectedCategory,

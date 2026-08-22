@@ -48,6 +48,7 @@ export interface CompositionResult {
   imageArtDirections: ImageArtDirectionSummary[];
   typographySystem: string;
   densityPreset: string;
+  designDirection?: import('./design-direction').DesignDirection;
 }
 
 // ── Library-aware prompt context (injected into generation system prompt) ──
@@ -103,6 +104,8 @@ export interface ImageArtDirectionSummary {
   mood?: string[];
   avoid?: string[];
 }
+
+export type { DesignDirection } from './design-direction';
 
 // ── Recipe type ────────────────────────────────────────────
 
