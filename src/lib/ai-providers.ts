@@ -2,15 +2,15 @@
 // AI Provider Abstraction Layer
 // ========================================
 // Provider chain (production):
-//   1. GLM / Zhipu AI (primary — free tier, no credits)
-//   2. OpenRouter (fallback, requires credits)
-//   3. Gemini (if valid API key configured, secondary)
+//   1. GLM / Zhipu AI (primary — requires balance on platform)
+//   2. Gemini (secondary — genuinely FREE, 15 RPM)
+//   3. OpenRouter (fallback, requires credits)
 //
 // Provider chain (sandbox / local dev):
 //   1. z-ai (sandbox-only, fastest)
 //   2. GLM (fallback)
-//   3. OpenRouter (fallback)
-//   4. Gemini (if valid key, final fallback)
+//   3. Gemini (if valid key)
+//   4. OpenRouter (fallback)
 
 import { GoogleGenAI } from '@google/genai';
 import { createHmac } from 'crypto';
@@ -152,18 +152,22 @@ class ZAIProvider implements AIProvider {
   }
 }
 
-// ─── GLM / Zhipu AI Provider (Production primary — free tier) ──────────
+// ─── GLM / Zhipu AI Provider (Production — requires balance/resource package) ──────────
 // API: OpenAI-compatible at https://open.bigmodel.cn/api/paas/v4/chat/completions
 // Auth: JWT token generated from API key (format: {id}.{secret})
-// Free models: glm-4-flash, glm-4-air, glm-4-plus
-// Get a key at https://open.bigmodel.cn (free tokens for new users)
+// NOTE: As of 2026-08, old models (glm-4-flash, glm-4-air, etc.) are DEPRECATED.
+//       New models: glm-4.5, glm-4.5-air, glm-5, glm-5.3 etc.
+//       ALL models require a valid resource package or balance on the Zhipu AI platform.
+// Get a key at https://open.bigmodel.cn
 
 const GLM_API_URL = 'https://open.bigmodel.cn/api/paas/v4/chat/completions';
-const DEFAULT_GLM_MODEL = 'glm-4-flash';
+const DEFAULT_GLM_MODEL = 'glm-4.5-air';
 
 const GLM_FALLBACK_MODELS = [
-  'glm-4-plus',
-  'glm-4-air',
+  'glm-4.5',
+  'glm-4.6',
+  'glm-5-turbo',
+  'glm-5.1',
 ];
 
 /** Generate a Zhipu AI JWT token from an API key (format: {id}.{secret}) */
@@ -276,8 +280,9 @@ class GLMProvider implements AIProvider {
           const errBody = await response.text().catch(() => '');
           const errMsg = `GLM ${response.status}: ${errBody.substring(0, 300)}`;
 
-          if (response.status === 429 && mi < modelsToTry.length - 1) {
-            console.warn(`[GLM] ${tryModel} rate limited, trying next model...`);
+          // Retry on 429 (rate limit / no balance) or 400 (model deprecated)
+          if (mi < modelsToTry.length - 1 && (response.status === 429 || response.status === 400)) {
+            console.warn(`[GLM] ${tryModel} returned ${response.status}, trying next model...`);
             continue;
           }
           throw new Error(errMsg);
@@ -298,7 +303,7 @@ class GLMProvider implements AIProvider {
         return content.trim();
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (mi === modelsToTry.length - 1 || !msg.includes('429')) throw err;
+        if (mi === modelsToTry.length - 1 || (!msg.includes('429') && !msg.includes('400'))) throw err;
       }
     }
 
@@ -693,6 +698,68 @@ class GeminiProvider implements AIProvider {
   }
 }
 
+// ─── Gemini Streaming (for marketing-kit SSE — FREE) ──────────
+
+export async function streamGemini(
+  options: StreamOptions,
+): Promise<string | null> {
+  const apiKey = process.env.GOOGLE_AI_API_KEY;
+  if (!apiKey || apiKey === 'placeholder' || !apiKey.startsWith('AIzaSy')) return null;
+
+  const { messages, temperature = 0.8, maxTokens, onDelta, timeout = 180_000, signal } = options;
+
+  let systemInstruction: string | undefined;
+  const geminiContents: Array<{ role: string; parts: Array<{ text: string }> }> = [];
+
+  for (const msg of messages) {
+    if (msg.role === 'system') {
+      systemInstruction = msg.content;
+    } else {
+      geminiContents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }],
+      });
+    }
+  }
+
+  const config: Record<string, unknown> = {};
+  if (systemInstruction) config.systemInstruction = systemInstruction;
+  config.temperature = temperature;
+  if (maxTokens) config.maxOutputTokens = maxTokens;
+
+  try {
+    const ai = new GoogleGenAI({ apiKey, googleAuthOptions: { scopes: [] } });
+
+    const response = await Promise.race([
+      ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
+        contents: geminiContents,
+        config,
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Request timed out')), timeout)
+      ),
+    ]);
+
+    let fullContent = '';
+    for await (const chunk of response) {
+      if (signal?.aborted) return null;
+      const text = chunk.text;
+      if (text) {
+        fullContent += text;
+        onDelta(text);
+      }
+    }
+
+    return fullContent.trim() || null;
+  } catch (err: unknown) {
+    if (signal?.aborted) return null;
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Gemini Stream] Error: ' + msg);
+    return null;
+  }
+}
+
 // ─── Provider Chain Management ─────────────────────────────────
 
 let providers: AIProvider[] | null = null;
@@ -707,32 +774,33 @@ function createProviders(): AIProvider[] {
     chain.push(new ZAIProvider());
   }
 
-  // GLM / Zhipu AI: Primary production provider. Free tier, no credits needed.
-  // Requires GLM_API_KEY (format: {id}.{secret}) — free from https://open.bigmodel.cn
+  // GLM / Zhipu AI: Primary production provider. Requires balance/resource package.
+  // Requires GLM_API_KEY (format: {id}.{secret}) — https://open.bigmodel.cn
   const glmKey = process.env.GLM_API_KEY;
   if (glmKey && glmKey !== 'placeholder' && glmKey.includes('.')) {
     chain.push(new GLMProvider());
   }
 
-  // OpenRouter: Fallback (requires credits).
-  const orKey = process.env.OPENROUTER_API_KEY;
-  if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
-    chain.push(new OpenRouterProvider());
-  }
-
-  // Gemini: Secondary fallback if a valid API key is configured.
+  // Gemini: FREE secondary (15 RPM free tier, no credits ever needed).
+  // Requires GOOGLE_AI_API_KEY (format: AIzaSy...) — https://aistudio.google.com/apikey
   const gemKey = process.env.GOOGLE_AI_API_KEY;
   if (gemKey && gemKey !== 'placeholder' && gemKey.startsWith('AIzaSy')) {
     chain.push(new GeminiProvider());
+  }
+
+  // OpenRouter: Last resort fallback (requires paid credits).
+  const orKey = process.env.OPENROUTER_API_KEY;
+  if (orKey && orKey !== 'placeholder' && orKey.startsWith('sk-or-')) {
+    chain.push(new OpenRouterProvider());
   }
 
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
     console.error(`[AI Providers]   z-ai SDK: ${zaiCreate ? 'loaded (sandbox only)' : 'not available'}`);
     console.error(`[AI Providers]   GLM_API_KEY: ${glmKey ? 'set' : 'NOT SET'}`);
-    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set' : 'NOT SET'}`);
     console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${gemKey ? 'set' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Set GLM_API_KEY (free from https://open.bigmodel.cn)');
+    console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set' : 'NOT SET'}`);
+    console.error('[AI Providers] Fix: Set GOOGLE_AI_API_KEY (free from https://aistudio.google.com/apikey)');
   }
 
   providers = chain;

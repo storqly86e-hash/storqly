@@ -5,12 +5,12 @@
 // Supports auto-continue: if the proxy kills the connection mid-stream,
 // the client sends continueFrom=<partial> and the AI picks up where it left off.
 //
-// Provider priority: z-ai (sandbox) → GLM (production) → OpenRouter (fallback)
+// Provider priority: z-ai (sandbox) → GLM (production) → Gemini (FREE) → OpenRouter (credits)
 // Auth guard: returns 401 JSON before creating the SSE stream.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
-import { streamGLM, streamOpenRouter } from '@/lib/ai-providers';
+import { streamGLM, streamGemini, streamOpenRouter } from '@/lib/ai-providers';
 
 const TIMEOUT_MS = 180_000;
 
@@ -169,7 +169,7 @@ export async function POST(req: NextRequest) {
           if (result) console.log('[Marketing Kit] ✅ z-ai succeeded');
         }
 
-        // 2. Try GLM / Zhipu AI (primary production provider, free)
+        // 2. Try GLM / Zhipu AI (primary production provider, requires balance)
         if (!result && !timedOut()) {
           console.log('[Marketing Kit] Trying GLM provider...');
           send('progress', { message: 'Connecting to AI...' });
@@ -179,10 +179,23 @@ export async function POST(req: NextRequest) {
             onDelta: (delta) => send('delta', { content: delta }),
             timeout: TIMEOUT_MS - (Date.now() - startTime),
           });
-          if (result) console.log(`[Marketing Kit] ✅ GLM succeeded (${result.length} chars)`);
+          if (result) console.log('[Marketing Kit] ✅ GLM succeeded (' + result.length + ' chars)');
         }
 
-        // 3. Try OpenRouter (fallback, requires credits)
+        // 3. Try Gemini (FREE — 15 RPM, no credits ever)
+        if (!result && !timedOut()) {
+          console.log('[Marketing Kit] Trying Gemini provider...');
+          send('progress', { message: 'Connecting to AI...' });
+          result = await streamGemini({
+            messages,
+            temperature: 0.8,
+            onDelta: (delta) => send('delta', { content: delta }),
+            timeout: TIMEOUT_MS - (Date.now() - startTime),
+          });
+          if (result) console.log('[Marketing Kit] ✅ Gemini succeeded (' + result.length + ' chars)');
+        }
+
+        // 4. Try OpenRouter (last resort, requires credits)
         if (!result && !timedOut()) {
           console.log('[Marketing Kit] Trying OpenRouter provider...');
           send('progress', { message: 'Connecting to AI...' });
@@ -192,11 +205,11 @@ export async function POST(req: NextRequest) {
             onDelta: (delta) => send('delta', { content: delta }),
             timeout: TIMEOUT_MS - (Date.now() - startTime),
           });
-          if (result) console.log(`[Marketing Kit] ✅ OpenRouter succeeded (${result.length} chars)`);
+          if (result) console.log('[Marketing Kit] ✅ OpenRouter succeeded (' + result.length + ' chars)');
         }
 
         if (!result) {
-          send('error', { message: 'AI generation failed. No AI provider available. Set GLM_API_KEY in your environment.' });
+          send('error', { message: 'AI generation failed. Set GOOGLE_AI_API_KEY (free from https://aistudio.google.com/apikey) or GLM_API_KEY.' });
           return;
         }
 
