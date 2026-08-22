@@ -7,7 +7,6 @@ import {
   stringToColor,
   formatPrice,
   getInitials,
-  pyClass,
   pxClass,
   maxWidthClass,
   borderRadiusClass,
@@ -179,10 +178,23 @@ function SectionWrapper({
   // --section-contrast: high contrast inverts text on dark bg
   const secHighContrast = secContrast === 'high';
 
+  // Responsive padding: ensures minimum py-8 on mobile, scales up on tablet/desktop
+  // Only used when rhythm spacing is NOT overriding via inline style
+  const responsivePy = style.paddingY === 'xl'
+    ? 'py-8 md:py-14 lg:py-20'
+    : style.paddingY === 'lg'
+      ? 'py-6 md:py-10 lg:py-16'
+      : style.paddingY === 'md'
+        ? 'py-5 md:py-8 lg:py-12'
+        : style.paddingY === 'sm'
+          ? 'py-4 md:py-5 lg:py-8'
+          : 'py-6 md:py-8 lg:py-12';
+
   const outerClasses = [
     'relative transition-all duration-200 cursor-pointer',
-    // Rhythm vertical spacing overrides pyClass when present
-    rhythmSpacing ? '' : (densityPy || pyClass(style.paddingY)),
+    // Rhythm vertical spacing overrides when present
+    // Otherwise use responsive Tailwind padding classes
+    rhythmSpacing ? '' : (densityPy || responsivePy),
     isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
     secBorderClass,
     extraClasses || '',
@@ -760,10 +772,15 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   const showProduct = !!resolvedHeroImage && hasProductLayout;
 
-  // ── Height (responsive-aware) — generous for professional e-commerce ──
-  const heightMap: Record<string, string> = { sm: 'min-h-[360px]', md: 'min-h-[480px]', lg: 'min-h-[600px]', xl: 'min-h-[750px]' };
+  // ── Height (responsive-aware) — vh-based for mobile, generous on desktop ──
+  const heightMap: Record<string, string> = {
+    sm: 'min-h-[40vh] sm:min-h-[50vh] md:min-h-[55vh] lg:min-h-[60vh]',
+    md: 'min-h-[45vh] sm:min-h-[55vh] md:min-h-[65vh] lg:min-h-[70vh]',
+    lg: 'min-h-[50vh] sm:min-h-[60vh] md:min-h-[70vh] lg:min-h-[80vh]',
+    xl: 'min-h-[55vh] sm:min-h-[65vh] md:min-h-[75vh] lg:min-h-[85vh]',
+  };
   const minHeight = layout === 'minimal'
-    ? (heightMap[content.height] || 'min-h-[600px]')
+    ? (heightMap[content.height] || heightMap.md)
     : (heightMap[content.height] || heightMap.lg);
 
   // ── Alignment (centered / minimal layouts) ──
@@ -915,12 +932,12 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
       case 'sm':
         return 'text-3xl sm:text-4xl md:text-5xl lg:text-5xl font-bold tracking-tight leading-[1.15]';
       case 'lg':
-        return 'text-5xl sm:text-6xl md:text-7xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-[1.05]';
+        return 'text-3xl sm:text-5xl md:text-7xl lg:text-7xl xl:text-8xl font-extrabold tracking-tight leading-[1.05]';
       case 'xl':
-        return 'text-6xl sm:text-7xl md:text-8xl lg:text-8xl xl:text-9xl font-black tracking-tight leading-[1.0]';
+        return 'text-3xl sm:text-5xl md:text-7xl lg:text-8xl xl:text-9xl font-black tracking-tight leading-[1.0]';
       case 'md':
       default:
-        if (layout === 'minimal') return 'text-4xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]';
+        if (layout === 'minimal') return 'text-3xl sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-black tracking-tight leading-[1.05]';
         if (layout === 'product-first') return 'text-3xl sm:text-4xl lg:text-5xl xl:text-6xl font-extrabold tracking-tight leading-[1.1]';
         if (layout === 'text-first') return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight leading-[1.08]';
         return 'text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-extrabold tracking-tight leading-[1.1]';
@@ -1031,7 +1048,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   // ── CTA button class ──
   const primaryCtaClass = [
-    'inline-flex items-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg hover:shadow-xl',
+    'inline-flex items-center justify-center gap-2 rounded-full px-8 py-3.5 text-sm font-semibold transition-all duration-200 hover:-translate-y-0.5 shadow-lg hover:shadow-xl w-full sm:w-auto',
     ctaColors.isOutline && 'border-2 hover:bg-white/10',
   ].filter(Boolean).join(' ');
 
@@ -1053,7 +1070,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
       `}</style>
 
       <div
-        className={`relative flex transition-all duration-200 cursor-pointer overflow-hidden ${minHeight} ${alignClass} ${pyClass(style.paddingY)} ${isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40'}`}
+        className={`relative flex transition-all duration-200 cursor-pointer overflow-hidden ${minHeight} ${alignClass} ${style.paddingY === 'sm' ? 'py-4 md:py-6' : style.paddingY === 'lg' ? 'py-8 md:py-14 lg:py-20' : style.paddingY === 'xl' ? 'py-10 md:py-16 lg:py-24' : 'py-6 md:py-10 lg:py-14'} ${isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40'}`}
         style={{ color: textColor }}
         onClick={(e) => { e.stopPropagation(); onSelectSection?.(isSelected ? null : section.id); }}
         data-section-id={section.id}
@@ -1408,7 +1425,14 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   }
 
   // Compute variant-driven styles
-  const gapClass = gridGap || 'gap-5 sm:gap-6 lg:gap-8';
+  // Responsive grid: always 2 cols on mobile, scales up on tablet/desktop
+  const responsiveGridCols: Record<number, string> = {
+    2: 'grid-cols-2',
+    3: 'grid-cols-2 md:grid-cols-3',
+    4: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-4',
+  };
+  const productGridClass = responsiveGridCols[content.columns] || responsiveGridCols[3];
+  const gapClass = gridGap || 'gap-2 sm:gap-4 md:gap-6';
   const headingAlignClass = gridHeadingAlignment === 'left' ? 'text-left' : gridHeadingAlignment === 'center' ? 'text-center' : '';
   const headingScaleStyle = gridHeadingScale ? { transform: `scale(${gridHeadingScale})`, transformOrigin: 'left' } : {};
   // VARIANT: --grid-show-price hides price on cards
@@ -1485,7 +1509,7 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
         )}
         {/* VARIANT: --grid-show-price hides price on cards via CSS */}
         {hidePrice && <style>{`.grid-hide-price [data-card-price] { display: none; }`}</style>}
-        <div className={`grid ${gridCols(content.columns)}`}>
+        <div className={`grid ${productGridClass}`}>
         {filteredProducts.map((product) => (
           <ProductCard
             key={product.id}
@@ -1675,9 +1699,18 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
 
   // Effective columns: variant override or content default
   const effectiveColumns = galleryColumns > 0 ? galleryColumns : (content.columns || 3);
-  const columnsClass = gridCols(effectiveColumns);
-  // Effective gap: variant override or content default
-  const effectiveGap = galleryGap ? (gapMap[galleryGap] || gapMap.md) : (gapMap[content.gap] || gapMap.md);
+  // Responsive gallery grid: 1 col on mobile, 2 on tablet, 3 on desktop
+  const responsiveGalleryGrid: Record<number, string> = {
+    2: 'grid-cols-1 sm:grid-cols-2',
+    3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
+    4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4',
+  };
+  const galleryGridClass = responsiveGalleryGrid[effectiveColumns] || responsiveGalleryGrid[3];
+  // Effective gap: variant override or content default, responsive when no override
+  const gapBase = galleryGap ? (gapMap[galleryGap] || gapMap.md) : (gapMap[content.gap] || gapMap.md);
+  const effectiveGap = galleryGap
+    ? gapBase
+    : `gap-2 sm:gap-3 md:gap-4 lg:${gapBase}`;
 
   // Caption mode: overlay, below, none
   const captionMode = galleryCaptions || 'below';
@@ -1713,7 +1746,7 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
         </div>
       )}
       {isStaggered ? (
-        <div className={`${effectiveGap} columns-2 lg:columns-3 space-y-4`}>
+        <div className={`${effectiveGap} columns-1 sm:columns-2 lg:columns-3 space-y-3 sm:space-y-4`}>
           {content.images.map((img, i) => (
             <div key={i} className={`${borderRadius} ${frameBorderWidth} ${frameShadow} overflow-hidden group break-inside-avoid`} style={isAnchor2x && i === 0 ? { aspectRatio: '4/5' } : undefined}>
               <div
@@ -1751,9 +1784,9 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
           ))}
         </div>
       ) : (
-        <div className={`grid ${columnsClass} ${effectiveGap}`}>
+        <div className={`grid ${galleryGridClass} ${effectiveGap}`}>
           {content.images.map((img, i) => (
-            <div key={i} className={`${borderRadius} ${frameBorderWidth} ${frameShadow} overflow-hidden group`} style={isAnchor2x && i === 0 ? { gridColumn: 'span 2', aspectRatio: '4/5' } : undefined}>
+            <div key={i} className={`${borderRadius} ${frameBorderWidth} ${frameShadow} overflow-hidden group ${isAnchor2x && i === 0 ? 'sm:col-span-2' : ''}`} style={isAnchor2x && i === 0 ? { aspectRatio: '4/5' } : undefined}>
               <div
                 className={`aspect-[4/3] w-full ${borderRadius} transition-transform duration-300 group-hover:scale-[1.02]`}
                 style={{
@@ -1841,12 +1874,12 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   const isScrollHorizontal = vScroll === 'horizontal' || isHorizontalScroll;
 
   // ── Grid layout classes ──
-  // Default (no variant): grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
+  // Single column on mobile, 2 on tablet, 3 on desktop
   const gridClasses = isScrollHorizontal
     ? ''
     : colCount === 2
-      ? 'grid grid-cols-1 gap-6 sm:grid-cols-2'
-      : 'grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3';
+      ? 'grid grid-cols-1 gap-6 md:grid-cols-2'
+      : 'grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3';
 
   // ── Card visual treatment ──
   // Default (no variant): border + shadow + hover + surface bg
@@ -2263,7 +2296,12 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
     // VARIANT: --promo-display-type makes headline extra bold
     ...(promoDisplayType === 'bold' ? { fontWeight: 900 } : {}),
   };
-  const spacingPy = ctaSectionSpacing === 'spacious' ? '5rem' : ctaSectionSpacing === 'generous' ? '4rem' : '3rem';
+  // Responsive padding classes for CTA (replaces inline padding)
+  const ctaPaddingClass = ctaSectionSpacing === 'spacious'
+    ? 'py-10 px-6 sm:py-14 md:py-20 lg:py-24'
+    : ctaSectionSpacing === 'generous'
+      ? 'py-8 px-6 sm:py-12 md:py-16 lg:py-20'
+      : 'py-6 px-6 sm:py-10 md:py-12 lg:py-16';
   const urgencyBorder = ctaBorderMode === 'top-accent' ? `4px solid ${ctaUrgencyColor || '#dc2626'}` : 'none';
   // VARIANT: --cta-contrast high contrast styling
   const isHighContrast = ctaContrast === 'high' || promoContrast === 'high';
@@ -2313,10 +2351,10 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       {/* VARIANT: --promo-layout split shows 2-column layout */}
       {isPromoSplit ? (
-        <div className={`mx-auto grid ${promoGridClass || 'grid-cols-1 md:grid-cols-2'} gap-8 items-center`}
-          style={{ maxWidth: variantMaxWidth || '48rem', padding: `${spacingPy} 2rem` }}
+        <div className={`mx-auto grid ${promoGridClass || 'grid-cols-1 md:grid-cols-2'} gap-6 md:gap-8 items-center ${ctaPaddingClass}`}
+          style={{ maxWidth: variantMaxWidth || '48rem' }}
         >
-          <div style={{ ...headlineStyle }}>
+          <div className="text-center md:text-left" style={{ ...headlineStyle }}>
             <h2 className="text-2xl font-bold sm:text-3xl" style={{
               ...headingFontStyle(theme),
               ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
@@ -2327,7 +2365,7 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
             </h2>
             {content.body && (<p className="mt-3 text-sm opacity-65" style={bodyFontStyle}>{content.body}</p>)}
             <button
-              className={`${borderRadius} mt-6 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+              className={`${borderRadius} mt-6 inline-flex items-center justify-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02] w-full sm:w-auto`}
               style={btnStyle}
             >
               {content.ctaText}
@@ -2340,11 +2378,10 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
           <div className={`hidden md:block w-full overflow-hidden rounded-xl bg-gradient-to-br ${isHighContrast ? 'from-white/10 to-white/5' : 'from-primary/10 to-secondary/5'}`} style={{ aspectRatio: v('--promo-image-ratio') || '4/5' }} />
         </div>
       ) : (
-      <div className={`mx-auto text-center`}
+      <div className={`mx-auto text-center ${ctaPaddingClass}`}
         style={{
           backgroundColor: isHighContrast ? '#0f0f0f' : (section.style.backgroundColor || theme.colors.surface),
           color: isHighContrast ? '#ffffff' : undefined,
-          padding: `${spacingPy} 2rem`,
           borderRadius: theme.borderRadius === 'none' ? '0' : '1rem',
           maxWidth: variantMaxWidth || undefined,
           borderTop: urgencyBorder,
@@ -2394,7 +2431,7 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
           </p>
         )}
         <button
-          className={`${borderRadius} mt-6 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+          className={`${borderRadius} mt-6 inline-flex items-center justify-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02] w-full sm:w-auto`}
           style={btnStyle}
         >
           {content.ctaText}

@@ -59,6 +59,14 @@ export interface CompositionResult {
     rhythmConfig: SectionRhythmConfig;
     rhythmCssVars: Record<string, string>;
   }>;
+  /** Design hints extracted from DesignDirection for downstream consumers */
+  designHints?: {
+    radius: string;
+    elevation: string;
+    density: string;
+    ctaStrategy: string;
+    imageDirection: string;
+  };
 }
 
 // ── Library-aware prompt context (injected into generation system prompt) ──

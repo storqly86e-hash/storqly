@@ -8,8 +8,129 @@
 // contentAlignment, etc.) that the renderer doesn't know about. This
 // module translates those tokens into the concrete fields the renderer
 // expects, without overwriting values the AI already placed in content.
+//
+// ── MAPPING TABLE ────────────────────────────────────────────
+// Full AI field → renderer field mapping per section type:
+//
+//   hero:
+//     typographySystem  → content.headingFont
+//     contentAlignment  → content.alignment
+//     density           → style.paddingY
+//     sectionHeight     → content.height
+//     vignetteStrength  → content.vignette
+//     productScale      → content.productTreatment
+//     mediaCrop         → (consumed by renderer directly)
+//     surfaceTheme      → (consumed by renderer directly)
+//
+//   product-grid:
+//     columnCount       → content.columns
+//     headingAlignment  → style.headingAlignment
+//     sectionSpacing    → style.paddingY
+//     cardVariant       → style.cardVariant
+//     productScale      → (consumed by renderer directly)
+//     density           → (consumed by renderer directly)
+//
+//   testimonials:
+//     quoteScale        → style.quoteScale
+//     cardMode          → style.cardMode
+//     attributionStyle  → style.attributionStyle
+//     dividerMode       → style.dividerMode
+//     density           → (consumed by renderer directly)
+//     sectionSpacing    → (consumed by renderer directly)
+//
+//   cta:
+//     typeScale         → style.typeScale
+//     sectionSpacing    → style.paddingY
+//     alignment         → content.alignment
+//     surfaceTheme      → (consumed by renderer directly)
+//     density           → (consumed by renderer directly)
+//     buttonVariant     → (consumed by renderer directly)
+//
+//   newsletter:
+//     typePairing       → style.typePairing
+//     inputStyle        → style.inputStyle
+//     sectionSpacing    → style.paddingY
+//     alignment         → content.alignment
+//     surfaceTheme      → (consumed by renderer directly)
+//     density           → (consumed by renderer directly)
+//
+//   brand-statement:
+//     splitRatio        → style.splitRatio
+//     typePairing       → style.typePairing
+//     copyMeasure       → style.copyMeasure
+//     captionStyle      → style.captionStyle
+//     imageRatio        → style.imageRatio
+//     density           → (consumed by renderer directly)
+//
+//   image-gallery:
+//     masonryPattern    → style.masonryPattern
+//     anchorSize        → style.anchorSize
+//     gap               → content.gap
+//     captionStyle      → style.captionStyle
+//     columns           → content.columns
+//     density           → (consumed by renderer directly)
+//
+//   faq:
+//     indexStyle        → style.indexStyle
+//     numberStyle       → style.numberStyle
+//     columns           → style.columns
+//     dividerMode       → style.dividerMode
+//     density           → (consumed by renderer directly)
+//
+//   text-banner:
+//     size              → content.size
+//     alignment         → content.alignment
+//     density           → (consumed by renderer directly)
+//     surfaceTheme      → (consumed by renderer directly)
+//
+//   header:
+//     logoScale         → style.logoScale
+//     headerHeight      → style.headerHeight
+//     borderMode        → style.borderMode
+//     surface           → style.surface
+//     navSpacing        → style.navSpacing
+//
+//   footer:
+//     columnCount       → style.columnCount
+//     logoScale         → style.logoScale
+//     typeSystem        → style.typeSystem
+//
+// ────────────────────────────────────────────────────────────
 
 import type { Store, Section } from '@/lib/store-schema';
+
+// ── Field whitelist (CSS injection prevention) ───────────────
+// Only these AI-generated style fields are permitted per section type.
+// Any field not listed here is silently stripped before bridging.
+
+const ALLOWED_FIELDS: Record<string, string[]> = {
+  hero: ['typographySystem', 'contentAlignment', 'density', 'sectionHeight', 'vignetteStrength', 'productScale', 'mediaCrop', 'surfaceTheme'],
+  'product-grid': ['columnCount', 'headingAlignment', 'sectionSpacing', 'cardVariant', 'productScale', 'density'],
+  testimonials: ['quoteScale', 'cardMode', 'attributionStyle', 'dividerMode', 'density', 'sectionSpacing'],
+  cta: ['typeScale', 'sectionSpacing', 'alignment', 'surfaceTheme', 'density', 'buttonVariant'],
+  newsletter: ['typePairing', 'inputStyle', 'sectionSpacing', 'alignment', 'surfaceTheme', 'density'],
+  'brand-statement': ['splitRatio', 'typePairing', 'copyMeasure', 'captionStyle', 'imageRatio', 'density'],
+  'image-gallery': ['masonryPattern', 'anchorSize', 'gap', 'captionStyle', 'columns', 'density'],
+  faq: ['indexStyle', 'numberStyle', 'columns', 'dividerMode', 'density'],
+  'text-banner': ['size', 'alignment', 'density', 'surfaceTheme'],
+  header: ['logoScale', 'headerHeight', 'borderMode', 'surface', 'navSpacing'],
+  footer: ['columnCount', 'logoScale', 'typeSystem'],
+};
+
+// ── Value sanitizer (CSS injection prevention) ───────────────
+// Returns undefined for non-string/non-number, empty strings, or values
+// containing suspicious CSS patterns.
+
+const CSS_INJECTION_RE = /[;{}]|\burl\(|\bexpression\(|\bimport\(|@import/i;
+
+function sanitizeValue(value: unknown): string | undefined {
+  if (typeof value === 'number') return String(value);
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (trimmed === '') return undefined;
+  if (CSS_INJECTION_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -328,7 +449,20 @@ export function bridgeSectionStyles(store: Store): Store {
         if (!bridge) return section; // unknown type — skip silently
 
         // Shallow-clone so we never mutate the input
-        const style = { ...section.style } as Record<string, unknown>;
+        const rawStyle = { ...section.style } as Record<string, unknown>;
+
+        // Filter to only whitelisted fields and sanitize each value
+        const whitelist = ALLOWED_FIELDS[section.type];
+        const style: Record<string, unknown> = {};
+        if (whitelist) {
+          for (const key of whitelist) {
+            const val = sanitizeValue(rawStyle[key]);
+            if (val !== undefined) {
+              style[key] = val;
+            }
+          }
+        }
+
         const content = { ...section.content };
 
         try {

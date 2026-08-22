@@ -364,14 +364,15 @@ export async function composeStore(
 
   // ── Resolve design tokens ─────────────────────────────────
   const typographySystem = recipe.recommended_theme ?? 'modern_grotesk';
-  const densityPreset = profile.visual_energy === 'extreme' ? 'compact' : profile.visual_energy === 'calm' ? 'airy' : 'balanced';
+  // Use DD.visual.density (more specific) first, fall back to visual_energy heuristic
+  const densityPreset: 'airy' | 'balanced' | 'compact' = dd.visual.density;
 
-  const tokens = resolveDesignTokens({
+  const designTokens = resolveDesignTokens({
     typographySystem,
-    densityPreset: densityPreset as 'airy' | 'balanced' | 'compact',
+    densityPreset,
     designDirection: dd,
   });
-  const tokenCssVars = getTokenCssVars(tokens);
+  const tokenCssVars = getTokenCssVars(designTokens);
 
   // ── Compute visual rhythm per section ──────────────────────
   const sectionInputs = nodes.map(n => ({
@@ -381,7 +382,7 @@ export async function composeStore(
   const rhythmMap = computeVisualRhythm(sectionInputs, {
     designDirection: dd,
     recipeId: recipe.id,
-    densityPreset: densityPreset as 'airy' | 'balanced' | 'compact',
+    densityPreset,
     visualEnergy: dd?.visual.visualEnergy,
   });
 
@@ -407,6 +408,13 @@ export async function composeStore(
     designDirection: dd,
     tokenCssVars,
     sectionRhythm,
+    designHints: {
+      radius: dd.visual.radiusLanguage,
+      elevation: dd.visual.elevationLanguage,
+      density: dd.visual.density,
+      ctaStrategy: dd.commerce.ctaStrategy,
+      imageDirection: dd.visual.imageDirection,
+    },
   };
 }
 
