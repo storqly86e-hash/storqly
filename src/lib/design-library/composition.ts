@@ -19,6 +19,8 @@ import { componentRegistry } from '@/lib/component-registry';
 import { isPageSection } from './variant-categories';
 import type { DesignDirection } from './design-direction';
 import { inferDesignDirection } from './design-direction';
+import { resolveDesignTokens, getTokenCssVars } from './token-resolver';
+import { computeVisualRhythm, getRhythmCssVars } from './visual-rhythm';
 
 // ── Role ordering weights for page composition ─────────
 const ROLE_ORDER: DesignRole[] = [
@@ -360,6 +362,39 @@ export async function composeStore(
     }
   }
 
+  // ── Resolve design tokens ─────────────────────────────────
+  const typographySystem = recipe.recommended_theme ?? 'modern_grotesk';
+  const densityPreset = profile.visual_energy === 'extreme' ? 'compact' : profile.visual_energy === 'calm' ? 'airy' : 'balanced';
+
+  const tokens = resolveDesignTokens({
+    typographySystem,
+    densityPreset: densityPreset as 'airy' | 'balanced' | 'compact',
+    designDirection: dd,
+  });
+  const tokenCssVars = getTokenCssVars(tokens);
+
+  // ── Compute visual rhythm per section ──────────────────────
+  const sectionInputs = nodes.map(n => ({
+    type: n.component_id.split('.')[0],
+    role: n.role,
+  }));
+  const rhythmMap = computeVisualRhythm(sectionInputs, {
+    designDirection: dd,
+    recipeId: recipe.id,
+    densityPreset: densityPreset as 'airy' | 'balanced' | 'compact',
+    visualEnergy: dd?.visual.visualEnergy,
+  });
+
+  const sectionRhythm = nodes.map((_, idx) => {
+    const config = rhythmMap[String(idx)];
+    if (!config) return null;
+    return {
+      nodeIndex: idx,
+      rhythmConfig: config,
+      rhythmCssVars: getRhythmCssVars(config),
+    };
+  }).filter((r): r is NonNullable<typeof r> => r !== null);
+
   return {
     brandProfile: profile,
     recipeId: recipe.id,
@@ -367,9 +402,11 @@ export async function composeStore(
     nodes,
     variantSummaries,
     imageArtDirections: artDirections,
-    typographySystem: recipe.recommended_theme ?? 'modern_grotesk',
-    densityPreset: profile.visual_energy === 'extreme' ? 'compact' : profile.visual_energy === 'calm' ? 'airy' : 'balanced',
+    typographySystem,
+    densityPreset,
     designDirection: dd,
+    tokenCssVars,
+    sectionRhythm,
   };
 }
 

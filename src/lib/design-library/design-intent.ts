@@ -8,6 +8,8 @@
 import type { DesignRole } from '@/lib/store-schema';
 export type { DesignRole };
 
+import type { SectionRhythmConfig } from './visual-rhythm';
+
 // ── Brand Profile (matches library's brand-profile.schema.json) ──────
 
 export interface BrandProfile {
@@ -49,6 +51,14 @@ export interface CompositionResult {
   typographySystem: string;
   densityPreset: string;
   designDirection?: import('./design-direction').DesignDirection;
+  /** Resolved design token CSS vars from token-resolver */
+  tokenCssVars?: Record<string, string>;
+  /** Per-section visual rhythm configs and their CSS vars */
+  sectionRhythm?: Array<{
+    nodeIndex: number;
+    rhythmConfig: SectionRhythmConfig;
+    rhythmCssVars: Record<string, string>;
+  }>;
 }
 
 // ── Library-aware prompt context (injected into generation system prompt) ──

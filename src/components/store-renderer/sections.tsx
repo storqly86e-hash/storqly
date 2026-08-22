@@ -128,28 +128,91 @@ function SectionWrapper({
   const isSelected = selectedSectionId === section.id;
   const style = section.style;
 
-  const sectionBg = style.backgroundColor || theme.colors.background;
+  // ── Visual rhythm consumption ──
+  // Rhythm vars are merged into section.style._rhythmCssVars by renderSection
+  const rhythmVars = (style as Record<string, unknown>)?._rhythmCssVars as Record<string, string> | undefined;
+  const rhythmSurface = rhythmVars?.['--rhythm-surface'];
+  const rhythmWidth = rhythmVars?.['--rhythm-content-width'];
+  const rhythmSpacing = rhythmVars?.['--rhythm-vertical-spacing'];
+
+  // ── Generic section-level variant CSS var consumption ──
+  const secSurface = cssVars?.['--section-surface'];
+  const secDensity = cssVars?.['--section-density'];
+  const secBorderMode = cssVars?.['--section-border-mode'];
+  const secHeadingFont = cssVars?.['--section-heading-font'];
+  const secHeadingWeight = cssVars?.['--section-heading-weight'];
+  const secContrast = cssVars?.['--section-contrast'];
+  const secButtonVariant = cssVars?.['--section-button-variant'];
+  const secDividerMode = cssVars?.['--section-divider-mode'];
+  const secImageRatio = cssVars?.['--section-image-ratio'];
+  const secHeadingAlignment = cssVars?.['--section-heading-alignment'];
+
+  let sectionBg = style.backgroundColor || theme.colors.background;
+
+  // --section-surface: warm tint or default
+  if (secSurface === 'warm' && !rhythmSurface) {
+    sectionBg = style.backgroundColor || lightenHex(sectionBg, 0.02) || '#fafaf8';
+  }
   const sectionText = style.textColor || theme.colors.text;
+
+  // Rhythm surface: adjust background based on surface mode
+  if (rhythmSurface === 'muted') {
+    sectionBg = style.backgroundColor || lightenHex(sectionBg, 0.03) || '#fafaf8';
+  } else if (rhythmSurface === 'inverse') {
+    sectionBg = style.backgroundColor || theme.colors.text;
+  }
 
   const bgImage = style.backgroundImage
     ? `url(${style.backgroundImage})`
     : undefined;
 
+  // --section-density: compact or spacious padding override
+  const densityPy = secDensity === 'compact'
+    ? 'pt-4 pb-4'
+    : secDensity === 'spacious'
+      ? 'pt-16 pb-16'
+      : '';
+  // --section-border-mode: full border or none
+  const secBorderClass = secBorderMode === 'full'
+    ? 'border border-[var(--border,theme(colors.border))]'
+    : '';
+  // --section-contrast: high contrast inverts text on dark bg
+  const secHighContrast = secContrast === 'high';
+
   const outerClasses = [
     'relative transition-all duration-200 cursor-pointer',
-    pyClass(style.paddingY),
+    // Rhythm vertical spacing overrides pyClass when present
+    rhythmSpacing ? '' : (densityPy || pyClass(style.paddingY)),
     isSelected ? 'ring-2 ring-[#a855f7] ring-offset-2' : 'hover:ring-1 hover:ring-[#a855f7]/40',
+    secBorderClass,
     extraClasses || '',
   ].join(' ');
 
   // Build inline style with variant CSS custom properties
-  const inlineStyle: React.CSSProperties = {
+  const inlineStyle: Record<string, string | undefined> = {
     backgroundColor: sectionBg,
     color: sectionText,
     backgroundImage: bgImage,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
+    // Rhythm vertical spacing overrides padding
+    ...(rhythmSpacing ? { paddingTop: rhythmSpacing, paddingBottom: rhythmSpacing } : {}),
+    // --section-contrast: high contrast darkens background
+    ...(secHighContrast ? { backgroundColor: '#0f0f0f', color: '#ffffff' } : {}),
   };
+
+  // Build context object for children to consume generic section vars
+  // Children can read these via variantCssVars (passed as prop), but for
+  // generic vars we also apply heading font/weight here via a wrapper class.
+  // Build scoped heading style overrides from generic section vars
+  const headingOverrides = [
+    secHeadingFont === 'serif' ? 'font-family:var(--sq-font-heading,serif)' : '',
+    secHeadingWeight ? `font-weight:${secHeadingWeight}` : '',
+    secHeadingAlignment === 'center' ? 'text-align:center' : secHeadingAlignment === 'right' ? 'text-align:right' : '',
+  ].filter(Boolean).join(';');
+  const buttonOverride = secButtonVariant === 'outline'
+    ? 'border:2px solid currentColor;background:transparent'
+    : '';
   if (cssVars && Object.keys(cssVars).length > 0) {
     // CSS custom properties must be set via type assertion
     // because React.CSSProperties doesn't include arbitrary --var keys
@@ -158,10 +221,15 @@ function SectionWrapper({
     });
   }
 
+  // Rhythm content width: modify the inner container's max-width
+  const rhythmMaxWidthStyle = rhythmWidth
+    ? { maxWidth: rhythmWidth === 'full' ? '100%' : rhythmWidth === 'narrow' ? '48rem' : rhythmWidth === 'wide' ? '90rem' : undefined }
+    : {};
+
   return (
     <div
       className={outerClasses}
-      style={inlineStyle}
+      style={inlineStyle as React.CSSProperties}
       onClick={(e) => {
         e.stopPropagation();
         onSelectSection?.(isSelected ? null : section.id);
@@ -175,6 +243,7 @@ function SectionWrapper({
       )}
       <div
         className={`relative z-10 mx-auto ${maxWidthClass(style.maxWidth)} ${pxClass(style.paddingX)}`}
+        style={Object.keys(rhythmMaxWidthStyle).length > 0 ? rhythmMaxWidthStyle : undefined}
       >
         {/* Selected section label */}
         {isSelected && (
@@ -182,7 +251,23 @@ function SectionWrapper({
             {section.type.replace(/-/g, ' ')}
           </div>
         )}
+        {/* --section-divider-mode: bottom divider */}
+        {secDividerMode === 'border' && (
+          <div className="absolute bottom-0 left-0 right-0 border-t" style={{ borderColor: theme.colors.border }} />
+        )}
         {children}
+        {/* --section-image-ratio: expose as data attribute for child images */}
+        {secImageRatio && (
+          <style>{`.section-img-ratio [data-section-img] { aspect-ratio: ${secImageRatio}; }`}</style>
+        )}
+        {/* --section-heading-font / --section-heading-weight / --section-heading-alignment: scoped heading overrides */}
+        {headingOverrides && (
+          <style>{`[data-section-id="${section.id}"] h2{${headingOverrides}}`}</style>
+        )}
+        {/* --section-button-variant: scoped button override */}
+        {buttonOverride && (
+          <style>{`[data-section-id="${section.id}"] > div > button, [data-section-id="${section.id}"] > div form button{${buttonOverride}}`}</style>
+        )}
       </div>
     </div>
   );
@@ -658,6 +743,10 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const heroUgcCollage = vBool('--hero-ugc-collage');
   const heroRailEnabled = vBool('--hero-rail-enabled');
   const heroGrainStrength = vNum('--hero-grain-strength');
+  const heroUgcTileRotation = v('--hero-ugc-tile-rotation');
+  const heroUgcBorderRadius = v('--hero-ugc-border-radius');
+  const heroPortalGrid = vBool('--hero-portal-grid');
+  const heroUrgencyLevel = v('--hero-urgency-level');
 
   const isCentered = layout === 'centered' || layout === 'minimal';
   const hasProductLayout = layout === 'split-left' || layout === 'split-right' || layout === 'product-first' || layout === 'text-first';
@@ -719,6 +808,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   // Resolve which background image to show
   const currentBgImage = heroImages[activeSlide]?.src || style.backgroundImage;
   const effectiveHasBgImage = !!currentBgImage;
+
+  // VARIANT: --hero-image-fit controls background image sizing
+  const bgSize = heroImageFit || 'cover';
+  // VARIANT: --hero-accent-color overrides the accent glow
+  const accentGlowColor = heroAccentColor || primaryColor;
 
   // ── Background ──
   const bgGradient = !effectiveHasBgImage && !style.backgroundColor
@@ -800,10 +894,21 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
   // ── Headline size scale (user-controllable via headlineSize content field) ──
   // VARIANT: --hero-headline-weight, --hero-headline-letter-spacing, --hero-headline-text-transform
+  // Token-driven typography from design library
+  const tokenFontSize = v('--sq-heading-xl-font-size') || v('--sq-display-lg-font-size');
+  const tokenLetterSpacing = v('--sq-heading-xl-letter-spacing') || v('--sq-display-lg-letter-spacing');
+  const tokenLineHeight = v('--sq-heading-xl-line-height') || v('--sq-display-lg-line-height');
+  const tokenFontWeight = v('--sq-heading-xl-weight');
+
   const headlineVariantStyle: React.CSSProperties = {};
   if (heroHeadlineWeight) headlineVariantStyle.fontWeight = parseFloat(heroHeadlineWeight);
   if (heroHeadlineLetterSpacing) headlineVariantStyle.letterSpacing = heroHeadlineLetterSpacing;
   if (heroHeadlineTransform) headlineVariantStyle.textTransform = heroHeadlineTransform as React.CSSProperties['textTransform'];
+  // Token-driven typography overrides
+  if (tokenFontSize) headlineVariantStyle.fontSize = tokenFontSize;
+  if (tokenLetterSpacing) headlineVariantStyle.letterSpacing = tokenLetterSpacing;
+  if (tokenLineHeight) headlineVariantStyle.lineHeight = tokenLineHeight;
+  if (tokenFontWeight) headlineVariantStyle.fontWeight = parseFloat(tokenFontWeight);
 
   const headlineSizeClass = (() => {
     switch (content.headlineSize) {
@@ -912,6 +1017,15 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
         ? 'left-[15%] top-1/3 -translate-y-1/2'
         : '';
 
+  // VARIANT: --hero-urgency-level shows urgency badge above CTA
+  const showUrgencyBadge = heroUrgencyLevel === 'high';
+  // VARIANT: --hero-ugc-tile-rotation applies rotation to UGC tiles
+  const ugcRotations = heroUgcTileRotation === 'random'
+    ? ['-3deg', '2deg', '-1deg', '3deg', '-2deg']
+    : ['0deg'];
+  // VARIANT: --hero-ugc-border-radius applies to UGC tile corners
+  const ugcRadius = heroUgcBorderRadius || '0.5rem';
+
   // ── CTA click handler ──
   const handleCtaClick = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -963,7 +1077,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
                 style={{
                   opacity: i === activeSlide ? 1 : 0,
                   backgroundImage: `url(${img.src})`,
-                  backgroundSize: 'cover',
+                  backgroundSize: bgSize,
                   backgroundPosition: 'center',
                   filter: bgTreatmentFilter || undefined,
                 }}
@@ -1032,11 +1146,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
           />
         )}
 
-        {/* Subtle accent glow */}
+        {/* Subtle accent glow — VARIANT: --hero-accent-color overrides color */}
         {showAccent && (
           <div
             className={`absolute h-96 w-96 rounded-full pointer-events-none ${accentPos}`}
-            style={{ background: `radial-gradient(circle, ${hexToRgba(primaryColor, 0.08)} 0%, transparent 70%)` }}
+            style={{ background: `radial-gradient(circle, ${hexToRgba(accentGlowColor, 0.08)} 0%, transparent 70%)` }}
           />
         )}
 
@@ -1086,6 +1200,61 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
               </p>
             )}
 
+            {/* VARIANT: --hero-urgency-level urgency badge */}
+            {showUrgencyBadge && content.ctaText && (
+              <div className="hero-fade-in-delay-2 mb-3">
+                <span className="inline-block rounded-full bg-red-500/90 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                  Limited Availability
+                </span>
+              </div>
+            )}
+
+            {/* VARIANT: --hero-ugc-collage shows UGC tile grid */}
+            {heroUgcCollage && !showProduct && (
+              <div className="hero-fade-in-delay-2 mt-6 flex flex-wrap gap-2 max-w-xs">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="w-16 h-20 sm:w-20 sm:h-24 overflow-hidden bg-white/10"
+                    style={{ borderRadius: ugcRadius, transform: `rotate(${ugcRotations[i % ugcRotations.length]})` }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* VARIANT: --hero-portal-grid shows category portal grid */}
+            {heroPortalGrid && !showProduct && (
+              <div className="hero-fade-in-delay-2 mt-6 grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-sm">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="rounded-lg bg-white/10 backdrop-blur-sm px-3 py-4 text-center">
+                    <div className="mx-auto mb-1.5 h-8 w-8 rounded bg-white/20" />
+                    <span className="text-[10px] font-medium opacity-70">Category</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* VARIANT: --hero-rail-enabled shows product rail hint */}
+            {heroRailEnabled && !showProduct && (
+              <div className="hero-fade-in-delay-2 mt-6 flex gap-3 overflow-x-auto pb-2 max-w-md">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex-shrink-0 w-24 h-32 rounded-lg bg-white/10" />
+                ))}
+              </div>
+            )}
+
+            {/* VARIANT: --hero-countdown-visible shows countdown timer */}
+            {heroCountdownVisible && content.ctaText && (
+              <div className="hero-fade-in-delay-2 mt-4 flex gap-2">
+                {['02', '14', '36'].map((val, i) => (
+                  <div key={i} className="flex flex-col items-center">
+                    <span className="text-2xl sm:text-3xl font-bold tabular-nums">{val}</span>
+                    <span className="text-[9px] uppercase tracking-wider opacity-50">{['D', 'H', 'M'][i]}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* CTA buttons */}
             {(content.ctaText || content.secondaryCtaText) && (
               <div className={`hero-fade-in-delay-2 mt-8 flex flex-wrap gap-3 ${!showProduct && content.alignment === 'center' ? 'justify-center' : ''} ${!showProduct && content.alignment === 'right' ? 'justify-end' : ''}`}>
@@ -1120,7 +1289,7 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
 
           {/* Product image column — full visual impact, not a tiny card */}
           {showProduct && (
-            <div className={`${productColClass} flex items-center justify-center`}>
+            <div className={`${productColClass} flex items-center justify-center`} style={heroProductOverlap ? { marginTop: '-4rem' } : undefined}>
               <div
                 className="hero-float relative mx-auto w-full max-w-full"
                 style={getProductImageStyle()}
@@ -1166,12 +1335,25 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
   );
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      {content.headline && (
-        <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
-          {content.headline}
-        </h2>
-      )}
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {content.headline && (() => {
+        const tokenFontSize = v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size');
+        const tokenLetterSpacing = v('--sq-heading-lg-letter-spacing') || v('--sq-heading-md-letter-spacing');
+        const tokenLineHeight = v('--sq-heading-lg-line-height') || v('--sq-heading-md-line-height');
+        const tokenFontWeight = v('--sq-heading-lg-weight');
+        return (
+          <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{
+            ...headingFontStyle(theme),
+            ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+            ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
+            ...(tokenLetterSpacing ? { letterSpacing: tokenLetterSpacing } : {}),
+            ...(tokenLineHeight ? { lineHeight: tokenLineHeight } : {}),
+            ...(tokenFontWeight ? { fontWeight: parseFloat(tokenFontWeight) } : {}),
+          }}>
+            {content.headline}
+          </h2>
+        );
+      })()}
       {content.subtitle && (
         <p className="mb-8 text-base opacity-65">
           {content.subtitle}
@@ -1212,6 +1394,10 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   const gridFeaturedFirst = v('--grid-featured-first');
   const gridAccentPlane = v('--grid-accent-plane');
   const gridHeadingScale = v('--grid-heading-scale');
+  const gridCardHoverLift = v('--grid-card-hover-lift');
+  const gridShowSwatches = v('--grid-show-swatches');
+  const gridShowBundleBadge = v('--grid-show-bundle-badge');
+  const gridShowSavings = v('--grid-show-savings');
 
   // Extract card-level CSS vars for ProductCard overrides
   const cardStyleVars: Record<string, string> = {};
@@ -1225,6 +1411,18 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   const gapClass = gridGap || 'gap-5 sm:gap-6 lg:gap-8';
   const headingAlignClass = gridHeadingAlignment === 'left' ? 'text-left' : gridHeadingAlignment === 'center' ? 'text-center' : '';
   const headingScaleStyle = gridHeadingScale ? { transform: `scale(${gridHeadingScale})`, transformOrigin: 'left' } : {};
+  // VARIANT: --grid-show-price hides price on cards
+  const hidePrice = gridShowPrice === 'false';
+  // VARIANT: --grid-show-ratings shows rating stars in heading area
+  const showGridRatings = gridShowRatings === 'true';
+  // VARIANT: --grid-card-hover-lift adds hover translate to card wrapper
+  const hoverLiftStyle = gridCardHoverLift && gridCardHoverLift !== '0'
+    ? { '--grid-hover-lift': gridCardHoverLift } as React.CSSProperties
+    : {};
+  // VARIANT: --grid-show-swatches bridges to card var
+  if (gridShowSwatches === 'true') cardStyleVars['--card-show-swatch'] = 'true';
+  // VARIANT: --grid-show-bundle-badge shows badge on each card
+  // VARIANT: --grid-show-savings shows savings on each card
 
   const filteredProducts = useMemo(() => {
     let prods = products;
@@ -1239,15 +1437,54 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
   }, [products, content.filterByCategory, gridFeaturedFirst]);
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      {content.headline && (
-        <h2 className={`mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl ${headingAlignClass}`} style={{ ...headingFontStyle(theme), ...headingScaleStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
-          {content.headline}
-        </h2>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {content.headline && (() => {
+        const tokenFontSize = v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size');
+        const tokenLetterSpacing = v('--sq-heading-lg-letter-spacing') || v('--sq-heading-md-letter-spacing');
+        const tokenLineHeight = v('--sq-heading-lg-line-height') || v('--sq-heading-md-line-height');
+        const tokenFontWeight = v('--sq-heading-lg-weight');
+        return (
+          <h2 className={`mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl ${headingAlignClass}`} style={{
+            ...headingFontStyle(theme),
+            ...headingScaleStyle,
+            ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+            ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
+            ...(tokenLetterSpacing ? { letterSpacing: tokenLetterSpacing } : {}),
+            ...(tokenLineHeight ? { lineHeight: tokenLineHeight } : {}),
+            ...(tokenFontWeight ? { fontWeight: parseFloat(tokenFontWeight) } : {}),
+          }}>
+            {content.headline}
+          </h2>
+        );
+      })()}
+      {/* VARIANT: --grid-show-bundle-badge shows bundle badge above grid */}
+      {gridShowBundleBadge === 'true' && (
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+          <ShoppingCart className="h-3 w-3" /> Bundle & Save
+        </div>
+      )}
+      {/* VARIANT: --grid-show-savings shows savings banner */}
+      {gridShowSavings === 'true' && (
+        <div className="mb-4 inline-flex items-center gap-1.5 rounded bg-green-100 px-3 py-1 text-xs font-semibold text-green-800">
+          Save up to 20% when you bundle
+        </div>
       )}
       {/* VARIANT: --grid-gap controls grid spacing */}
       {/* VARIANT: --grid-accent-plane adds a left accent bar */}
-      <div className={`${gridGap} ${gridAccentPlane === 'true' ? 'border-l-4 pl-6' : ''}`} style={gridAccentPlane === 'true' ? { borderColor: theme.colors.primary } : undefined}>
+      <div className={`${gridGap} ${gridAccentPlane === 'true' ? 'border-l-4 pl-6' : ''}`} style={{...(gridAccentPlane === 'true' ? { borderColor: theme.colors.primary } : {}), ...hoverLiftStyle}}>
+        {/* VARIANT: --grid-show-ratings shows aggregate rating in heading */}
+        {showGridRatings && (
+          <div className="mb-3 flex items-center gap-1.5">
+            <div className="flex gap-0.5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />
+              ))}
+            </div>
+            <span className="text-xs font-medium opacity-65">4.8 average</span>
+          </div>
+        )}
+        {/* VARIANT: --grid-show-price hides price on cards via CSS */}
+        {hidePrice && <style>{`.grid-hide-price [data-card-price] { display: none; }`}</style>}
         <div className={`grid ${gridCols(content.columns)}`}>
         {filteredProducts.map((product) => (
           <ProductCard
@@ -1292,8 +1529,20 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
 
   // ── Variant CSS variable consumption (Design Library) ──
   const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
+  const vNum = (key: string, fallback: number = 0) => {
+    const raw = variantCssVars?.[key];
+    return raw !== undefined ? parseInt(raw, 10) : fallback;
+  };
   const trustAlignment = v('--trust-alignment');
   const trustDensity = v('--trust-density');
+  const trustLayout = v('--trust-layout');
+  const trustIconStyle = v('--trust-icon-style');
+  const trustSurface = v('--trust-surface');
+  const trustMarkSize = v('--trust-mark-size');
+  const trustLabelStyle = v('--trust-label-style');
+  const trustNumberScale = v('--trust-number-scale');
+  const trustDividerMode = v('--trust-divider-mode');
+  const trustColumns = vNum('--trust-columns', 0);
 
   // Alignment: variant override or content default
   const effectiveAlign = trustAlignment || content.alignment;
@@ -1302,18 +1551,100 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
   // Density: variant override for padding density
   const densityPy = trustDensity === 'compact' ? 'py-6' : trustDensity === 'spacious' ? 'py-16' : '';
 
+  // VARIANT: --trust-surface adds background tint
+  const trustSurfaceStyle: React.CSSProperties = trustSurface === 'surface'
+    ? { backgroundColor: theme.colors.surface }
+    : {};
+  // VARIANT: --trust-layout controls arrangement
+  const isTrustStrip = trustLayout === 'strip';
+  const isTrustRow = trustLayout === 'row';
+  const isTrustCenteredCount = trustLayout === 'centered-count';
+  // VARIANT: --trust-icon-style: line vs filled
+  const trustIconStroke = trustIconStyle === 'line' ? '1.5' : '0';
+  const trustIconFill = trustIconStyle === 'filled' ? 'currentColor' : 'none';
+  // VARIANT: --trust-mark-size controls icon size
+  const markSizeStyle = trustMarkSize ? { width: trustMarkSize, height: trustMarkSize } : {};
+  // VARIANT: --trust-label-style: below vs inline
+  const isLabelBelow = trustLabelStyle === 'below';
+  // VARIANT: --trust-number-scale: stat number sizing
+  const numberSizeMap: Record<string, string> = { '2xl': 'text-2xl', '3xl': 'text-3xl', '4xl': 'text-4xl' };
+  const trustNumSizeClass = numberSizeMap[trustNumberScale] || '';
+  // VARIANT: --trust-columns: auto or specific
+  const trustGridClass = trustColumns > 0
+    ? `grid grid-cols-1 sm:grid-cols-${trustColumns}`
+    : isTrustStrip || isTrustRow
+      ? 'flex flex-wrap justify-center gap-8 sm:gap-12'
+      : '';
+  // VARIANT: --trust-divider-mode: border between items
+  const trustItemBorderClass = trustDividerMode === 'border' ? 'border-r last:border-r-0' : '';
+
+  // ── Promotion variant consumption (Design Library) ──
+  // promotion.inline_offer maps to text-banner
+  const promoLayout = v('--promo-layout');
+  const promoHeight = v('--promo-height');
+  const promoBorderMode = v('--promo-border-mode');
+  const promoSurface = v('--promo-surface');
+  const promoContentColor = v('--promo-content-color');
+  const promoFinePrint = v('--promo-fine-print');
+  // VARIANT: --promo-surface accent-light background
+  const promoSurfaceStyle: React.CSSProperties = promoSurface === 'accent-light'
+    ? { backgroundColor: lightenHex(theme.colors.primary, 0.9) || '#fef3c7' }
+    : {};
+  // VARIANT: --promo-border-mode full border
+  const promoBorderClass = promoBorderMode === 'full' ? 'border' : '';
+  // VARIANT: --promo-content-color dark forces dark text
+  const promoTextColor = promoContentColor === 'dark' ? theme.colors.text : undefined;
+  // VARIANT: --promo-layout inline shows horizontal layout
+  const isPromoInline = promoLayout === 'inline' || !!promoLayout;
+  // VARIANT: --promo-height auto removes fixed height
+  const promoHeightStyle = promoHeight ? { minHeight: 'auto' } : {};
+
+  // Trust icons placeholder data when variant requests a strip/row layout
+  const trustIconData = isTrustStrip || isTrustRow
+    ? [
+        { icon: '🛡️', label: 'Secure Checkout' },
+        { icon: '🚚', label: 'Free Shipping' },
+        { icon: '↩️', label: 'Easy Returns' },
+        { icon: '⭐', label: '5-Star Reviews' },
+      ]
+    : [];
+
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      <div className={`${alignClass} ${densityPy}`}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {/* VARIANT: --trust-layout strip/row shows icon items */}
+      {(isTrustStrip || isTrustRow) ? (
+        <div className={`${alignClass} ${densityPy}`} style={trustSurfaceStyle}>
+          <div className={`${trustGridClass} ${trustItemBorderClass} items-center gap-4 pr-4`}>
+            {trustIconData.map((item, i) => (
+              <div key={i} className={`flex items-center gap-3 ${isLabelBelow ? 'flex-col text-center' : ''}`}>
+                <svg style={{ ...markSizeStyle, stroke: trustIconStroke === '0' ? 'none' : 'currentColor', fill: trustIconFill, strokeWidth: trustIconStroke }} className={`shrink-0 ${trustMarkSize ? '' : 'h-6 w-6'}`} viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /></svg>
+                <span className="text-xs font-medium opacity-75">{item.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : isTrustCenteredCount ? (
+        <div className={`${alignClass} ${densityPy}`} style={trustSurfaceStyle}>
+          <div className={`flex flex-col items-center gap-6`}>
+            <div className={`${trustNumSizeClass || 'text-4xl'} font-extrabold tabular-nums`}>10,000+</div>
+            <div className="text-sm opacity-65">Happy Customers</div>
+          </div>
+        </div>
+      ) : (
+      <div className={`${alignClass} ${densityPy} ${promoBorderClass} inline-flex items-center gap-4 flex-wrap`} style={{ ...trustSurfaceStyle, ...promoSurfaceStyle, color: promoTextColor, ...promoHeightStyle }}>
         <h2 className={`font-bold leading-tight tracking-tight ${sizes.headline}`} style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
         {content.body && (
-          <p className={`mt-3 max-w-2xl ${sizes.body} opacity-65`}>
+          <p className={`max-w-2xl ${sizes.body} opacity-65`}>
             {content.body}
           </p>
         )}
+        {/* VARIANT: --promo-fine-print */}
+        {promoFinePrint === 'visible' && (<p className="text-[10px] opacity-40">Terms and conditions apply. Offer valid while supplies last.</p>)}
+        {promoFinePrint === 'optional' && (<p className="text-[10px] opacity-30">*Conditions apply</p>)}
       </div>
+      )}
     </SectionWrapper>
   );
 }
@@ -1336,6 +1667,11 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
   const galleryGap = v('--gallery-gap');
   const galleryCaptions = v('--gallery-captions');
   const galleryMasonryPattern = v('--gallery-masonry-pattern');
+  const galleryLayout = v('--gallery-layout');
+  const galleryLightbox = v('--gallery-lightbox');
+  const galleryAnchorSize = v('--gallery-anchor-size');
+  const galleryOversizedFrames = v('--gallery-oversized-frames');
+  const galleryHotspotStyle = v('--gallery-hotspot-style');
 
   // Effective columns: variant override or content default
   const effectiveColumns = galleryColumns > 0 ? galleryColumns : (content.columns || 3);
@@ -1348,14 +1684,38 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
   const showCaptions = captionMode !== 'none';
 
   // Masonry: staggered vs uniform
-  const isStaggered = galleryMasonryPattern === 'staggered';
+  const isStaggered = galleryLayout === 'masonry' || galleryMasonryPattern === 'staggered';
+  // VARIANT: --gallery-lightbox enables click-to-enlarge
+  const isLightboxEnabled = galleryLightbox === 'enabled';
+  const [lightboxIdx, setLightboxIdx] = useState<number | null>(null);
+  // VARIANT: --gallery-anchor-size makes first image larger
+  const isAnchor2x = galleryAnchorSize === '2x';
+  // VARIANT: --gallery-oversized-frames adds visible frame
+  const isOversizedFrame = galleryOversizedFrames === 'true';
+  // VARIANT: --gallery-hotspot-style shows hotspot dots
+  const isHotspotDot = galleryHotspotStyle === 'dot';
+  const frameBorderWidth = isOversizedFrame ? 'p-2 border-2 border-white/20' : '';
+  const frameShadow = isOversizedFrame ? 'shadow-xl' : '';
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {/* VARIANT: --gallery-lightbox overlay */}
+      {isLightboxEnabled && lightboxIdx !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8" onClick={() => setLightboxIdx(null)}>
+          <div className="relative max-h-[90vh] max-w-[90vw] overflow-hidden rounded-lg">
+            <StoreImage
+              src={content.images[lightboxIdx]?.src}
+              alt={content.images[lightboxIdx]?.alt || ''}
+              fallbackColor={theme.colors.primary}
+              className="h-auto max-h-[90vh] w-auto max-w-[90vw] object-contain"
+            />
+          </div>
+        </div>
+      )}
       {isStaggered ? (
         <div className={`${effectiveGap} columns-2 lg:columns-3 space-y-4`}>
           {content.images.map((img, i) => (
-            <div key={i} className={`${borderRadius} overflow-hidden group break-inside-avoid`}>
+            <div key={i} className={`${borderRadius} ${frameBorderWidth} ${frameShadow} overflow-hidden group break-inside-avoid`} style={isAnchor2x && i === 0 ? { aspectRatio: '4/5' } : undefined}>
               <div
                 className={`${borderRadius} overflow-hidden transition-transform duration-300 group-hover:scale-[1.02] ${i % 3 === 0 ? 'aspect-[4/5]' : i % 3 === 1 ? 'aspect-[4/3]' : 'aspect-square'}`}
                 style={{
@@ -1381,13 +1741,19 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
                   </p>
                 </div>
               )}
+              {/* VARIANT: --gallery-hotspot-style shows dot overlay */}
+              {isHotspotDot && (
+                <div className="absolute right-3 top-3 h-3 w-3 rounded-full bg-white/80 shadow" />
+              )}
+              {/* VARIANT: --gallery-lightbox click handler */}
+              {isLightboxEnabled && <div className="absolute inset-0 cursor-zoom-in" onClick={(e) => { e.stopPropagation(); setLightboxIdx(i); }} />}
             </div>
           ))}
         </div>
       ) : (
         <div className={`grid ${columnsClass} ${effectiveGap}`}>
           {content.images.map((img, i) => (
-            <div key={i} className={`${borderRadius} overflow-hidden group`}>
+            <div key={i} className={`${borderRadius} ${frameBorderWidth} ${frameShadow} overflow-hidden group`} style={isAnchor2x && i === 0 ? { gridColumn: 'span 2', aspectRatio: '4/5' } : undefined}>
               <div
                 className={`aspect-[4/3] w-full ${borderRadius} transition-transform duration-300 group-hover:scale-[1.02]`}
                 style={{
@@ -1406,6 +1772,12 @@ export function ImageGallerySection({ section, theme, selectedSectionId, onSelec
                     <p className="text-xs text-white">{img.caption}</p>
                   </div>
                 )}
+                {/* VARIANT: --gallery-hotspot-style shows dot overlay */}
+                {isHotspotDot && (
+                  <div className="absolute right-3 top-3 h-3 w-3 rounded-full bg-white/80 shadow opacity-0 transition-opacity group-hover:opacity-100" />
+                )}
+                {/* VARIANT: --gallery-lightbox click handler */}
+                {isLightboxEnabled && <div className="absolute inset-0 cursor-zoom-in opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); setLightboxIdx(i); }} />}
               </div>
               {showCaptions && img.caption && captionMode === 'below' && (
                 <p className="mt-2 text-xs opacity-65">
@@ -1443,6 +1815,11 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   const vColumns = variantCssVars?.['--testimonials-columns'];
   const vRailGap = variantCssVars?.['--testimonials-rail-gap'];
   const vRatingSummary = variantCssVars?.['--testimonials-rating-summary'];
+  const vAttributionStyle = variantCssVars?.['--testimonials-attribution-style'];
+  const vRatingStyle = variantCssVars?.['--testimonials-rating-style'];
+  const vTileRatio = variantCssVars?.['--testimonials-tile-ratio'];
+  const vUgcMode = variantCssVars?.['--testimonials-ugc-mode'];
+  const vScroll = variantCssVars?.['--testimonials-scroll'];
 
   // Derived booleans
   const isMinimalCard = vCardMode === 'minimal';
@@ -1451,10 +1828,21 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   const showQuoteMark = vQuoteMark === 'visible';
   const showRatingSummary = vRatingSummary === 'visible';
   const colCount = vColumns ? parseInt(vColumns, 10) : 0;
+  // VARIANT: --testimonials-attribution-style
+  const isAttributionNameRole = vAttributionStyle === 'name-role';
+  const isAttributionUsernameHandle = vAttributionStyle === 'username-handle';
+  // VARIANT: --testimonials-rating-style: stars vs number
+  const isRatingNumber = vRatingStyle === 'number';
+  // VARIANT: --testimonials-tile-ratio
+  const tileRatioStyle = vTileRatio ? { aspectRatio: vTileRatio } : undefined;
+  // VARIANT: --testimonials-ugc-mode
+  const isUgcMode = vUgcMode === 'true';
+  // VARIANT: --testimonials-scroll
+  const isScrollHorizontal = vScroll === 'horizontal' || isHorizontalScroll;
 
   // ── Grid layout classes ──
   // Default (no variant): grid-cols-1 sm:grid-cols-2 lg:grid-cols-3
-  const gridClasses = isHorizontalScroll
+  const gridClasses = isScrollHorizontal
     ? ''
     : colCount === 2
       ? 'grid grid-cols-1 gap-6 sm:grid-cols-2'
@@ -1488,16 +1876,33 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   const renderCard = (item: TestimonialsContent['items'][0], index: number) => (
     <div
       key={item.id}
-      className={`${cardBaseClasses}${isHorizontalScroll ? ' min-w-[280px] max-w-[320px] flex-shrink-0 snap-start' : ''}`}
-      style={cardInlineStyle}
+      className={`${cardBaseClasses}${isScrollHorizontal ? ' min-w-[280px] max-w-[320px] flex-shrink-0 snap-start' : ''}`}
+      style={{...cardInlineStyle, ...tileRatioStyle}}
     >
+      {/* VARIANT: --testimonials-ugc-mode shows image-first layout */}
+      {isUgcMode && item.avatar && (
+        <StoreImage
+          src={item.avatar}
+          alt={item.author}
+          fallbackColor={theme.colors.primary}
+          className="mb-3 w-full aspect-video object-cover rounded-md"
+          iconSize="sm"
+        />
+      )}
+
       {/* Decorative quote mark (quote_wall) */}
       {showQuoteMark && (
         <div className="mb-2 text-5xl leading-none opacity-15 select-none" style={{ ...headingFontStyle(theme), fontWeight: 400 }}>&ldquo;</div>
       )}
 
-      {/* Stars */}
+      {/* Stars — VARIANT: --testimonials-rating-style: stars vs number */}
       {item.rating && (
+        isRatingNumber ? (
+          <div className="mb-3 flex items-baseline gap-1">
+            <span className="text-xl font-bold">{item.rating}</span>
+            <span className="text-xs opacity-50">/5</span>
+          </div>
+        ) : (
         <div className="mb-3 flex gap-0.5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star
@@ -1506,6 +1911,7 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
             />
           ))}
         </div>
+        )
       )}
 
       {/* Quote */}
@@ -1513,8 +1919,8 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
         &ldquo;{item.quote}&rdquo;
       </p>
 
-      {/* Author attribution */}
-      <div className="mt-4 flex items-center gap-3">
+      {/* Author attribution — VARIANT: --testimonials-attribution-style */}
+      <div className={`mt-4 flex items-center gap-3 ${isAttributionUsernameHandle ? 'flex-row-reverse' : ''}`}>
         {item.avatar ? (
           <StoreImage
             src={item.avatar}
@@ -1531,13 +1937,18 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
             {getInitials(item.author)}
           </div>
         )}
-        <div>
+        <div className={isAttributionUsernameHandle ? 'text-right' : ''}>
           <p className="text-sm font-semibold">
             {item.author}
           </p>
-          {item.role && (
+          {item.role && isAttributionNameRole && (
             <p className="text-xs opacity-65">
               {item.role}
+            </p>
+          )}
+          {isAttributionUsernameHandle && (
+            <p className="text-xs opacity-50">
+              @{item.author.toLowerCase().replace(/\s+/g, '')}
             </p>
           )}
         </div>
@@ -1546,12 +1957,25 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
   );
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      {content.headline && (
-        <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
-          {content.headline}
-        </h2>
-      )}
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {content.headline && (() => {
+        const tokenFontSize = variantCssVars?.['--sq-heading-lg-font-size'] || variantCssVars?.['--sq-heading-md-font-size'];
+        const tokenLetterSpacing = variantCssVars?.['--sq-heading-lg-letter-spacing'] || variantCssVars?.['--sq-heading-md-letter-spacing'];
+        const tokenLineHeight = variantCssVars?.['--sq-heading-lg-line-height'] || variantCssVars?.['--sq-heading-md-line-height'];
+        const tokenFontWeight = variantCssVars?.['--sq-heading-lg-weight'];
+        return (
+          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{
+            ...headingFontStyle(theme),
+            ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+            ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
+            ...(tokenLetterSpacing ? { letterSpacing: tokenLetterSpacing } : {}),
+            ...(tokenLineHeight ? { lineHeight: tokenLineHeight } : {}),
+            ...(tokenFontWeight ? { fontWeight: parseFloat(tokenFontWeight) } : {}),
+          }}>
+            {content.headline}
+          </h2>
+        );
+      })()}
 
       {/* Aggregate rating summary (rating_rail) */}
       {showRatingSummary && aggregateRating > 0 && (
@@ -1598,6 +2022,12 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
   const nlHeadingFont = v('--newsletter-heading-font');
   const nlHeadingWeight = v('--newsletter-heading-weight');
   const nlSectionSpacing = v('--newsletter-section-spacing');
+  const nlSplitRatio = v('--newsletter-split-ratio');
+  const nlCopyMeasure = v('--newsletter-copy-measure');
+  const nlAlignment = v('--newsletter-alignment');
+  const nlUrgency = v('--newsletter-urgency');
+  const nlStatusStyle = v('--newsletter-status-style');
+  const nlUrgencyColor = v('--newsletter-urgency-color');
 
   // Compute variant-driven styles
   const isSplit = nlLayout === 'split';
@@ -1608,6 +2038,24 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
     ...(nlHeadingWeight ? { fontWeight: parseFloat(nlHeadingWeight) } : {}),
   };
   const spacingPy = nlSectionSpacing === 'spacious' ? '5rem' : '3rem';
+  // VARIANT: --newsletter-split-ratio controls split grid
+  const splitGridClass = nlSplitRatio && nlSplitRatio.includes('/')
+    ? (() => {
+        const [a, b] = nlSplitRatio.split('/').map(Number);
+        return (!a || !b || isNaN(a) || isNaN(b))
+          ? 'grid-cols-1 md:grid-cols-2'
+          : `grid-cols-1 md:grid-cols-[${a}fr_${b}fr]`;
+      })()
+    : 'grid-cols-1 md:grid-cols-2';
+  // VARIANT: --newsletter-copy-measure controls text max-width
+  const copyMeasureStyle = nlCopyMeasure === 'narrow' ? { maxWidth: '20rem' } : nlCopyMeasure === 'wide' ? { maxWidth: '36rem' } : {};
+  // VARIANT: --newsletter-alignment
+  const nlAlignClass = nlAlignment === 'left' ? 'text-left' : nlAlignment === 'right' ? 'text-right' : 'text-center';
+  // VARIANT: --newsletter-urgency shows urgency badge
+  const isNlUrgent = nlUrgency === 'true';
+  const urgencyBadgeColor = nlUrgencyColor || '#dc2626';
+  // VARIANT: --newsletter-status-style shows subscriber count
+  const isNlStatusVisible = nlStatusStyle === 'visible';
 
   // Button style driven by variant
   const btnBg = isOutline ? 'transparent' : (section.style.buttonBackgroundColor || theme.colors.primary);
@@ -1615,19 +2063,39 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
   const btnBorder = isOutline ? `2px solid ${theme.colors.primary}` : 'none';
 
   const containerClass = isSplit
-    ? 'mx-auto max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center text-left'
-    : 'mx-auto max-w-xl text-center';
+    ? `mx-auto max-w-4xl grid ${splitGridClass} gap-8 items-center text-left`
+    : `mx-auto max-w-xl ${nlAlignClass}`;
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      <div className={containerClass} style={{ padding: `${spacingPy} 1.5rem` }}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      <div className={containerClass} style={{ padding: `${spacingPy} 1.5rem`, ...copyMeasureStyle }}>
+        {/* VARIANT: --newsletter-urgency urgency indicator */}
+        {isNlUrgent && (
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: `${urgencyBadgeColor}15`, color: urgencyBadgeColor }}>
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: urgencyBadgeColor }} />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: urgencyBadgeColor }} />
+            </span>
+            Limited Spots Available
+          </div>
+        )}
+        {/* VARIANT: --newsletter-status-style subscriber count */}
+        {isNlStatusVisible && (
+          <div className="mb-3 text-xs opacity-50">Join 12,000+ subscribers</div>
+        )}
         {!isSplit && (
           <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-full" style={{ backgroundColor: `${theme.colors.primary}15` }}>
             <Mail className="h-5 w-5" style={{ color: theme.colors.primary }} />
           </div>
         )}
         <div>
-          <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...headingVariantStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+          <h2 className="text-2xl font-bold sm:text-3xl" style={{
+            ...headingFontStyle(theme),
+            ...headingVariantStyle,
+            ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+            ...(v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') ? { fontSize: v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') } : {}),
+            ...(v('--sq-heading-lg-weight') ? { fontWeight: parseFloat(v('--sq-heading-lg-weight')) } : {}),
+          }}>
             {content.headline}
           </h2>
           {content.subtitle && (
@@ -1699,7 +2167,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
   const itemBorderRadius = trustDividerMode === 'line' ? '' : borderRadius;
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       <div className={`mx-auto ${faqMaxWidth}`}>
         {content.headline && (
           <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
@@ -1761,6 +2229,7 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
   const ctaButtonVariant = v('--cta-button-variant');
   const ctaHeadlineWeight = v('--cta-headline-weight');
   const ctaHeadlineLetterSpacing = v('--cta-headline-letter-spacing');
+  const ctaHeadlineTransform = v('--cta-headline-transform');
   const ctaBodyMaxWidth = v('--cta-body-max-width');
   const ctaSectionSpacing = v('--cta-section-spacing');
   const ctaUrgencyLevel = v('--cta-urgency-level');
@@ -1768,15 +2237,58 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
   const ctaBorderMode = v('--cta-border-mode');
   const ctaUrgencyColor = v('--cta-urgency-color');
   const ctaProofStyle = v('--cta-proof-style');
+  const ctaBodyFontStyle = v('--cta-body-font-style');
+
+  // ── Promotion variant consumption (Design Library) ──
+  // promotion.campaign_split and promotion.sticker_campaign map to CTA
+  const promoLayout = v('--promo-layout');
+  const promoSplitRatio = v('--promo-split-ratio');
+  const promoOfferEmphasis = v('--promo-offer-emphasis');
+  const promoButtonVariant = v('--promo-button-variant');
+  const promoFinePrint = v('--promo-fine-print');
+  const promoStickerShape = v('--promo-sticker-shape');
+  const promoContrast = v('--promo-contrast');
+  const promoDisplayType = v('--promo-display-type');
+  const promoBadgeSize = v('--promo-badge-size');
 
   // Compute effective styles from variant vars
   const variantMaxWidth = ctaBodyMaxWidth || '';
   const headlineStyle: React.CSSProperties = {
     ...(ctaHeadlineWeight ? { fontWeight: parseFloat(ctaHeadlineWeight) } : {}),
     ...(ctaHeadlineLetterSpacing ? { letterSpacing: ctaHeadlineLetterSpacing } : {}),
+    // VARIANT: --cta-headline-transform
+    ...(ctaHeadlineTransform ? { textTransform: ctaHeadlineTransform as React.CSSProperties['textTransform'] } : {}),
+    // VARIANT: --promo-offer-emphasis makes headline extra bold
+    ...(promoOfferEmphasis === 'headline' ? { fontSize: '1.75rem' } : {}),
+    // VARIANT: --promo-display-type makes headline extra bold
+    ...(promoDisplayType === 'bold' ? { fontWeight: 900 } : {}),
   };
   const spacingPy = ctaSectionSpacing === 'spacious' ? '5rem' : ctaSectionSpacing === 'generous' ? '4rem' : '3rem';
   const urgencyBorder = ctaBorderMode === 'top-accent' ? `4px solid ${ctaUrgencyColor || '#dc2626'}` : 'none';
+  // VARIANT: --cta-contrast high contrast styling
+  const isHighContrast = ctaContrast === 'high' || promoContrast === 'high';
+  // VARIANT: --cta-urgency-level shows urgency indicator
+  const isCtaUrgent = ctaUrgencyLevel === 'high';
+  // VARIANT: --cta-proof-style shows social proof
+  const isAvatarRow = ctaProofStyle === 'avatar-row';
+  // VARIANT: --cta-body-font-style
+  const bodyFontStyle: React.CSSProperties = ctaBodyFontStyle === 'italic' ? { fontStyle: 'italic' } : {};
+  // VARIANT: --promo-layout controls split/sticker layout
+  const isPromoSplit = promoLayout === 'split';
+  const isPromoSticker = promoLayout === 'sticker';
+  // VARIANT: --promo-sticker-shape rounds the sticker badge
+  const promoBadgeRadius = promoStickerShape === 'circle' ? '9999px' : '0.5rem';
+  // VARIANT: --promo-badge-size
+  const promoBadgePadding = promoBadgeSize === 'large' ? 'px-5 py-2 text-sm' : 'px-3 py-1 text-xs';
+  // VARIANT: --promo-split-ratio controls 2-col grid
+  const promoGridClass = promoSplitRatio && promoSplitRatio.includes('/')
+    ? (() => {
+        const [a, b] = promoSplitRatio.split('/').map(Number);
+        return (!a || !b || isNaN(a) || isNaN(b))
+          ? 'grid-cols-1 md:grid-cols-2'
+          : `grid-cols-1 md:grid-cols-[${a}fr_${b}fr]`;
+      })()
+    : '';
 
   // Build base button style from content.style variant
   const btnBgOverride = section.style.buttonBackgroundColor;
@@ -1784,8 +2296,8 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
   const effectiveBtnBg = btnBgOverride || theme.colors.primary;
   const effectiveBtnText = btnTextOverride || contrastTextColor(effectiveBtnBg);
 
-  // VARIANT: --cta-button-variant overrides content.style
-  const effectiveBtnVariant = ctaButtonVariant || content.style || 'solid';
+  // VARIANT: --cta-button-variant overrides content.style, --promo-button-variant merges
+  const effectiveBtnVariant = ctaButtonVariant || promoButtonVariant || content.style || 'solid';
   const btnStyleMap = {
     solid: { backgroundColor: effectiveBtnBg, color: effectiveBtnText, border: 'none' },
     outline: { backgroundColor: 'transparent', color: effectiveBtnText, border: `2px solid ${effectiveBtnBg}` },
@@ -1798,21 +2310,86 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
   const btnStyle = btnStyleMap[effectiveBtnVariant] || btnStyleMap.solid;
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      {/* VARIANT: --promo-layout split shows 2-column layout */}
+      {isPromoSplit ? (
+        <div className={`mx-auto grid ${promoGridClass || 'grid-cols-1 md:grid-cols-2'} gap-8 items-center`}
+          style={{ maxWidth: variantMaxWidth || '48rem', padding: `${spacingPy} 2rem` }}
+        >
+          <div style={{ ...headlineStyle }}>
+            <h2 className="text-2xl font-bold sm:text-3xl" style={{
+              ...headingFontStyle(theme),
+              ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+              ...(v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') ? { fontSize: v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') } : {}),
+              ...(v('--sq-heading-lg-weight') ? { fontWeight: parseFloat(v('--sq-heading-lg-weight')) } : {}),
+            }}>
+              {content.headline}
+            </h2>
+            {content.body && (<p className="mt-3 text-sm opacity-65" style={bodyFontStyle}>{content.body}</p>)}
+            <button
+              className={`${borderRadius} mt-6 inline-flex items-center gap-2 px-8 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+              style={btnStyle}
+            >
+              {content.ctaText}
+              <ArrowRight className="h-4 w-4" />
+            </button>
+            {/* VARIANT: --promo-fine-print */}
+            {promoFinePrint === 'visible' && (<p className="mt-3 text-[10px] opacity-40">Terms and conditions apply. Offer valid while supplies last.</p>)}
+          </div>
+          {/* VARIANT: --promo-image-ratio placeholder image */}
+          <div className={`hidden md:block w-full overflow-hidden rounded-xl bg-gradient-to-br ${isHighContrast ? 'from-white/10 to-white/5' : 'from-primary/10 to-secondary/5'}`} style={{ aspectRatio: v('--promo-image-ratio') || '4/5' }} />
+        </div>
+      ) : (
       <div className={`mx-auto text-center`}
         style={{
-          backgroundColor: section.style.backgroundColor || theme.colors.surface,
+          backgroundColor: isHighContrast ? '#0f0f0f' : (section.style.backgroundColor || theme.colors.surface),
+          color: isHighContrast ? '#ffffff' : undefined,
           padding: `${spacingPy} 2rem`,
           borderRadius: theme.borderRadius === 'none' ? '0' : '1rem',
           maxWidth: variantMaxWidth || undefined,
           borderTop: urgencyBorder,
         }}
       >
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...headlineStyle, ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+        {/* VARIANT: --cta-proof-style avatar row */}
+        {isAvatarRow && (
+          <div className="mb-4 flex justify-center gap-1">
+            {['A', 'B', 'C', 'D'].map((initials, i) => (
+              <div
+                key={i}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[10px] font-semibold text-white border-2 border-background"
+                style={{ backgroundColor: ['#6366f1', '#8b5cf6', '#a855f7', '#c084fc'][i], zIndex: 4 - i }}
+              >{initials}</div>
+            ))}
+            <span className="ml-2 text-xs opacity-65 self-center">Loved by thousands</span>
+          </div>
+        )}
+        {/* VARIANT: --promo-sticker-shape and --promo-badge-size sticker badge */}
+        {isPromoSticker && content.headline && (
+          <div className={`mb-4 inline-flex items-center gap-2 rounded-full ${promoBadgePadding} font-bold`} style={{ backgroundColor: theme.colors.primary, color: contrastTextColor(theme.colors.primary), borderRadius: promoBadgeRadius }}>
+            {content.headline.slice(0, 20)}{content.headline.length > 20 ? '…' : ''}
+          </div>
+        )}
+        {/* VARIANT: --cta-urgency-level urgency badge */}
+        {isCtaUrgent && (
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold" style={{ backgroundColor: `${ctaUrgencyColor || '#dc2626'}15`, color: ctaUrgencyColor || '#dc2626' }}>
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75" style={{ backgroundColor: ctaUrgencyColor || '#dc2626' }} />
+              <span className="relative inline-flex h-2 w-2 rounded-full" style={{ backgroundColor: ctaUrgencyColor || '#dc2626' }} />
+            </span>
+            Don't Miss Out
+          </div>
+        )}
+        <h2 className="text-2xl font-bold sm:text-3xl" style={{
+          ...headingFontStyle(theme),
+          ...headlineStyle,
+          ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
+          ...(v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') ? { fontSize: v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') } : {}),
+          ...(v('--sq-heading-lg-weight') ? { fontWeight: parseFloat(v('--sq-heading-lg-weight')) } : {}),
+        }}>
           {content.headline}
         </h2>
         {content.body && (
-          <p className="mt-3 text-sm opacity-65">
+          <p className="mt-3 text-sm opacity-65" style={bodyFontStyle}>
             {content.body}
           </p>
         )}
@@ -1823,7 +2400,12 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
           {content.ctaText}
           <ArrowRight className="h-4 w-4" />
         </button>
+        {/* VARIANT: --promo-fine-print */}
+        {promoFinePrint === 'visible' && (<p className="mt-3 text-[10px] opacity-40">Terms and conditions apply. Offer valid while supplies last.</p>)}
+        {/* VARIANT: --promo-fine-print optional */}
+        {promoFinePrint === 'optional' && (<p className="mt-3 text-[10px] opacity-30">*Conditions apply</p>)}
       </div>
+      )}
     </SectionWrapper>
   );
 }
@@ -1843,7 +2425,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
   const effectiveColumns = catColumns ? gridCols(parseInt(catColumns, 10)) : gridCols(content.columns);
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       {content.headline && (
         <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
@@ -1971,7 +2553,7 @@ export function FooterSection({ section, theme, selectedSectionId, onSelectSecti
   const hasContact = content.contactInfo?.email || content.contactInfo?.phone || content.contactInfo?.address;
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       <div className="space-y-10">
         {/* Top row: Logo/Name + Tagline + Social + Contact */}
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
@@ -2118,9 +2700,43 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
   const brandSplitRatio = v('--brand-split-ratio');
   const brandTypePairing = v('--brand-type-pairing');
   const brandCaptionStyle = v('--brand-caption-style');
+  const brandImageBleed = v('--brand-image-bleed');
+  const brandCopyMeasure = v('--brand-copy-measure');
+  const brandPortraitVisible = v('--brand-portrait-visible');
+  const brandPortraitRatio = v('--brand-portrait-ratio');
+  const brandSignatureStyle = v('--brand-signature-style');
+  const brandSurface = v('--brand-surface');
+  const brandTimelineLineStyle = v('--brand-timeline-line-style');
+  const brandTimelineStepMarker = v('--brand-timeline-step-marker');
+  const brandTimelineAlternation = v('--brand-timeline-alternation');
+  const brandSurfaceAlternation = v('--brand-surface-alternation');
+  const brandTypeSystem = v('--brand-type-system');
+  const brandHeadingWeight = v('--brand-heading-weight');
 
   const hasBgImage = !!style.backgroundImage;
   const textColor = style.textColor || (hasBgImage ? '#ffffff' : theme.colors.text);
+
+  // VARIANT: --brand-image-bleed allows image to overflow
+  const isImageBleed = brandImageBleed === 'true';
+  // VARIANT: --brand-copy-measure controls text width
+  const copyMeasureStyle = brandCopyMeasure === 'narrow' ? { maxWidth: '20rem' } : {};
+  // VARIANT: --brand-portrait-visible shows portrait placeholder
+  const isPortraitVisible = brandPortraitVisible === 'true';
+  const portraitRatioStyle = brandPortraitRatio ? { aspectRatio: brandPortraitRatio } : {};
+  // VARIANT: --brand-signature-style shows signature text
+  const isSignatureScript = brandSignatureStyle === 'script';
+  // VARIANT: --brand-surface warm background
+  const surfaceStyle = brandSurface === 'warm' ? { backgroundColor: lightenHex(theme.colors.background, 0.02) || '#fafaf8' } : {};
+  // VARIANT: --brand-timeline-* controls timeline layout
+  const isTimeline = brandLayout === 'timeline';
+  const isTimelineSolid = brandTimelineLineStyle === 'solid';
+  const isTimelineDot = brandTimelineStepMarker === 'dot';
+  const isTimelineAlternate = brandTimelineAlternation === 'true';
+  const isSurfaceAlternate = brandSurfaceAlternation === 'true';
+  // VARIANT: --brand-type-system numbered
+  const isNumbered = brandTypeSystem === 'numbered';
+  // VARIANT: --brand-heading-weight
+  const brandWeightStyle = brandHeadingWeight ? { fontWeight: parseFloat(brandHeadingWeight) } : {};
 
   // Parse split ratio e.g. '5/7' → 'grid-cols-[5fr_7fr]'
   const parseSplitRatio = (ratio: string): string => {
@@ -2138,6 +2754,14 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
       : brandTypePairing === 'sans_sans'
         ? {}
         : headingFontStyle(theme);
+  // Merge heading weight override
+  Object.assign(brandHeadlineStyle, brandWeightStyle);
+
+  // Token-driven typography from design library
+  const tokenFontSize = v('--sq-heading-lg-font-size') || v('--sq-heading-xl-font-size');
+  const tokenLetterSpacing = v('--sq-heading-lg-letter-spacing') || v('--sq-heading-xl-letter-spacing');
+  const tokenLineHeight = v('--sq-heading-lg-line-height') || v('--sq-heading-xl-line-height');
+  const tokenFontWeight = v('--sq-heading-lg-weight');
 
   const isSplit = brandLayout === 'split';
   const isFull = brandLayout === 'full';
@@ -2153,6 +2777,10 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
           ...brandHeadlineStyle,
           textShadow: hasBgImage ? '0 2px 12px rgba(0,0,0,0.3)' : undefined,
           ...(style.headlineColor ? { color: style.headlineColor } : {}),
+          ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
+          ...(tokenLetterSpacing ? { letterSpacing: tokenLetterSpacing } : {}),
+          ...(tokenLineHeight ? { lineHeight: tokenLineHeight } : {}),
+          ...(tokenFontWeight ? { fontWeight: parseFloat(tokenFontWeight) } : {}),
         }}
       >
         {content.headline}
@@ -2163,10 +2791,25 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
           style={{
             textShadow: hasBgImage ? '0 1px 8px rgba(0,0,0,0.2)' : undefined,
             ...(content.alignment === 'center' && !isSplit && !isFull ? { marginLeft: 'auto', marginRight: 'auto' } : {}),
+            ...copyMeasureStyle,
           }}
         >
           {content.body}
         </p>
+      )}
+      {/* VARIANT: --brand-portrait-visible shows portrait */}
+      {isPortraitVisible && (
+        <div className="mt-6 inline-block" style={portraitRatioStyle}>
+          <div className="mx-auto h-24 w-24 rounded-full bg-gray-200/50" style={{ aspectRatio: brandPortraitRatio || '1/1' }} />
+        </div>
+      )}
+      {/* VARIANT: --brand-signature-style shows signature */}
+      {isSignatureScript && (
+        <p className="mt-4 text-lg italic opacity-40" style={{ fontFamily: 'cursive' }}>The Founder</p>
+      )}
+      {/* VARIANT: --brand-type-system numbered label */}
+      {isNumbered && (
+        <div className="mt-4 text-6xl font-extrabold opacity-10 tabular-nums">01</div>
       )}
     </>
   );
@@ -2174,7 +2817,7 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
   // Full-width layout: image with overlay text
   if (isFull) {
     return (
-      <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+      <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
         <div className="relative min-h-[280px] overflow-hidden">
           {hasBgImage && (
             <>
@@ -2199,14 +2842,58 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
     );
   }
 
+  // Timeline layout: vertical timeline with steps
+  if (isTimeline) {
+    const timelineSteps = content.body
+      ? content.body.split(/\n|\./).filter(s => s.trim().length > 10).slice(0, 4)
+      : ['Our founding mission', 'The craft behind every product', 'Sustainably sourced materials', 'A community of believers'];
+    return (
+      <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+        <div className="mx-auto max-w-2xl" style={surfaceStyle}>
+          <h2 className="mb-8 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl md:text-5xl" style={{
+            ...brandHeadlineStyle,
+            ...(style.headlineColor ? { color: style.headlineColor } : {}),
+            ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
+            ...(tokenLetterSpacing ? { letterSpacing: tokenLetterSpacing } : {}),
+            ...(tokenLineHeight ? { lineHeight: tokenLineHeight } : {}),
+            ...(tokenFontWeight ? { fontWeight: parseFloat(tokenFontWeight) } : {}),
+          }}>
+            {content.headline}
+          </h2>
+          <div className="relative">
+            {/* VARIANT: --brand-timeline-line-style */}
+            <div className="absolute left-4 top-0 bottom-0 w-px md:left-6" style={{ backgroundColor: isTimelineSolid ? theme.colors.border : 'transparent', backgroundImage: isTimelineSolid ? undefined : `repeating-linear-gradient(to bottom, ${theme.colors.border} 0px, ${theme.colors.border} 4px, transparent 4px, transparent 8px)` }} />
+            {timelineSteps.map((step, i) => (
+              <div key={i} className={`relative flex gap-4 md:gap-6 pb-8 ${isTimelineAlternate && i % 2 === 1 ? 'md:flex-row-reverse md:text-right' : ''}`} style={isSurfaceAlternate && i % 2 === 1 ? { backgroundColor: lightenHex(theme.colors.background, 0.01) || '#fafafa' } : undefined}>
+                {/* VARIANT: --brand-timeline-step-marker */}
+                <div className="relative z-10 mt-1 flex-shrink-0">
+                  {isTimelineDot ? (
+                    <div className="h-3 w-3 rounded-full" style={{ backgroundColor: theme.colors.primary }} />
+                  ) : (
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: theme.colors.primary }}>
+                      {i + 1}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 pt-px">
+                  <p className="text-sm leading-relaxed opacity-75">{step.trim()}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </SectionWrapper>
+    );
+  }
+
   // Split layout: 2-column grid (image left, text right)
   if (isSplit) {
     return (
-      <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+      <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
         <div className={`grid ${splitGridClass} gap-8 lg:gap-12 items-center`}>
           {/* Image column */}
           {hasBgImage && (
-            <div className="aspect-[4/3] w-full overflow-hidden">
+            <div className={`aspect-[4/3] w-full overflow-hidden ${isImageBleed ? '-ml-4 -mr-4 lg:-ml-8 lg:-mr-8' : ''}`}>
               <StoreImage
                 src={style.backgroundImage}
                 alt={content.headline}
@@ -2226,8 +2913,8 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
 
   // Default: centered layout
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
-      <div className={`flex min-h-[280px] flex-col items-center justify-center text-center`}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
+      <div className={`flex min-h-[280px] flex-col items-center justify-center text-center`} style={surfaceStyle}>
         {!hasBgImage && (
           <div className="absolute inset-0 bg-gradient-to-br from-black/10 to-black/30 pointer-events-none" />
         )}
@@ -2241,11 +2928,11 @@ export function BrandStatementSection({ section, theme, selectedSectionId, onSel
 
 // ─── 14. Rich Text ──────────────────────────────────────────────────────
 
-export function RichTextSection({ section, theme, selectedSectionId, onSelectSection }: SectionRendererProps) {
+export function RichTextSection({ section, theme, selectedSectionId, onSelectSection, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as RichTextContent;
 
   return (
-    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection}>
+    <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       <div
         className="prose prose-sm max-w-none sm:prose-base"
         dangerouslySetInnerHTML={{ __html: content.html }}
@@ -2356,6 +3043,12 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
       variantExtraClasses = config.extraClasses ?? '';
       variantCardStyle = config.cardStyle;
     }
+  }
+
+  // Merge rhythm CSS vars from visual rhythm engine (set via section.style._rhythmCssVars)
+  const rhythmVars = (effectiveSection.style as Record<string, unknown>)?._rhythmCssVars as Record<string, string> | undefined;
+  if (rhythmVars) {
+    variantCssVars = { ...variantCssVars, ...rhythmVars };
   }
 
   // Build effective props with the merged section + variant metadata

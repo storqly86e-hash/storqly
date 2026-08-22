@@ -355,6 +355,25 @@ export interface Store {
     typographySystem?: string;
     /** Density preset selected (e.g. 'airy', 'balanced', 'compact') */
     densityPreset?: string;
+    /** Full composition result including token CSS vars and visual rhythm.
+     *  Saved during generation so the renderer can consume design tokens
+     *  and per-section rhythm without recomputation. */
+    compositionResult?: {
+      /** Resolved design token CSS vars (--sq-font-heading, --sq-heading-lg-*, etc.) */
+      tokenCssVars?: Record<string, string>;
+      /** Per-section visual rhythm configs */
+      sectionRhythm?: Array<{
+        nodeIndex: number;
+        rhythmConfig: {
+          density: string;
+          surfaceStyle: string;
+          contentWidth: string;
+          verticalSpacing: string;
+          visualWeight: string;
+        };
+        rhythmCssVars: Record<string, string>;
+      }>;
+    };
   };
 }
 

@@ -270,6 +270,12 @@ export function validateAndFixComponentMeta(
       recipe: compositionCtx.recipeId,
       typographySystem: compositionCtx.typographySystem,
       densityPreset: compositionCtx.densityPreset,
+      // Include compositionResult so the renderer can consume
+      // design tokens and per-section visual rhythm.
+      compositionResult: {
+        tokenCssVars: compositionCtx.tokenCssVars,
+        sectionRhythm: compositionCtx.sectionRhythm,
+      },
     };
   }
 

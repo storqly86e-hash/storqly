@@ -24,6 +24,9 @@ import { buildLibraryPromptContext, buildHeroLibraryBlock, buildImageArtDirectio
 import { getVariantMapping } from '@/lib/design-library/variant-mapping';
 import { validateAndFixComponentMeta } from '@/lib/design-library/componentmeta-validator';
 import { bridgeSectionStyles } from '@/lib/design-library/style-bridge';
+import { validateStoreQuality } from '@/lib/design-library/quality-guardrails';
+import { detectGenericity } from '@/lib/design-library/genericity-detector';
+import { attemptAutoRepair } from '@/lib/design-library/auto-repair';
 import type { ComponentMeta } from '@/lib/store-schema';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
@@ -759,6 +762,25 @@ export async function POST(req: NextRequest) {
               section.content.productIds = validIds;
             }
           }
+        }
+
+        // ── Quality guardrails + genericity detection + auto-repair ──
+        try {
+          const qualityReport = validateStoreQuality(store);
+          const genericityReport = detectGenericity(store);
+          log(`[Store Generate] Quality: ${qualityReport.status} (score=${qualityReport.overallScore.toFixed(2)}, violations=${qualityReport.violations.length}). Genericity: ${genericityReport.status} (score=${genericityReport.genericityScore.toFixed(2)})`);
+
+          if (qualityReport.status === 'FAIL' || genericityReport.status === 'REJECT') {
+            log(`[Store Generate] Attempting auto-repair...`);
+            const repairResult = await attemptAutoRepair(store, sanitizedPrompt);
+            store = repairResult.store;
+            log(`[Store Generate] Repair: ${repairResult.repaired ? 'SUCCESS' : 'BEST_EFFORT'} (${repairResult.attempts} attempts, actions: ${repairResult.repairActions.join(', ') || 'none'})`);
+            log(`[Store Generate] Post-repair quality: ${repairResult.qualityReport.status} (score=${repairResult.qualityReport.overallScore.toFixed(2)}). Genericity: ${repairResult.genericityReport.status} (score=${repairResult.genericityReport.genericityScore.toFixed(2)})`);
+          } else if (qualityReport.status === 'WARN') {
+            log(`[Store Generate] Quality WARN — ${qualityReport.violations.filter(v => v.severity === 'warning').map(v => v.rule).join(', ')}`);
+          }
+        } catch (guardErr) {
+          warn(`[Store Generate] Quality guardrails error (non-fatal): ${guardErr instanceof Error ? guardErr.message : String(guardErr)}`);
         }
 
         // ── Final result ──

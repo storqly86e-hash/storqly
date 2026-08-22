@@ -423,6 +423,11 @@ export function StoreRenderer({
 
   const theme = store.theme;
   const products = store.products;
+
+  // Token-driven CSS vars from design library composition engine
+  const tokenCssVars = (store.designLibrary as any)?.compositionResult?.tokenCssVars as Record<string, string> | undefined;
+  // Per-section visual rhythm CSS vars
+  const sectionRhythmArr = (store.designLibrary as any)?.compositionResult?.sectionRhythm as Array<{ nodeIndex: number; rhythmConfig: unknown; rhythmCssVars: Record<string, string> }> | undefined;
   const cartCount = useCartStore((s) => s.getItemCount());
 
   // Merge store pages with dynamic product pages
@@ -498,8 +503,8 @@ export function StoreRenderer({
   }
 
   // GAP 6: Resolve typography + density CSS variables from design library
-  const typoDensityVars = resolveTypographyDensity(store);
-  const hasTypoDensityVars = Object.keys(typoDensityVars).length > 0;
+  // Use tokenCssVars when available (from composition engine), fallback to legacy resolver
+  const typoDensityVars = tokenCssVars ? {} : resolveTypographyDensity(store);
 
   // Merge typography/density vars into the base theme style.
   // Typography system vars override the theme font when set.
@@ -518,8 +523,12 @@ export function StoreRenderer({
     '--sq-font-heading': theme.fonts.heading ? `"${theme.fonts.heading}", system-ui, sans-serif` : undefined,
     '--sq-font-body': theme.fonts.body ? `"${theme.fonts.body}", system-ui, sans-serif` : undefined,
   };
-  // Typography/density vars take precedence (e.g. --sq-font-heading from editorial_serif_sans)
-  if (hasTypoDensityVars) {
+  // Merge token CSS vars from composition engine (tokenCssVars) or legacy typography/density vars
+  if (tokenCssVars) {
+    Object.entries(tokenCssVars).forEach(([key, value]) => {
+      baseStyle[key] = value;
+    });
+  } else {
     Object.entries(typoDensityVars).forEach(([key, value]) => {
       baseStyle[key] = value;
     });
@@ -550,20 +559,32 @@ export function StoreRenderer({
           />
         ) : (
           <>
-            {body.map((section) => (
-              <Fragment key={section.id}>
-                {renderSection({
-                  section,
-                  theme,
-                  selectedSectionId,
-                  onSelectSection,
-                  products,
-                  onViewProduct: handleHomeCardClick,
-                  onNavigate: handleNavigate,
-                  forceHideAddToCart: true,
-                })}
-              </Fragment>
-            ))}
+            {body.map((section, index) => {
+              // Find matching rhythm entry for this section by body index
+              const rhythmEntry = sectionRhythmArr?.find(r => r.nodeIndex === index);
+              const rhythmVars = rhythmEntry?.rhythmCssVars;
+              // Merge rhythm CSS vars into section.style so renderSection can pick them up
+              const sectionForRender = rhythmVars && Object.keys(rhythmVars).length > 0
+                ? {
+                    ...section,
+                    style: { ...section.style, _rhythmCssVars: rhythmVars },
+                  }
+                : section;
+              return (
+                <Fragment key={section.id}>
+                  {renderSection({
+                    section: sectionForRender,
+                    theme,
+                    selectedSectionId,
+                    onSelectSection,
+                    products,
+                    onViewProduct: handleHomeCardClick,
+                    onNavigate: handleNavigate,
+                    forceHideAddToCart: true,
+                  })}
+                </Fragment>
+              );
+            })}
             {body.length === 0 && (
               <div className="flex items-center justify-center py-32">
                 <div className="text-center">

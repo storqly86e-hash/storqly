@@ -52,6 +52,54 @@ export function buildLibraryPromptContext(ctx: CompositionResult): string {
     lines.push('');
   }
 
+  // ── Design tokens & visual rhythm ────────────────
+  if (ctx.tokenCssVars && Object.keys(ctx.tokenCssVars).length > 0) {
+    lines.push('## Design Tokens & Visual Rhythm');
+    lines.push(`Typography system: ${ctx.typographySystem}, Density preset: ${ctx.densityPreset}`);
+
+    // Summarize type scale tokens
+    const typeVars = Object.entries(ctx.tokenCssVars)
+      .filter(([k]) => k.startsWith('--sq-type-') && k.endsWith('-font-size'))
+      .map(([k, v]) => `  ${k}: ${v}`);
+    if (typeVars.length > 0) {
+      lines.push('Resolved type scale (font sizes):');
+      lines.push(typeVars.join('\n'));
+    }
+
+    // Summarize font families
+    const fontVars = Object.entries(ctx.tokenCssVars)
+      .filter(([k]) => k.startsWith('--sq-font-'));
+    if (fontVars.length > 0) {
+      lines.push('Font families:');
+      lines.push(fontVars.map(([k, v]) => `  ${k}: ${v}`).join('\n'));
+    }
+
+    // Summarize spacing
+    const spacingVars = Object.entries(ctx.tokenCssVars)
+      .filter(([k]) => k.startsWith('--sq-spacing-'));
+    if (spacingVars.length > 0) {
+      lines.push('Spacing:');
+      lines.push(spacingVars.map(([k, v]) => `  ${k}: ${v}`).join('\n'));
+    }
+
+    lines.push('');
+  }
+
+  if (ctx.sectionRhythm && ctx.sectionRhythm.length > 0) {
+    if (!ctx.tokenCssVars || Object.keys(ctx.tokenCssVars).length === 0) {
+      lines.push('## Visual Rhythm Plan');
+    }
+    lines.push('Per-section rhythm (follow these when writing section content):');
+    for (const sr of ctx.sectionRhythm) {
+      const node = ctx.nodes[sr.nodeIndex];
+      const label = node ? `${node.component_id}` : `section ${sr.nodeIndex}`;
+      lines.push(`  ${sr.nodeIndex + 1}. ${label}`);
+      lines.push(`     density: ${sr.rhythmConfig.density}, surface: ${sr.rhythmConfig.surfaceStyle}, width: ${sr.rhythmConfig.contentWidth}, weight: ${sr.rhythmConfig.visualWeight}`);
+      lines.push(`     vertical spacing: ${sr.rhythmConfig.verticalSpacing}`);
+    }
+    lines.push('');
+  }
+
   // ── GAP 1: componentMeta instructions ────────────
   lines.push('## CRITICAL: componentMeta on Every Section');
   lines.push('Each section object MUST include a componentMeta field with valid library IDs.');
