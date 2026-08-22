@@ -634,6 +634,14 @@ export async function streamOpenRouter(
 
 // ─── Google AI Studio / Gemini Provider (secondary, if key available) ──
 
+const GEMINI_MODELS = [
+  'gemini-2.0-flash',
+  'gemini-2.5-flash-preview-05-20',
+  'gemini-2.5-flash',
+  'gemini-1.5-flash',
+  'gemini-2.5-pro-preview-05-06',
+];
+
 class GeminiProvider implements AIProvider {
   readonly name = 'gemini';
   private client: GoogleGenAI | null = null;
@@ -676,20 +684,35 @@ class GeminiProvider implements AIProvider {
     if (temperature !== undefined) config.temperature = temperature;
     if (maxTokens) config.maxOutputTokens = maxTokens;
 
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: geminiContents,
-        ...(Object.keys(config).length > 0 ? { config } : {}),
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), timeout)
-      ),
-    ]);
-
-    const content = response.text;
-    if (!content || content.trim().length === 0) throw new Error('Empty response');
-    return content.trim();
+    // Try multiple Gemini models (Google deprecates/renames models frequently)
+    let lastError: unknown = null;
+    for (const model of GEMINI_MODELS) {
+      try {
+        const response = await Promise.race([
+          ai.models.generateContent({
+            model,
+            contents: geminiContents,
+            ...(Object.keys(config).length > 0 ? { config } : {}),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
+        const content = response.text;
+        if (!content || content.trim().length === 0) throw new Error('Empty response');
+        return content.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        lastError = err;
+        // If model not found (404), try next model
+        if (msg.includes('404') || msg.includes('not found') || msg.includes('NOT_FOUND')) {
+          console.warn('[Gemini] Model ' + model + ' not found, trying next...');
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError || new Error('Gemini: all models exhausted');
   }
 
   reset() {
@@ -729,28 +752,43 @@ export async function streamGemini(
   try {
     const ai = new GoogleGenAI({ apiKey, googleAuthOptions: { scopes: [] } });
 
-    const response = await Promise.race([
-      ai.models.generateContentStream({
-        model: 'gemini-2.0-flash',
-        contents: geminiContents,
-        config,
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Request timed out')), timeout)
-      ),
-    ]);
+    // Try multiple Gemini models for streaming
+    for (const model of GEMINI_MODELS) {
+      try {
+        const response = await Promise.race([
+          ai.models.generateContentStream({
+            model,
+            contents: geminiContents,
+            config,
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
 
-    let fullContent = '';
-    for await (const chunk of response) {
-      if (signal?.aborted) return null;
-      const text = chunk.text;
-      if (text) {
-        fullContent += text;
-        onDelta(text);
+        let fullContent = '';
+        for await (const chunk of response) {
+          if (signal?.aborted) return null;
+          const text = chunk.text;
+          if (text) {
+            fullContent += text;
+            onDelta(text);
+          }
+        }
+
+        return fullContent.trim() || null;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes('404') || msg.includes('not found') || msg.includes('NOT_FOUND')) {
+          console.warn('[Gemini Stream] Model ' + model + ' not found, trying next...');
+          continue;
+        }
+        if (signal?.aborted) return null;
+        console.error('[Gemini Stream] Error with ' + model + ': ' + msg);
+        return null;
       }
     }
-
-    return fullContent.trim() || null;
+    return null;
   } catch (err: unknown) {
     if (signal?.aborted) return null;
     const msg = err instanceof Error ? err.message : String(err);

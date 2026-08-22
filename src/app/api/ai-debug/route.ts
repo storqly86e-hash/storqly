@@ -12,7 +12,7 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
 const GLM_DEFAULT_MODEL = 'glm-4.5-air';
-const FINGERPRINT = 'v13-gemini-aq-prefix-2026-08-22';
+const FINGERPRINT = 'v14-gemini-model-fallback-2026-08-22';
 
 function analyzeGLMKey(value: string | undefined) {
   if (!value || value === 'placeholder') return { format: 'NOT_SET', isValid: false, advice: 'Not configured. Get a free key at https://open.bigmodel.cn' };
