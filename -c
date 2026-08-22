@@ -1,0 +1,16 @@
+HTTP/2 200 
+cache-control: private, no-cache, no-store
+content-security-policy: frame-ancestors *
+content-type: application/json
+date: Sat, 22 Aug 2026 08:37:39 GMT
+expires: 0
+pragma: no-cache
+server: railway-hikari
+set-cookie: __Host-next-auth.csrf-token=47ca8423a5cfed89b2fd207f65ba4a8ebec616c43c3f9afb9c8355958859a16c%7C79c21bf30b8d19e57bb77c64719d5943b3bfd5f1c24382e52948d47fe9d25e97; Path=/; HttpOnly; Secure; SameSite=Lax
+set-cookie: __Secure-next-auth.callback-url=https%3A%2F%2Fstorqly-production-c2a0.up.railway.app; Path=/; HttpOnly; Secure; SameSite=Lax
+vary: rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch
+x-frame-options: ALLOWALL
+x-railway-request-id: 5TCOk30hSSamYqKV21mRUA
+x-railway-edge: hkg1
+x-hikari-trace: hkg1.hn7d
+
