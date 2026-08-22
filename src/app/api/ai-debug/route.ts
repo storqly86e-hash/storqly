@@ -11,7 +11,7 @@ import { getProviders, getProviderDiagnostics, isZAiLoaded } from '@/lib/ai-prov
 const GEMINI_MODEL = 'gemini-2.0-flash';
 const GEMINI_SDK = '@google/genai';
 const ZAI_EXCLUDED_IN_PROD = true;
-const OPENROUTER_DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324:free';
+const OPENROUTER_DEFAULT_MODEL = 'deepseek/deepseek-chat-v3-0324';
 const FINGERPRINT = 'v9-openrouter-added-2026-08-21';
 
 function analyzeKey(value: string | undefined, name: string) {

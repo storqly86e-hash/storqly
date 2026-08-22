@@ -48,7 +48,7 @@ function checkByFormat(): ProviderStatus[] {
         ok: true,
         latencyMs: Date.now() - start,
         method: 'format',
-        model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3-0324:free',
+        model: process.env.OPENROUTER_MODEL || 'deepseek/deepseek-chat-v3-0324',
       });
     } else {
       results.push({

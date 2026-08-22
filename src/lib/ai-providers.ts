@@ -151,20 +151,21 @@ class ZAIProvider implements AIProvider {
 }
 
 // ─── OpenRouter Provider (Production primary — free tier) ──────────
-// Uses OpenRouter's OpenAI-compatible API.
-// Free models (no billing required): deepseek/deepseek-chat-v3-0324:free
-// API key: free from https://openrouter.ai/keys (format: sk-or-v1-...)
+// OpenRouter's OpenAI-compatible API.
+// Default model: deepseek/deepseek-chat-v3-0324 (structured JSON, fast).
+// API key: from https://openrouter.ai/keys (format: sk-or-v1-...)
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-// Default model: DeepSeek V3 — excellent at structured JSON, free tier
-const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-chat-v3-0324:free';
+// Default model: DeepSeek V3 — excellent at structured JSON.
+// NOTE: Do NOT append ':free' suffix — those slugs return 404.
+const DEFAULT_OPENROUTER_MODEL = 'deepseek/deepseek-chat-v3-0324';
 
-// Fallback free models if primary is unavailable
+// Fallback models if primary is unavailable (no ':free' suffix — those slugs return 404)
 const OPENROUTER_FALLBACK_MODELS = [
-  'google/gemma-3-27b-it:free',
-  'meta-llama/llama-4-maverick:free',
-  'qwen/qwen3-235b-a22b:free',
+  'google/gemma-3-27b-it',
+  'meta-llama/llama-4-maverick',
+  'qwen/qwen3-235b-a22b',
 ];
 
 class OpenRouterProvider implements AIProvider {
