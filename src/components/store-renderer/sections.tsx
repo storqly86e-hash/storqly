@@ -721,6 +721,10 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const productTreatment = content.productTreatment || 'floating';
   const badgeStyle = content.badgeStyle || 'outlined';
 
+  // ── Theme colors (used throughout — declared early to avoid TDZ) ──
+  const primaryColor = theme.colors.primary;
+  const accentColor = theme.colors.accent;
+
   // ── Variant CSS variable consumption (Design Library) ──
   // Safe reads with fallback to current hardcoded defaults.
   const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
@@ -879,8 +883,8 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
   const textColor = heroContrastMode === 'dark'
     ? (style.textColor || '#ffffff')
     : (style.textColor || '#ffffff');
-  const primaryColor = theme.colors.primary;
-  const accentColor = theme.colors.accent;
+  // primaryColor & accentColor are declared at the top of HeroSection (line ~724)
+  // to avoid TDZ errors when referenced by variant CSS var logic above.
   const headlineColor = style.headlineColor || undefined;
 
   // CTA button colors (theme-consistent instead of always white)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { useSession } from 'next-auth/react'
@@ -1542,7 +1542,7 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
 
 // ─── Page Root ────────────────────────────────────────────────────────
 
-export default function Home() {
+function HomePage() {
   const view = useStoreEditor((s) => s.view)
   const searchParams = useSearchParams()
   const storeSlug = searchParams.get('store')
@@ -1573,5 +1573,28 @@ export default function Home() {
       </main>
       <Toaster />
     </>
+  )
+}
+
+// ─── Exported Page Root (wrapped in Suspense for useSearchParams) ────
+// useSearchParams() must be within a <Suspense> boundary to avoid
+// hydration mismatches. See: https://nextjs.org/docs/app/api-reference/functions/use-search-params
+
+export default function Home() {
+  return (
+    <Suspense fallback={<HomePageSkeleton />}>
+      <HomePage />
+    </Suspense>
+  )
+}
+
+/** Minimal skeleton shown while searchParams are resolving */
+function HomePageSkeleton() {
+  return (
+    <main className="min-h-screen flex flex-col bg-[#09090b] text-white">
+      <div className="flex-1 flex items-center justify-center">
+        <p className="text-sm text-zinc-500">Loading...</p>
+      </div>
+    </main>
   )
 }

@@ -28,6 +28,7 @@ import { validateStoreQuality } from '@/lib/design-library/quality-guardrails';
 import { detectGenericity } from '@/lib/design-library/genericity-detector';
 import { attemptAutoRepair } from '@/lib/design-library/auto-repair';
 import type { ComponentMeta } from '@/lib/store-schema';
+import { logGeneration } from '@/lib/logger';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -548,6 +549,8 @@ export async function POST(req: NextRequest) {
           log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
         }
 
+        logGeneration({ event: 'generation_started', details: { prompt_length: sanitizedPrompt.length, product_count: requestedCount } });
+
         if (elapsed() > TOTAL_TIME_BUDGET_MS) {
           warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms).`);
           send('error', { message: 'Generation timed out before AI could respond. Please try again.' });
@@ -593,6 +596,7 @@ export async function POST(req: NextRequest) {
           maxRetries: 3,
           responseFormat: 'json_object',
           enableThinking: true,
+          maxTokens: 16000,
         });
 
         if (!phase1Result.success || !phase1Result.content) {
@@ -608,6 +612,16 @@ export async function POST(req: NextRequest) {
 
         // ── Parse JSON ──
         send('progress', { stage: 'parsing', message: 'Processing store data...' });
+
+        // Guard against oversized AI responses (potential OOM vector)
+        const MAX_RESPONSE_CHARS = 500_000; // ~125K tokens — well above any reasonable store
+        if (phase1Result.content.length > MAX_RESPONSE_CHARS) {
+          logErr(`[Store Generate] Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
+          logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { reason: 'response_too_large', size: phase1Result.content.length } });
+          send('error', { message: 'AI response was too large. Please try again with a simpler prompt.' });
+          return;
+        }
+
         let parsed: unknown;
         try {
           parsed = JSON.parse(phase1Result.content);
@@ -622,6 +636,7 @@ export async function POST(req: NextRequest) {
 
         if (!normResult) {
           warn(`[Store Generate] normalizeStore returned null.`);
+          logGeneration({ event: 'normalization_failed', duration_ms: elapsed(), details: { reason: 'normalizeStore returned null' } });
           send('error', { message: 'AI response could not be processed into a valid store. Please try again.' });
           return;
         }
@@ -647,6 +662,9 @@ export async function POST(req: NextRequest) {
           if (vr.fixedMeta > 0 || vr.errors.length > 0) {
             log(`[Store Generate] componentMeta validation: ${vr.validMeta} valid, ${vr.fixedMeta} fixed, ${vr.attachedMissingMeta} attached, ${vr.errors.length} errors`);
             for (const e of vr.errors) log(`  [componentMeta] ${e}`);
+            if (vr.errors.length > 0) {
+              logGeneration({ event: 'validation_failed', duration_ms: elapsed(), details: { valid: vr.validMeta, fixed: vr.fixedMeta, errors: vr.errors.length } });
+            }
           } else {
             log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
           }
@@ -765,16 +783,24 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Quality guardrails + genericity detection + auto-repair ──
+        let finalQualityScore = 0;
         try {
           const qualityReport = validateStoreQuality(store);
           const genericityReport = detectGenericity(store);
+          finalQualityScore = qualityReport.overallScore;
           log(`[Store Generate] Quality: ${qualityReport.status} (score=${qualityReport.overallScore.toFixed(2)}, violations=${qualityReport.violations.length}). Genericity: ${genericityReport.status} (score=${genericityReport.genericityScore.toFixed(2)})`);
+
+          if (genericityReport.status === 'REJECT') {
+            logGeneration({ event: 'genericity_rejected', duration_ms: elapsed(), details: { score: genericityReport.genericityScore } });
+          }
 
           if (qualityReport.status === 'FAIL' || genericityReport.status === 'REJECT') {
             log(`[Store Generate] Attempting auto-repair...`);
+            logGeneration({ event: 'auto_repair_started', duration_ms: elapsed(), details: { quality_status: qualityReport.status, genericity_status: genericityReport.status, quality_score: qualityReport.overallScore, genericity_score: genericityReport.genericityScore, attempt: 1 } });
             const repairResult = await attemptAutoRepair(store, sanitizedPrompt);
             store = repairResult.store;
             log(`[Store Generate] Repair: ${repairResult.repaired ? 'SUCCESS' : 'BEST_EFFORT'} (${repairResult.attempts} attempts, actions: ${repairResult.repairActions.join(', ') || 'none'})`);
+            logGeneration({ event: 'auto_repair_completed', duration_ms: elapsed(), details: { succeeded: repairResult.repaired, attempts: repairResult.attempts, actions: repairResult.repairActions } });
             log(`[Store Generate] Post-repair quality: ${repairResult.qualityReport.status} (score=${repairResult.qualityReport.overallScore.toFixed(2)}). Genericity: ${repairResult.genericityReport.status} (score=${repairResult.genericityReport.genericityScore.toFixed(2)})`);
           } else if (qualityReport.status === 'WARN') {
             log(`[Store Generate] Quality WARN — ${qualityReport.violations.filter(v => v.severity === 'warning').map(v => v.rule).join(', ')}`);
@@ -786,6 +812,7 @@ export async function POST(req: NextRequest) {
         // ── Final result ──
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
         log(`[Store Generate] Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+        logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
 
         send('result', {
           store,
@@ -794,9 +821,11 @@ export async function POST(req: NextRequest) {
           _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
           _generatedCount: store.products.length,
         });
+        logGeneration({ event: 'store_saved', storeId: store.id, duration_ms: elapsed() });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         logErr(`[Store Generate] Unexpected error after ${elapsed()}ms:`, msg);
+        logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
         send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
       } finally {
         clearInterval(heartbeat);
