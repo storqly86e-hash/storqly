@@ -580,11 +580,6 @@ function LandingPage() {
                   return
                 }
                 console.log('[Storqly] Store generated via SSE. name:', data.store.name, 'products:', data.store.products?.length)
-                // TEMP DIAG: log pages and hero sections
-                for (const p of (data.store.pages || [])) {
-                  const heroSec = p.sections?.find((s: any) => s.type === 'hero')
-                  console.log(`[DIAG] Page: ${p.name} type=${p.type} isHome=${p.isHomepage} sections=${p.sections?.length} hero=${!!heroSec} heroImages=${heroSec?.content?.heroImages?.length || 0} bgImg=${heroSec?.style?.backgroundImage?.substring(0, 60) || 'none'}`)
-                }
                 resolved = true
 
                 setStore(data.store)

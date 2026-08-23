@@ -939,6 +939,15 @@ export async function POST(req: NextRequest) {
               }
             }
           }
+          // Step 3: Ensure hero is FIRST non-chrome visible section (after header)
+          const bodySections = homepage.sections.filter(s => s.type !== 'header' && s.type !== 'footer' && s.type !== 'spacer' && s.type !== 'divider' && s.visible !== false);
+          const firstBodyIdx = homepage.sections.indexOf(bodySections[0]);
+          const heroIdx = homepage.sections.findIndex(s => s.type === 'hero' && s.visible !== false);
+          if (heroIdx > 0 && firstBodyIdx >= 0 && heroIdx !== firstBodyIdx) {
+            const [hero] = homepage.sections.splice(heroIdx, 1);
+            homepage.sections.splice(firstBodyIdx, 0, hero);
+            log(`[Store Generate] Hero guarantee: moved hero from index ${heroIdx} to ${firstBodyIdx} (first position)`);
+          }
         } catch (heroErr) {
           warn(`[Store Generate] Hero guarantee error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
         }
