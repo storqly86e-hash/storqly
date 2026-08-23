@@ -15,8 +15,17 @@
 //   3. Theme-aware CSS variables and utility classes
 
 import { getVariantMapping } from './variant-mapping'
-import { getLibraryMetadata } from './loader'
+import { getLibraryMetadata, registerLibraryComponents } from './loader'
 import type { Section, StoreTheme } from '@/lib/store-schema'
+
+// Ensure design library metadata is available on first client-side use.
+// This populates the libraryMetadata Map so getLibraryMetadata() returns
+// real data instead of undefined. The JSON data is already bundled by
+// webpack via static imports in loader.ts.
+let _clientLibraryReady = false;
+if (typeof window !== 'undefined' && !_clientLibraryReady) {
+  try { registerLibraryComponents(); _clientLibraryReady = true; } catch { /* non-fatal */ }
+}
 
 // ── Public types ───────────────────────────────────────────
 

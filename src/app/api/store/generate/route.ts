@@ -313,14 +313,24 @@ function getProductGuidance(category: string) {
   return DEFAULT_PRODUCT_GUIDANCE;
 }
 
+function pickProductCategory(keys: string[]): string {
+  const lower = keys.join(' ').toLowerCase();
+  for (const [cat, ] of Object.entries(PRODUCT_URLS)) {
+    const catParts = cat.split('/');
+    if (catParts.some(p => lower.includes(p))) return cat;
+  }
+  return 'general';
+}
+
 // ─── Phase 1 System Prompt (SUPERCHARGED for complex stores) ──
 
 function buildPhase1SystemPrompt(productCount: number, userPrompt: string): string {
   const promptWords = userPrompt.toLowerCase();
-  const category = pickCategory([promptWords]);
-  const heroUrls = HERO_URLS[category] || HERO_URLS['general/lifestyle'];
-  const productUrls = PRODUCT_URLS[category] || PRODUCT_URLS['general'];
-  const guidance = getProductGuidance(category);
+  const heroCategory = pickCategory([promptWords]);
+  const productCategory = pickProductCategory([promptWords]);
+  const heroUrls = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+  const productUrls = PRODUCT_URLS[productCategory] || PRODUCT_URLS['general'];
+  const guidance = getProductGuidance(heroCategory);
 
   // Detect complexity signals from the prompt
   const isComplex = (
