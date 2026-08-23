@@ -329,13 +329,19 @@ function LandingPage() {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [aiStatus, setAiStatus] = useState<{ anyWorking: boolean; providers: Array<{ name: string; ok: boolean; error?: string }> } | null>(null)
+  const [dbAvailable, setDbAvailable] = useState(true)
 
-  // Check AI provider status once on mount
+  // Check AI provider status and DB health once on mount
   useEffect(() => {
-    fetch('/api/ai-status')
-      .then(r => r.json())
-      .then(data => setAiStatus(data))
-      .catch(() => { /* silently fail — status is informational */ })
+    Promise.all([
+      fetch('/api/ai-status').then(r => r.json()).catch(() => null),
+      fetch('/api/health').then(r => r.json()).catch(() => null),
+    ]).then(([aiData, healthData]) => {
+      if (aiData) setAiStatus(aiData)
+      if (healthData && typeof healthData.database?.ok === 'boolean') {
+        setDbAvailable(healthData.database.ok)
+      }
+    })
   }, [])
 
   const clearTimers = useCallback(() => {
@@ -404,7 +410,9 @@ function LandingPage() {
     }
 
     // Auth gate — block generation for logged-out users (show modal instead)
-    if (!session?.user?.id) {
+    // Exception: when database is unavailable, allow anonymous generation
+    // (backend also allows this in degraded mode)
+    if (!session?.user?.id && dbAvailable) {
       setAuthOpen(true)
       return
     }
@@ -639,7 +647,7 @@ function LandingPage() {
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
-  }, [promptText, session, setIsGenerating, setStore, clearTimers, setAuthOpen])
+  }, [promptText, session, setIsGenerating, setStore, clearTimers, setAuthOpen, dbAvailable])
 
   // Cleanup on unmount
   useEffect(() => {
