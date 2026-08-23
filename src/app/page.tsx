@@ -409,13 +409,12 @@ function LandingPage() {
       return
     }
 
-    // Auth gate — block generation for logged-out users (show modal instead)
-    // Exception: when database is unavailable, allow anonymous generation
-    // (backend also allows this in degraded mode)
-    if (!session?.user?.id && dbAvailable) {
-      setAuthOpen(true)
-      return
-    }
+    // Auth gate disabled — backend allows anonymous generation
+    // TODO: re-enable when user accounts are set up
+    // if (!session?.user?.id && dbAvailable) {
+    //   setAuthOpen(true)
+    //   return
+    // }
 
     // Reset state
     setError(null)
