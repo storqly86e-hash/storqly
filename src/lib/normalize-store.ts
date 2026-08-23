@@ -616,12 +616,26 @@ function stripJunkPages(store: Store, log: ReturnType<typeof createLogger>): voi
   }
 }
 
-/** Ensure at least one page is marked as homepage */
+/** Ensure at least one page is marked as homepage with correct type */
 function ensureHomepage(store: Store, log: ReturnType<typeof createLogger>): void {
   const hasHomepage = store.pages.some((p) => p.isHomepage);
   if (!hasHomepage && store.pages.length > 0) {
     store.pages[0].isHomepage = true;
+    // CRITICAL: Force type to 'home' so StoreRenderer renders sections.
+    // Without this, a page named 'Shop' gets type='collection' and
+    // all sections (including hero) are hidden.
+    if (store.pages[0].type !== 'home') {
+      log.log({ field: 'pages[0].type', action: 'coerced', from: store.pages[0].type || 'undefined', to: 'home' });
+      store.pages[0].type = 'home';
+    }
     log.log({ field: 'pages[0].isHomepage', action: 'defaulted', from: false, to: true });
+  } else if (hasHomepage) {
+    // Even if isHomepage was set, ensure the type is correct
+    const hp = store.pages.find(p => p.isHomepage);
+    if (hp && hp.type !== 'home') {
+      log.log({ field: 'homepage.type', action: 'coerced', from: hp.type, to: 'home' });
+      hp.type = 'home';
+    }
   }
 }
 
