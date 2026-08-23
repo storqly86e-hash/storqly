@@ -72,6 +72,8 @@ const HERO_URLS: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=1400',
     'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=1400',
     'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=1400',
+    'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=1400',
+    'https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=1400',
   ],
   'food/coffee/bakery': [
     'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
@@ -157,6 +159,12 @@ const PRODUCT_URLS: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=600',
     'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=600',
     'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=600',
+    'https://images.unsplash.com/photo-1605100804763-247f67b3557e?w=600',
+    'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=600',
+    'https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=600',
+    'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=600',
+    'https://images.unsplash.com/photo-1576022162028-3a434f67e5e0?w=600',
+    'https://images.unsplash.com/photo-1617038260897-41a1f14a8ca0?w=600',
   ],
   'food/coffee': [
     'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
@@ -210,6 +218,101 @@ function formatUrlsForPrompt(urls: string[]): string {
   return urls.map((u, i) => `  URL ${i+1}: ${u}`).join('\n');
 }
 
+// ─── Category-specific product examples & forbidden items ──
+
+const CATEGORY_PRODUCT_GUIDANCE: Record<string, { examples: string[]; forbidden: string[]; categoryHint: string }> = {
+  'skincare/beauty/spa': {
+    categoryHint: 'skincare, beauty, cosmetics, spa products',
+    examples: ['Hydrating Rose Serum', 'Vitamin C Brightening Cream', 'Retinol Night Repair Oil', 'Gentle Foam Cleanser', 'Niacinamide Pore Minimizer', 'SPF 50 Sunscreen Lotion', 'Hyaluronic Acid Face Mist', 'Exfoliating AHA Toner'],
+    forbidden: ['electronics', 'phone', 'laptop', 'camera', 'headphone', 'speaker', 'keyboard', 'watch', 'shoe', 'jacket', 'furniture'],
+  },
+  'fashion/clothing/apparel': {
+    categoryHint: 'clothing, apparel, fashion garments, accessories',
+    examples: ['Silk Wrap Blouse', 'Tailored Linen Trousers', 'Cashmere Crewneck Sweater', 'Structured Wool Blazer', 'High-Rise Straight Jeans', 'Pleated Midi Skirt', 'Cotton Oxford Shirt', 'Oversized Knit Cardigan'],
+    forbidden: ['electronics', 'phone', 'laptop', 'camera', 'headphone', 'speaker', 'serum', 'cream', 'lotion', 'skincare', 'ring', 'necklace', 'bracelet', 'furniture'],
+  },
+  'jewelry/watches/accessories': {
+    categoryHint: 'jewelry, watches, rings, necklaces, bracelets, earrings, fine jewelry, fashion accessories',
+    examples: ['Gold Signet Ring', 'Pearl Drop Earrings', 'Diamond Tennis Bracelet', 'Sapphire Pendant Necklace', 'Rose Gold Chain Bracelet', 'Emerald Stud Earrings', 'Vintage cameo brooch', 'Sterling Silver Anklet', 'Opal Cocktail Ring', 'Layered Gold Necklace Set'],
+    forbidden: ['camera', 'polaroid', 'headphone', 'speaker', 'laptop', 'phone', 'keyboard', 'monitor', 'printer', 'serum', 'cream', 'lotion', 'skincare', 'shoe', 'sneaker', 'jacket', 'tshirt', 'jeans', 'furniture', 'sofa', 'chair'],
+  },
+  'food/coffee/bakery': {
+    categoryHint: 'food, coffee, bakery, snacks, beverages, gourmet food',
+    examples: ['Single Origin Ethiopian Coffee Beans', 'Artisan Sourdough Loaf', 'Organic Matcha Powder', 'Dark Chocolate Truffle Box', 'Cold Brew Concentrate', 'Vanilla Bean Extract', 'Gluten-Free Granola Mix', 'Himalayan Pink Salt'],
+    forbidden: ['electronics', 'phone', 'laptop', 'camera', 'headphone', 'ring', 'necklace', 'bracelet', 'clothing', 'jacket', 'furniture'],
+  },
+  'furniture/home/decor': {
+    categoryHint: 'furniture, home decor, interior design, home accessories',
+    examples: ['Walnut Dining Table', 'Linen Accent Armchair', 'Handwoven Jute Rug', 'Ceramic Table Lamp', 'Floating Wall Shelf Set', 'Velvet Throw Pillow Cover', 'Marble Coaster Set', 'Brass Floor Lamp'],
+    forbidden: ['electronics', 'phone', 'laptop', 'camera', 'headphone', 'serum', 'cream', 'skincare', 'ring', 'necklace', 'bracelet', 'clothing', 'jacket', 'shoe'],
+  },
+  'electronics/tech/gadgets': {
+    categoryHint: 'electronics, tech gadgets, computer accessories, smart devices',
+    examples: ['Wireless Noise-Cancelling Headphones', 'Mechanical Gaming Keyboard', '4K Ultra-Wide Monitor', 'Portable Bluetooth Speaker', 'USB-C Docking Station', 'Smart Home Hub', 'Wireless Charging Pad', 'HD Webcam'],
+    forbidden: ['serum', 'cream', 'lotion', 'skincare', 'ring', 'necklace', 'bracelet', 'clothing', 'jacket', 'shoe', 'furniture', 'sofa', 'coffee', 'bread', 'cake'],
+  },
+  'fitness/sports/outdoor': {
+    categoryHint: 'fitness equipment, sports gear, outdoor gear, athletic wear',
+    examples: ['Adjustable Dumbbell Set', 'Yoga Mat Premium', 'Resistance Band Kit', 'Stainless Steel Water Bottle', 'Running Compression Socks', 'Foam Muscle Roller', 'Jump Rope Speed Pro', 'Pull-Up Bar Doorway'],
+    forbidden: ['electronics', 'laptop', 'phone', 'serum', 'cream', 'skincare', 'ring', 'necklace', 'bracelet', 'furniture', 'sofa', 'bread', 'cake'],
+  },
+  'books/education/stationery': {
+    categoryHint: 'books, educational materials, stationery, office supplies',
+    examples: ['Leather-Bound Journal', 'Fountain Pen Set', 'Watercolor Paint Kit', 'Desk Organizer Bamboo', 'Classic Literature Box Set', 'Moleskine Notebook Pack', 'Mechanical Pencil Set', 'Bookend Marble Pair'],
+    forbidden: ['electronics', 'laptop', 'phone', 'headphone', 'serum', 'cream', 'skincare', 'ring', 'necklace', 'furniture'],
+  },
+  'pets/animals': {
+    categoryHint: 'pet supplies, animal products, pet food, pet accessories',
+    examples: ['Organic Dog Treats', 'Memory Foam Pet Bed', 'Adjustable Dog Harness', 'Interactive Cat Toy', 'Stainless Steel Pet Bowl', 'Grooming Brush Set', 'Cat Scratching Post', 'Pet Car Seat Cover'],
+    forbidden: ['electronics', 'laptop', 'phone', 'headphone', 'serum', 'cream', 'skincare', 'ring', 'necklace', 'furniture', 'sofa'],
+  },
+  'automotive/cars': {
+    categoryHint: 'automotive, car accessories, auto parts, vehicle supplies',
+    examples: ['Leather Steering Wheel Cover', 'Portable Car Vacuum', 'Dash Camera 4K', 'LED Headlight Bulbs', 'Car Phone Mount', 'Seat Covers Premium Set', 'Tire Pressure Gauge', 'Car Wax Kit'],
+    forbidden: ['serum', 'cream', 'skincare', 'ring', 'necklace', 'bracelet', 'clothing', 'jacket', 'bread', 'cake', 'furniture'],
+  },
+  'travel/luggage/adventure': {
+    categoryHint: 'travel gear, luggage, bags, travel accessories',
+    examples: ['Hardshell Carry-On Suitcase', 'Travel Neck Pillow Memory Foam', 'Packing Cube Set', 'Anti-Theft Backpack', 'Passport Holder Leather', 'Universal Travel Adapter', 'Compression Socks Set', 'Toiletry Bag Waterproof'],
+    forbidden: ['furniture', 'sofa', 'serum', 'cream', 'skincare', 'laptop', 'monitor', 'keyboard', 'ring', 'necklace'],
+  },
+  'plants/garden/eco': {
+    categoryHint: 'plants, garden supplies, eco-friendly products, sustainable goods',
+    examples: ['Ceramic Planter Set', 'Indoor Herb Garden Kit', 'Organic Potting Soil Mix', 'Garden Tool Set', 'Bamboo Wind Chimes', 'Compost Bin Kitchen', 'LED Grow Light Panel', 'Pruning Shears Pro'],
+    forbidden: ['electronics', 'laptop', 'phone', 'headphone', 'serum', 'cream', 'skincare', 'ring', 'necklace', 'clothing', 'jacket'],
+  },
+  'kids/baby/toys': {
+    categoryHint: 'kids products, baby items, toys, children clothing',
+    examples: ['Wooden Building Blocks', 'Soft Plush Teddy Bear', 'Musical Activity Cube', 'Organic Cotton Baby Onesie', 'Kids Watercolor Art Set', 'Balance Bike Toddler', 'Storybook Collection Box', 'Night Light Projector'],
+    forbidden: ['electronics', 'laptop', 'phone', 'headphone', 'serum', 'cream', 'skincare', 'alcohol', 'wine'],
+  },
+  'music/instruments/art': {
+    categoryHint: 'musical instruments, art supplies, music accessories, creative tools',
+    examples: ['Acoustic Guitar Starter Kit', 'Digital Piano Keyboard', 'Studio Monitor Speakers', 'Canvas Paint Set Professional', 'Violin Full Size', 'Microphone Condenser USB', 'Drum Stick Pair Pro', 'Sketch Pencil Set'],
+    forbidden: ['serum', 'cream', 'skincare', 'ring', 'necklace', 'bracelet', 'furniture', 'sofa', 'bread', 'cake'],
+  },
+};
+
+// Fallback for uncategorized stores
+const DEFAULT_PRODUCT_GUIDANCE = {
+  categoryHint: '',
+  examples: [],
+  forbidden: [],
+};
+
+function getProductGuidance(category: string) {
+  // Check both HERO_URLS and PRODUCT_URLS keys since categories may differ slightly
+  for (const [key, guidance] of Object.entries(CATEGORY_PRODUCT_GUIDANCE)) {
+    const keyParts = key.split('/');
+    const catParts = category.split('/');
+    // Match if any part overlaps
+    if (keyParts.some(p => catParts.some(c => c.includes(p) || p.includes(c)))) {
+      return guidance;
+    }
+  }
+  return DEFAULT_PRODUCT_GUIDANCE;
+}
+
 // ─── Phase 1 System Prompt (SUPERCHARGED for complex stores) ──
 
 function buildPhase1SystemPrompt(productCount: number, userPrompt: string): string {
@@ -217,6 +320,7 @@ function buildPhase1SystemPrompt(productCount: number, userPrompt: string): stri
   const category = pickCategory([promptWords]);
   const heroUrls = HERO_URLS[category] || HERO_URLS['general/lifestyle'];
   const productUrls = PRODUCT_URLS[category] || PRODUCT_URLS['general'];
+  const guidance = getProductGuidance(category);
 
   // Detect complexity signals from the prompt
   const isComplex = (
@@ -404,10 +508,23 @@ ${isComplex ? `COMPLEX STORE GUIDANCE:
 ═══ PRODUCT SCHEMA ═══
 {id:"<uuid>", name:"<short, realistic name>", price:<number>, compareAtPrice:null, images:["<one REAL URL from product list>"], description:"<max 8 words, compelling>", category:"<category>", featured:false, inStock:true}
 
+═══ CRITICAL: PRODUCT NICHE ENFORCEMENT ═══
+This store sells: ${guidance.categoryHint ? guidance.categoryHint : 'products matching the user\'s prompt description'}.
+ALL ${productCount} products MUST be from this exact niche. This is NON-NEGOTIABLE.
+${guidance.examples.length > 0 ? `
+EXAMPLES of correct product names for this niche (use similar style, do NOT copy exactly):
+${guidance.examples.map(e => `  - ${e}`).join('\n')}
+` : ''}
+${guidance.forbidden.length > 0 ? `
+FORBIDDEN — Do NOT generate these types of products:
+${guidance.forbidden.map(f => `  - ${f}`).join('\n')}
+If any product name contains or implies any of the above forbidden categories, the ENTIRE generation is INVALID.
+` : ''}
+
 PRODUCT RULES:
 - Generate EXACTLY ${productCount} products. Mark 1 as featured.
 - Descriptions max 8 words. Make them compelling (not generic).
-- Names should be creative and realistic for the niche.
+- Names MUST be specific to the niche listed above. Every single product must belong to this category.
 - Prices should vary realistically (e.g., $29-$299 for mid-range, $100-$2000+ for luxury).
 - Cycle through the product image URLs. Do NOT invent URLs.
 - NO "variants" field on products.
@@ -456,7 +573,11 @@ function buildPhase2SystemPrompt(
   storeName: string,
   storeDescription: string,
   existingProductNames: string[],
+  userPrompt: string,
 ): string {
+  const promptWords = userPrompt.toLowerCase();
+  const category = pickCategory([promptWords]);
+  const guidance = getProductGuidance(category);
   return `You are a product catalog generator. Return a JSON ARRAY of product objects — no markdown, no explanation, no wrapping object.
 
 FORMAT RULES:
@@ -465,11 +586,23 @@ FORMAT RULES:
 3. Fresh UUIDs for all "id" fields.
 4. KEEP OUTPUT MINIMAL — short strings, no unnecessary fields.
 
+═══ NICHE: ${guidance.categoryHint || storeDescription} ═══
+ALL ${count} products MUST be from this exact niche. NON-NEGOTIABLE.
+${guidance.examples.length > 0 ? `
+EXAMPLES of correct product names (use similar style, do NOT copy):
+${guidance.examples.slice(0, 5).map(e => `  - ${e}`).join('\n')}
+` : ''}
+${guidance.forbidden.length > 0 ? `
+FORBIDDEN product types (NEVER generate these):
+${guidance.forbidden.slice(0, 10).map(f => `  - ${f}`).join('\n')}
+` : ''}
+
 Each product must be:
 {id: "<uuid>", name: "<short realistic name>", price: <number>, compareAtPrice: null, images: ["https://images.unsplash.com/photo-<id>?w=600"], description: "<max 8 words, compelling>", category: "<category>", featured: false, inStock: true}
 
 RULES:
 - Generate EXACTLY ${count} products for the ${storeName} store (${storeDescription}).
+- Each product MUST belong to the niche listed above. No exceptions.
 - Each product must be UNIQUE — do NOT duplicate any of these existing products: ${existingProductNames.join(', ')}.
 - NO variants field.
 - Prices should vary realistically for the product category.
@@ -713,6 +846,7 @@ export async function POST(req: NextRequest) {
                     store.name,
                     storeDescription,
                     existingNames,
+                    sanitizedPrompt,
                   ),
                   responseFormat: 'json_object',
                   maxRetries: 1,

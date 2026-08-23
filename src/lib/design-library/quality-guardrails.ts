@@ -18,6 +18,7 @@ export interface QualityReport {
     commerceEffectiveness: number;
     responsiveReadiness: number;
     componentValidity: number;
+    productNicheRelevance: number;
   };
   overallScore: number;
   violations: Array<{
@@ -488,6 +489,114 @@ function checkRejectRules(sections: Section[]): QualityReport['violations'] {
   return violations;
 }
 
+// ── Product-Niche Relevance Scoring ───────────────────────
+// Checks whether generated products match the store's niche/description.
+// Uses keyword overlap between product names/descriptions and store description.
+
+const CATEGORY_KEYWORDS: Record<string, string[]> = {
+  'skincare/beauty/spa': ['serum', 'cream', 'moisturizer', 'cleanser', 'toner', 'mask', 'skincare', 'beauty', 'cosmetic', 'spa', 'lotion', 'oil', 'sunscreen', 'exfoliant', 'retinol', 'hyaluronic', 'niacinamide', 'vitamin c', 'collagen', 'peel', 'scrub', 'essence', 'mist', 'balm', 'primer', 'foundation', 'lipstick', 'mascara', 'eyeshadow', 'blush', 'concealer'],
+  'fashion/clothing/apparel': ['shirt', 'dress', 'jacket', 'pants', 'jeans', 'skirt', 'blouse', 'sweater', 'coat', 'blazer', 'trousers', 'shorts', 'tshirt', 't-shirt', 'hoodie', 'cardigan', 'vest', 'leggings', 'knit', 'silk', 'linen', 'cotton', 'wool', 'denim', 'cashmere', 'apparel', 'clothing', 'fashion', 'garment', 'outfit', 'wear'],
+  'jewelry/watches/accessories': ['ring', 'necklace', 'bracelet', 'earring', 'pendant', 'chain', 'brooch', 'anklet', 'charm', 'watch', 'diamond', 'gold', 'silver', 'pearl', 'sapphire', 'emerald', 'ruby', 'opal', 'gem', 'jewel', 'jewelry', 'sterling', 'platinum', 'cameo', 'cuff', 'stud', 'hoop', 'drop'],
+  'food/coffee/bakery': ['coffee', 'tea', 'bread', 'cake', 'cookie', 'chocolate', 'snack', 'bakery', 'food', 'gourmet', 'organic', 'spice', 'sauce', 'honey', 'jam', 'granola', 'cereal', 'matcha', 'espresso', 'latte', 'pastry', 'tart', 'muffin', 'scone', 'butter', 'cheese', 'wine', 'vinegar', 'oil', 'salt', 'sugar', 'flour'],
+  'furniture/home/decor': ['table', 'chair', 'sofa', 'bed', 'lamp', 'rug', 'shelf', 'cushion', 'pillow', 'curtain', 'vase', 'candle', 'mirror', 'frame', 'clock', 'basket', 'planter', 'ottoman', 'desk', 'bookcase', 'wardrobe', 'cabinet', 'furniture', 'decor', 'home', 'interior', 'ceramic', 'marble', 'wood', 'brass', 'velvet', 'linen'],
+  'electronics/tech/gadgets': ['headphone', 'speaker', 'keyboard', 'mouse', 'monitor', 'laptop', 'phone', 'tablet', 'camera', 'charger', 'cable', 'hub', 'dock', 'webcam', 'microphone', 'router', 'earbuds', 'smart', 'gadget', 'tech', 'electronic', 'bluetooth', 'wireless', 'usb', 'hdmi', 'ssd', 'drive', 'printer', 'scanner'],
+  'fitness/sports/outdoor': ['dumbbell', 'yoga', 'mat', 'resistance', 'band', 'weight', 'barbell', 'kettlebell', 'foam roller', 'jump rope', 'pull-up', 'push-up', 'gym', 'fitness', 'workout', 'exercise', 'training', 'sport', 'outdoor', 'hiking', 'camping', 'running', 'cycling', 'swimming', 'protein', 'supplement', 'bottle', 'gear'],
+  'books/education/stationery': ['book', 'journal', 'notebook', 'pen', 'pencil', 'marker', 'paper', 'sketch', 'paint', 'canvas', 'brush', 'ink', 'eraser', 'ruler', 'stapler', 'folder', 'binder', 'calendar', 'planner', 'stationery', 'education', 'literature', 'art', 'writing', 'fountain', 'moleskine', 'watercolor', 'crayon'],
+  'pets/animals': ['dog', 'cat', 'pet', 'treat', 'food', 'bed', 'toy', 'leash', 'collar', 'harness', 'bowl', 'grooming', 'brush', 'shampoo', 'cage', 'aquarium', 'fish', 'bird', 'hamster', 'rabbit', 'carrier', 'litter', 'scratch', 'feather', 'bone', 'chew'],
+  'automotive/cars': ['car', 'auto', 'vehicle', 'tire', 'wheel', 'engine', 'brake', 'oil', 'filter', 'battery', 'charger', 'seat', 'cover', 'mat', 'vacuum', 'camera', 'dash', 'light', 'bulb', 'wax', 'polish', 'tool', 'jack', 'compressor', 'gauge', 'mount', 'trailer', 'ramp'],
+  'travel/luggage/adventure': ['suitcase', 'luggage', 'backpack', 'bag', 'travel', 'passport', 'adapter', 'pillow', 'blanket', 'lock', 'tag', 'wallet', 'packing', 'cube', 'tote', 'duffle', 'carry-on', 'compression', 'toiletry', 'neck', 'cover', 'organizer', 'carrier', 'map', 'guide'],
+  'plants/garden/eco': ['plant', 'garden', 'pot', 'soil', 'seed', 'fertilizer', 'tool', 'pruner', 'shears', 'shovel', 'rake', 'hose', 'sprinkler', 'planter', 'ceramic', 'bamboo', 'compost', 'mulch', 'grow', 'light', 'greenhouse', 'herb', 'flower', 'succulent', 'cactus', 'eco', 'sustainable', 'organic'],
+  'kids/baby/toys': ['toy', 'baby', 'kids', 'children', 'toddler', 'infant', 'game', 'puzzle', 'block', 'doll', 'plush', 'teddy', 'bear', 'car', 'train', 'robot', 'art', 'craft', 'crayon', 'color', 'book', 'story', 'onesie', 'diaper', 'bottle', 'stroller', 'crib', 'high chair', 'swing'],
+  'music/instruments/art': ['guitar', 'piano', 'drum', 'violin', 'flute', 'trumpet', 'saxophone', 'bass', 'ukulele', 'harmonica', 'microphone', 'speaker', 'amplifier', 'pedal', 'string', 'pick', 'strap', 'case', 'stand', 'music', 'instrument', 'art', 'paint', 'canvas', 'brush', 'easel', 'sketch', 'sculpture'],
+};
+
+function detectStoreCategory(store: Store): string {
+  const desc = (store.description + ' ' + store.name).toLowerCase();
+  for (const [cat, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
+    const catParts = cat.split('/');
+    // Check if store description/name contains category keywords
+    const matchCount = keywords.filter(kw => desc.includes(kw)).length;
+    if (matchCount >= 2) return cat;
+    // Also check category name parts
+    if (catParts.some(p => desc.includes(p))) return cat;
+  }
+  return '';
+}
+
+function scoreProductNicheRelevance(store: Store): { score: number; violations: QualityReport['violations'] } {
+  let score = 1.0;
+  const violations: QualityReport['violations'] = [];
+
+  if (!store.products || store.products.length === 0) {
+    return { score: 1.0, violations: [] };
+  }
+
+  const category = detectStoreCategory(store);
+  if (!category) {
+    // Can't determine category — skip validation
+    return { score: 1.0, violations: [] };
+  }
+
+  const keywords = CATEGORY_KEYWORDS[category] || [];
+  const forbiddenSets: Record<string, string[]> = {
+    'jewelry/watches/accessories': ['camera', 'polaroid', 'headphone', 'speaker', 'laptop', 'phone', 'keyboard', 'monitor', 'printer', 'serum', 'cream', 'lotion', 'skincare', 'sneaker', 'tshirt', 'jeans', 'furniture', 'sofa'],
+    'skincare/beauty/spa': ['camera', 'polaroid', 'headphone', 'speaker', 'laptop', 'phone', 'keyboard', 'ring', 'necklace', 'bracelet', 'shoe', 'jacket', 'furniture'],
+    'fashion/clothing/apparel': ['camera', 'polaroid', 'headphone', 'speaker', 'laptop', 'phone', 'keyboard', 'serum', 'cream', 'lotion', 'skincare', 'ring', 'necklace', 'bracelet', 'furniture'],
+  };
+  const forbidden = forbiddenSets[category] || [];
+
+  let relevantCount = 0;
+  const irrelevantProducts: string[] = [];
+
+  for (const product of store.products) {
+    const productText = (product.name + ' ' + (product.description || '') + ' ' + (product.category || '')).toLowerCase();
+    
+    // Check if product matches category keywords
+    const isRelevant = keywords.some(kw => productText.includes(kw));
+    // Check if product contains forbidden words
+    const isForbidden = forbidden.some(fw => productText.includes(fw));
+
+    if (isRelevant && !isForbidden) {
+      relevantCount++;
+    } else if (isForbidden) {
+      irrelevantProducts.push(product.name);
+    }
+  }
+
+  const relevanceRatio = relevantCount / store.products.length;
+
+  if (relevanceRatio < 0.5) {
+    score -= 0.5;
+    violations.push({
+      rule: 'productNicheRelevance.lowRelevance',
+      severity: 'error',
+      details: `Only ${Math.round(relevanceRatio * 100)}% of products (${relevantCount}/${store.products.length}) match the store niche. Irrelevant: ${irrelevantProducts.slice(0, 3).join(', ') || 'multiple products'}`,
+    });
+  } else if (relevanceRatio < 0.75) {
+    score -= 0.25;
+    violations.push({
+      rule: 'productNicheRelevance.moderateRelevance',
+      severity: 'warning',
+      details: `${Math.round(relevanceRatio * 100)}% of products match the store niche. Irrelevant: ${irrelevantProducts.slice(0, 3).join(', ') || 'some products'}`,
+    });
+  }
+
+  // Hard fail if ANY product is from a clearly wrong category (forbidden words)
+  if (irrelevantProducts.length > 0) {
+    const forbiddenRatio = irrelevantProducts.length / store.products.length;
+    if (forbiddenRatio > 0.3) {
+      score -= 0.3;
+      violations.push({
+        rule: 'productNicheRelevance.forbiddenProducts',
+        severity: 'error',
+        details: `${irrelevantProducts.length} products are from completely wrong categories: ${irrelevantProducts.join(', ')}`,
+      });
+    }
+  }
+
+  return { score: clamp01(score), violations };
+}
+
 // ── Main validation function ──────────────────────────────
 
 export function validateStoreQuality(store: Store): QualityReport {
@@ -500,6 +609,7 @@ export function validateStoreQuality(store: Store): QualityReport {
   const commerce = scoreCommerceEffectiveness(sections);
   const responsive = scoreResponsiveReadiness(sections);
   const validity = scoreComponentValidity(sections);
+  const nicheRelevance = scoreProductNicheRelevance(store);
 
   allViolations.push(...coherence.violations);
   allViolations.push(...specificity.violations);
@@ -507,19 +617,21 @@ export function validateStoreQuality(store: Store): QualityReport {
   allViolations.push(...commerce.violations);
   allViolations.push(...responsive.violations);
   allViolations.push(...validity.violations);
+  allViolations.push(...nicheRelevance.violations);
 
   // Check reject rules from ai-guidance.json
   const rejectViolations = checkRejectRules(sections);
   allViolations.push(...rejectViolations);
 
-  // Weighted average
+  // Weighted average — productNicheRelevance gets high weight since it's a critical quality signal
   const overallScore = clamp01(
-    coherence.score * 0.2
-    + specificity.score * 0.25
-    + variety.score * 0.2
-    + commerce.score * 0.15
+    coherence.score * 0.15
+    + specificity.score * 0.2
+    + variety.score * 0.15
+    + commerce.score * 0.1
     + responsive.score * 0.1
-    + validity.score * 0.1,
+    + validity.score * 0.1
+    + nicheRelevance.score * 0.2,
   );
 
   // Determine status
@@ -541,6 +653,7 @@ export function validateStoreQuality(store: Store): QualityReport {
       commerceEffectiveness: commerce.score,
       responsiveReadiness: responsive.score,
       componentValidity: validity.score,
+      productNicheRelevance: nicheRelevance.score,
     },
     overallScore,
     violations: allViolations,
