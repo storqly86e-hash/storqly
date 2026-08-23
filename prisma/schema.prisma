@@ -79,6 +79,7 @@ model Store {
   updatedAt   DateTime      @updatedAt
 
   chatHistory ChatHistory[]
+  orders      Order[]
   user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
 
@@ -90,4 +91,21 @@ model ChatHistory {
   createdAt DateTime @default(now())
 
   store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id        String   @id @default(cuid())
+  storeId   String
+  storeName String?
+  userId    String?
+  items     String   // JSON array of {productId, name, price, quantity, image}
+  subtotal  Float
+  shipping  Float    @default(0)
+  total     Float
+  email     String?
+  name      String?
+  status    String   @default("demo") // 'demo' = no real payment processed
+  createdAt DateTime @default(now())
+
+  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
 }

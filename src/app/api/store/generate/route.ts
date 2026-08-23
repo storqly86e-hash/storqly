@@ -170,11 +170,17 @@ const PRODUCT_URLS: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=600',
     'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=600',
     'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=600',
+    'https://images.unsplash.com/photo-1442512595331-e89e73853f31?w=600',
+    'https://images.unsplash.com/photo-1497935586351-b67a49e012bf?w=600',
+    'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600',
   ],
   'furniture/home': [
     'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=600',
     'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=600',
     'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600',
+    'https://images.unsplash.com/photo-1555041469-a586c61ea9bc?w=600',
+    'https://images.unsplash.com/photo-1506439773649-6e0eb8cfb237?w=600',
+    'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=600',
   ],
   'electronics/tech': [
     'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=600',
@@ -200,6 +206,38 @@ const PRODUCT_URLS: Record<string, string[]> = {
     'https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?w=600',
     'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600',
     'https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600',
+  ],
+  'automotive/cars': [
+    'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=600',
+    'https://images.unsplash.com/photo-1503376780353-7e6692767b70?w=600',
+    'https://images.unsplash.com/photo-1494976388531-d1058494cdd8?w=600',
+    'https://images.unsplash.com/photo-1502877338535-766e1452684a?w=600',
+    'https://images.unsplash.com/photo-1544636331-e26879cd4d9b?w=600',
+  ],
+  'travel/luggage': [
+    'https://images.unsplash.com/photo-1488646953014-85cb44e25828?w=600',
+    'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600',
+    'https://images.unsplash.com/photo-1503220317266-8e5b70a21ed6?w=600',
+    'https://images.unsplash.com/photo-1548013146-72479768bada?w=600',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=600',
+  ],
+  'plants/garden': [
+    'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600',
+    'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=600',
+    'https://images.unsplash.com/photo-1466692476868-aef1dfb1e735?w=600',
+    'https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=600',
+  ],
+  'kids/baby': [
+    'https://images.unsplash.com/photo-1515488042361-ee00e0ddd4e4?w=600',
+    'https://images.unsplash.com/photo-1471286174890-9c112ffca5b4?w=600',
+    'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=600',
+    'https://images.unsplash.com/photo-1503919545889-aef636e10ad4?w=600',
+  ],
+  'music/instruments': [
+    'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=600',
+    'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=600',
+    'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600',
+    'https://images.unsplash.com/photo-1519682337058-a94d519337bc?w=600',
   ],
 };
 
@@ -803,6 +841,68 @@ export async function POST(req: NextRequest) {
         // ── Bridge AI style tokens → renderer-consumable fields ──
         send('progress', { stage: 'applying-design', message: 'Applying design system...' });
         store = bridgeSectionStyles(store);
+
+        // ── Hero image backfill (CRITICAL: prevents plain/solid hero) ──
+        // The AI sometimes omits heroImages or provides empty arrays.
+        // This safety net ensures every hero has 3 category-appropriate images
+        // and carousel is enabled, regardless of AI compliance.
+        try {
+          const heroCategory = pickCategory([sanitizedPrompt]);
+          const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+          for (const page of store.pages) {
+            for (const section of page.sections) {
+              if (section.type !== 'hero') continue;
+              const content = section.content as Record<string, unknown>;
+              const style = section.style as Record<string, unknown>;
+
+              // Determine current image sources
+              let heroImages = content.heroImages;
+              if (!Array.isArray(heroImages) || heroImages.length === 0) {
+                // No heroImages at all — backfill from category pool
+                const images = heroImagePool.slice(0, 3).map((url, i) => ({
+                  src: url,
+                  alt: `${store.name} hero image ${i + 1}`,
+                  role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+                }));
+                content.heroImages = images;
+                log(`[Store Generate] Hero backfill: injected 3 hero images from category ${heroCategory}`);
+              } else {
+                // Validate existing heroImages — replace any with invalid/empty src
+                let hadInvalid = false;
+                const validated = (heroImages as Array<Record<string, unknown>>).slice(0, 3).map((img, i) => {
+                  const src = typeof img?.src === 'string' && img.src.startsWith('https://') ? img.src : '';
+                  if (!src) hadInvalid = true;
+                  return {
+                    src: src || heroImagePool[i % heroImagePool.length],
+                    alt: typeof img?.alt === 'string' ? img.alt : `${store.name} hero image ${i + 1}`,
+                    role: typeof img?.role === 'string' ? img.role : ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+                  };
+                });
+                if (hadInvalid) {
+                  content.heroImages = validated;
+                  log(`[Store Generate] Hero validation: replaced invalid hero image URLs`);
+                }
+              }
+
+              // Force carousel enabled
+              content.carouselEnabled = true;
+              content.carouselInterval = 5;
+
+              // Ensure style.backgroundImage is set as fallback
+              if (!style.backgroundImage || typeof style.backgroundImage !== 'string') {
+                style.backgroundImage = heroImagePool[0];
+                log(`[Store Generate] Hero: set style.backgroundImage fallback`);
+              }
+
+              // Ensure overlay is set for text readability
+              if (style.overlay === undefined) {
+                style.overlay = true;
+              }
+            }
+          }
+        } catch (heroErr) {
+          warn(`[Store Generate] Hero image backfill error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
+        }
 
         // ── Validate and fix componentMeta ─────────────────────
         if (libraryCtx) {

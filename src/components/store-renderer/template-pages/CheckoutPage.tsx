@@ -22,9 +22,8 @@ interface FormData {
 export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
   const theme = store.theme;
   const radius = borderRadiusClass(theme.borderRadius);
-  const meta = page?.metadata;
-  const successHeadline = meta?.successHeadline || 'Order Confirmed!';
-  const successMessage = meta?.successMessage || 'Thank you for your order. This is a demo checkout - no payment was processed. In a production store, your order would be on its way!';
+  const storeId = store.id;
+  const storeName = store.name;
 
   const items = useCartStore((s) => s.items);
   const getSubtotal = useCartStore((s) => s.getSubtotal);
@@ -49,6 +48,9 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
     cardCvc: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [orderId, setOrderId] = useState<string | null>(null);
 
   const updateField = (field: keyof FormData, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -68,17 +70,48 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
     color: theme.colors.textMuted,
   };
 
+  const fullName = `${form.firstName} ${form.lastName}`.trim();
+
   const isFormValid =
     form.email && form.firstName && form.lastName &&
-    form.address && form.city && form.state && form.zip &&
-    form.cardNumber && form.cardExpiry && form.cardCvc;
+    form.address && form.city && form.state && form.zip;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isFormValid) return;
-    // In a real app, this would process payment
-    setSubmitted(true);
-    clearCart();
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const res = await fetch('/api/order/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          storeId: storeId || '',
+          storeName: storeName || '',
+          items,
+          subtotal,
+          shipping,
+          total,
+          email: form.email,
+          name: fullName,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setOrderId(data.orderId);
+        setSubmitted(true);
+        clearCart();
+      } else {
+        setSubmitError(data.error || 'Failed to place order. Please try again.');
+      }
+    } catch {
+      setSubmitError('Network error. Please check your connection and try again.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (items.length === 0 && !submitted) {
@@ -117,11 +150,16 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
           </svg>
         </div>
         <h2 className="text-2xl font-bold" style={{ color: theme.colors.text }}>
-          {successHeadline}
+          Demo Order Recorded
         </h2>
         <p className="mt-2 text-sm text-center max-w-md" style={{ color: theme.colors.textMuted }}>
-          {successMessage}
+          Your order has been recorded (demo mode). No real payment was processed. In a production store, this would connect to a payment provider like Stripe.
         </p>
+        {orderId && (
+          <p className="mt-2 text-xs text-center" style={{ color: theme.colors.textMuted }}>
+            Order ID: {orderId}
+          </p>
+        )}
         <button
           className={`mt-6 ${radius} px-6 py-2.5 text-sm font-semibold transition-opacity hover:opacity-80`}
           style={{
@@ -148,9 +186,19 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
         Back to Cart
       </button>
 
+      <div className="mb-4 rounded-lg border px-4 py-3 text-sm" style={{ borderColor: theme.colors.border, backgroundColor: '#fef9c3', color: '#92400e' }}>
+        ⚠ Demo Mode — No real payment will be processed. Card details are not stored or transmitted.
+      </div>
+
       <h1 className="text-2xl font-bold tracking-tight sm:text-3xl" style={{ color: theme.colors.text }}>
         Checkout
       </h1>
+
+      {submitError && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {submitError}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit}>
         <div className="mt-8 grid gap-8 lg:grid-cols-3">
@@ -257,7 +305,7 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
                 <Lock className="h-3.5 w-3.5" style={{ color: theme.colors.textMuted }} />
               </div>
               <p className="mt-1 text-xs" style={mutedStyle}>
-                This is a demo checkout. No real payment will be processed.
+                Card details are optional in demo mode.
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="sm:col-span-2">
@@ -267,7 +315,6 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
                   </label>
                   <input
                     type="text"
-                    required
                     placeholder="4242 4242 4242 4242"
                     maxLength={19}
                     value={form.cardNumber}
@@ -284,7 +331,6 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
                   <label className="block text-sm font-medium" style={labelStyle}>Expiry date</label>
                   <input
                     type="text"
-                    required
                     placeholder="MM / YY"
                     maxLength={7}
                     value={form.cardExpiry}
@@ -301,7 +347,6 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
                   <label className="block text-sm font-medium" style={labelStyle}>CVC</label>
                   <input
                     type="text"
-                    required
                     placeholder="123"
                     maxLength={4}
                     value={form.cardCvc}
@@ -411,7 +456,7 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
 
               <button
                 type="submit"
-                disabled={!isFormValid}
+                disabled={!isFormValid || submitting}
                 className={`${radius} mt-6 flex w-full items-center justify-center gap-2 px-6 py-3 text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed`}
                 style={{
                   backgroundColor: theme.colors.primary,
@@ -419,7 +464,7 @@ export function CheckoutPage({ store, page, onNavigate }: TemplatePageProps) {
                 }}
               >
                 <Lock className="h-3.5 w-3.5" />
-                Place Order — {formatPrice(total)}
+                {submitting ? 'Placing Order...' : `Place Order — ${formatPrice(total)}`}
               </button>
             </div>
           </div>

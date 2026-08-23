@@ -104,7 +104,7 @@ import type { Store, Section } from '@/lib/store-schema';
 // Any field not listed here is silently stripped before bridging.
 
 const ALLOWED_FIELDS: Record<string, string[]> = {
-  hero: ['typographySystem', 'contentAlignment', 'density', 'sectionHeight', 'vignetteStrength', 'productScale', 'mediaCrop', 'surfaceTheme'],
+  hero: ['typographySystem', 'contentAlignment', 'density', 'sectionHeight', 'vignetteStrength', 'productScale', 'mediaCrop', 'surfaceTheme', 'backgroundImage', 'backgroundColor', 'overlay'],
   'product-grid': ['columnCount', 'headingAlignment', 'sectionSpacing', 'cardVariant', 'productScale', 'density'],
   testimonials: ['quoteScale', 'cardMode', 'attributionStyle', 'dividerMode', 'density', 'sectionSpacing'],
   cta: ['typeScale', 'sectionSpacing', 'alignment', 'surfaceTheme', 'density', 'buttonVariant'],

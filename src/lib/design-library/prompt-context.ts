@@ -198,6 +198,7 @@ export function buildHeroLibraryBlock(summary: VariantSummary): string {
     if (cr.cta_count) lines.push(`CTA: ${cr.cta_count}.`);
   }
   lines.push('The hero MUST have editable HTML text (not baked into images).');
+  lines.push('IMPORTANT: This hero MUST include `heroImages` array with EXACTLY 3 image objects using URLs from the provided image list. Set `carouselEnabled: true` and `carouselInterval: 5`. Also set `style.backgroundImage` to the first image URL.');
   return lines.join('\n');
 }
 

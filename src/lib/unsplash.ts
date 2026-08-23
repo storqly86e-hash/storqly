@@ -202,7 +202,7 @@ export async function fetchImage(query: string): Promise<string | null> {
     // On Render/production, z-ai CLI doesn't exist — this is expected, not an error
     if (msg.includes('ENOENT') || msg.includes('not found') || msg.includes('spawning')) {
       // Mark as unavailable so we don't keep retrying
-      if (!imageSearchAvailable) {
+      if (imageSearchAvailable) {
         imageSearchAvailable = false;
         console.log('[ImageEnrich] z-ai image-search CLI not available — image enrichment disabled (products will keep AI-generated URLs)');
       }
