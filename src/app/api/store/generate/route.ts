@@ -817,6 +817,24 @@ export async function POST(req: NextRequest) {
           } else {
             log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
           }
+
+          // ── Apply per-section rhythm CSS vars to section.style ──
+          // The composition engine produces sectionRhythm with rhythmCssVars,
+          // but these must be applied to the actual section.style so the
+          // renderer can consume them via section.style._rhythmCssVars.
+          if (libraryCtx.sectionRhythm && libraryCtx.sectionRhythm.length > 0) {
+            const homepage = store.pages.find(p => p.isHomepage);
+            if (homepage) {
+              const visibleSections = homepage.sections.filter(s => s.visible);
+              for (const rhythm of libraryCtx.sectionRhythm) {
+                const section = visibleSections[rhythm.nodeIndex];
+                if (section && rhythm.rhythmCssVars && Object.keys(rhythm.rhythmCssVars).length > 0) {
+                  (section.style as Record<string, unknown>)._rhythmCssVars = rhythm.rhythmCssVars;
+                }
+              }
+              log(`[Store Generate] Applied rhythm CSS vars to ${Math.min(libraryCtx.sectionRhythm.length, visibleSections.length)} sections`);
+            }
+          }
         }
 
         log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
@@ -891,6 +909,25 @@ export async function POST(req: NextRequest) {
 
                 const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
 
+                // ── Phase 2 image enrichment: replace AI-generated images ──
+                // Phase 2 products get random AI-chosen Unsplash URLs.
+                // Replace them with category-appropriate images from PRODUCT_URLS.
+                const p2Category = pickProductCategory([sanitizedPrompt]);
+                const p2ImagePool = PRODUCT_URLS[p2Category] || PRODUCT_URLS['general'];
+                let p2ImagesReplaced = 0;
+                for (const p of normalizedBatch) {
+                  if (p.images.length > 0) {
+                    // Replace with a deterministic category-appropriate image
+                    const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % p2ImagePool.length;
+                    const prevImg = p.images[0];
+                    p.images[0] = p2ImagePool[imgIdx];
+                    if (prevImg !== p.images[0]) p2ImagesReplaced++;
+                  }
+                }
+                if (p2ImagesReplaced > 0) {
+                  log(`[Store Generate] Phase 2 batch ${batchNum}: replaced ${p2ImagesReplaced}/${normalizedBatch.length} images with category-appropriate ones (category: ${p2Category})`);
+                }
+
                 if (normalizedBatch.length === 0) {
                   warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
                   break;
@@ -958,6 +995,39 @@ export async function POST(req: NextRequest) {
           }
         } catch (guardErr) {
           warn(`[Store Generate] Quality guardrails error (non-fatal): ${guardErr instanceof Error ? guardErr.message : String(guardErr)}`);
+        }
+
+        // ── Image relevance enforcement ──
+        // Ensure ALL product images are category-appropriate.
+        // Products with generic/wrong images get replaced.
+        try {
+          const productCategory = pickProductCategory([sanitizedPrompt]);
+          const safeImagePool = PRODUCT_URLS[productCategory] || PRODUCT_URLS['general'];
+          // Build a set of known-bad image patterns (electronics/general for non-electronics stores)
+          const isElectronicsStore = productCategory === 'electronics/tech';
+          const badPatterns = isElectronicsStore
+            ? [] // electronics stores can have any electronics images
+            : ['headphone', 'laptop', 'camera', 'keyboard', 'monitor', 'speaker', 'printer'];
+          let imagesFixed = 0;
+          for (const p of store.products) {
+            if (p.images.length === 0) continue;
+            const img = p.images[0];
+            // Check if image is from the wrong category
+            const isFromWrongCategory = !isElectronicsStore && badPatterns.some(bp => img.toLowerCase().includes(bp));
+            // Check if image is from the generic pool
+            const isGeneric = img.includes('photo-1523275335684') || img.includes('photo-1505740420928') || img.includes('photo-1526170375885');
+            if (isFromWrongCategory || isGeneric) {
+              // Replace with a deterministic category-appropriate image
+              const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % safeImagePool.length;
+              p.images[0] = safeImagePool[imgIdx];
+              imagesFixed++;
+            }
+          }
+          if (imagesFixed > 0) {
+            log(`[Store Generate] Image relevance: replaced ${imagesFixed}/${store.products.length} wrong-category/generic images (category: ${productCategory})`);
+          }
+        } catch (imgErr) {
+          warn(`[Store Generate] Image relevance check error (non-fatal): ${imgErr instanceof Error ? imgErr.message : String(imgErr)}`);
         }
 
         // ── Final result ──

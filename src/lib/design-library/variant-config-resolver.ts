@@ -16,15 +16,39 @@
 
 import { getVariantMapping } from './variant-mapping'
 import { getLibraryMetadata, registerLibraryComponents } from './loader'
+import { componentRegistry } from '@/lib/component-registry'
 import type { Section, StoreTheme } from '@/lib/store-schema'
 
-// Ensure design library metadata is available on first client-side use.
-// This populates the libraryMetadata Map so getLibraryMetadata() returns
-// real data instead of undefined. The JSON data is already bundled by
-// webpack via static imports in loader.ts.
-let _clientLibraryReady = false;
-if (typeof window !== 'undefined' && !_clientLibraryReady) {
-  try { registerLibraryComponents(); _clientLibraryReady = true; } catch { /* non-fatal */ }
+// ── Client-side Design Library Initialization ─────────────────
+// The libraryMetadata Map lives in loader.ts as a module-level variable.
+// On the server it's populated by ensureLibraryRegistered().
+// On the client, the module is re-evaluated (fresh empty Map), so we must
+// re-register. This top-level side effect runs when the module is first
+// imported on the client, BEFORE any rendering occurs.
+
+let _clientLibraryReady = false
+
+function ensureClientLibraryReady(): void {
+  if (_clientLibraryReady) return
+  if (typeof window === 'undefined') return
+  try {
+    registerLibraryComponents()
+    _clientLibraryReady = true
+  } catch (e) {
+    // Log but don't crash — variant config will fall back to empty overrides
+    console.warn('[variant-config-resolver] Client-side library registration failed:', e)
+  }
+}
+
+// Execute immediately on module load (client-only)
+ensureClientLibraryReady()
+
+/**
+ * Public: check whether the client-side library is ready.
+ * Returns true if getLibraryMetadata() will return real data.
+ */
+export function isClientLibraryReady(): boolean {
+  return _clientLibraryReady || typeof window === 'undefined'
 }
 
 // ── Public types ───────────────────────────────────────────
@@ -1176,11 +1200,28 @@ export function resolveVariantConfig(
   const componentId = section.componentMeta?.componentId
   if (!componentId) return { ...EMPTY_CONFIG }
 
+  // ── Safety: re-register on client if metadata is missing ──
+  // This handles the edge case where the module-level side effect
+  // in variant-config-resolver.ts ran before loader.ts was imported
+  // in certain webpack chunk ordering scenarios.
+  if (typeof window !== 'undefined' && !_clientLibraryReady) {
+    ensureClientLibraryReady()
+  }
+
   // 1. Get the variant mapping (base configOverrides + section type)
   const mapping = getVariantMapping(componentId)
 
   // 2. Get library metadata (styleHooks, contentRules, etc.)
-  const metadata = getLibraryMetadata(componentId)
+  let metadata = getLibraryMetadata(componentId)
+
+  // ── Fallback observable: log when metadata is missing ──
+  if (!metadata) {
+    console.warn(
+      `[resolveVariantConfig] No library metadata for componentId="${componentId}". ` +
+      `Registry has ${componentRegistry.size} entries, clientReady=${_clientLibraryReady}. ` +
+      `Section will render with generic defaults.`,
+    )
+  }
 
   // 3. Start with configOverrides from the mapping as content overrides
   //    (mapping.configOverrides contains hero layout/content fields)

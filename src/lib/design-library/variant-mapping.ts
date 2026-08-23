@@ -654,17 +654,25 @@ const variantMap = new Map<string, VariantMapping>(
 /**
  * Get the variant mapping for a given design library component ID.
  * Returns a default no-op mapping if the ID is not found.
+ * Logs a warning when falling back so missing mappings are observable.
  */
 export function getVariantMapping(componentId: string): VariantMapping {
-  return (
-    variantMap.get(componentId) ?? {
+  const mapping = variantMap.get(componentId)
+  if (!mapping) {
+    console.warn(
+      `[variant-mapping] No mapping for componentId="${componentId}". ` +
+      `Section will render with generic spacer/layout. This usually means the ` +
+      `AI generated an unknown component ID or the design library is missing this variant.`,
+    )
+    return {
       componentId,
       sectionType: 'spacer',
       isNewComponent: false,
       configOverrides: {},
       description: `No mapping defined for ${componentId}. Falls back to spacer.`,
     }
-  )
+  }
+  return mapping
 }
 
 /**
