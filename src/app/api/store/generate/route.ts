@@ -846,32 +846,70 @@ export async function POST(req: NextRequest) {
         send('progress', { stage: 'applying-design', message: 'Applying design system...' });
         store = bridgeSectionStyles(store);
 
-        // ── Hero image backfill (CRITICAL: prevents plain/solid hero) ──
-        // The AI sometimes omits heroImages or provides empty arrays.
-        // This safety net ensures every hero has 3 category-appropriate images
-        // and carousel is enabled, regardless of AI compliance.
+        // ── Hero guarantee + image backfill (CRITICAL) ──
+        // Ensures EVERY store has a homepage hero with 3 rotating images.
+        // Handles: missing hero section, empty heroImages, invalid URLs.
         try {
           const heroCategory = pickCategory([sanitizedPrompt]);
           const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+          const homepage = store.pages.find(p => p.isHomepage) || store.pages[0];
+
+          // Step 1: Ensure homepage has a hero section
+          const hasHero = homepage.sections.some(s => s.type === 'hero' && s.visible !== false);
+          if (!hasHero) {
+            const heroSection: Section = {
+              id: crypto.randomUUID(),
+              type: 'hero',
+              content: {
+                headline: store.name || 'Welcome to Our Store',
+                subheadline: store.description || 'Discover our curated collection',
+                ctaText: 'Shop Now',
+                ctaLink: '/shop',
+                alignment: 'center',
+                height: 'xl',
+                badge: 'NEW COLLECTION',
+                layout: 'minimal',
+                visualPriority: 'headline',
+                backgroundTreatment: 'editorial',
+                vignette: true,
+                heroImages: heroImagePool.slice(0, 3).map((url, i) => ({
+                  src: url,
+                  alt: `${store.name} hero image ${i + 1}`,
+                  role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+                })),
+                carouselEnabled: true,
+                carouselInterval: 5,
+              },
+              style: {
+                paddingY: 'xl',
+                maxWidth: 'xl',
+                backgroundImage: heroImagePool[0],
+                overlay: true,
+                backgroundColor: undefined,
+              },
+              visible: true,
+            };
+            homepage.sections.unshift(heroSection);
+            log(`[Store Generate] Hero guarantee: INJECTED hero section (AI omitted it)`);
+          }
+
+          // Step 2: Backfill hero images on existing hero sections
           for (const page of store.pages) {
             for (const section of page.sections) {
               if (section.type !== 'hero') continue;
               const content = section.content as Record<string, unknown>;
               const style = section.style as Record<string, unknown>;
 
-              // Determine current image sources
               let heroImages = content.heroImages;
               if (!Array.isArray(heroImages) || heroImages.length === 0) {
-                // No heroImages at all — backfill from category pool
                 const images = heroImagePool.slice(0, 3).map((url, i) => ({
                   src: url,
                   alt: `${store.name} hero image ${i + 1}`,
                   role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
                 }));
                 content.heroImages = images;
-                log(`[Store Generate] Hero backfill: injected 3 hero images from category ${heroCategory}`);
+                log(`[Store Generate] Hero backfill: injected 3 hero images from ${heroCategory}`);
               } else {
-                // Validate existing heroImages — replace any with invalid/empty src
                 let hadInvalid = false;
                 const validated = (heroImages as Array<Record<string, unknown>>).slice(0, 3).map((img, i) => {
                   const src = typeof img?.src === 'string' && img.src.startsWith('https://') ? img.src : '';
@@ -888,24 +926,21 @@ export async function POST(req: NextRequest) {
                 }
               }
 
-              // Force carousel enabled
               content.carouselEnabled = true;
               content.carouselInterval = 5;
 
-              // Ensure style.backgroundImage is set as fallback
               if (!style.backgroundImage || typeof style.backgroundImage !== 'string') {
                 style.backgroundImage = heroImagePool[0];
                 log(`[Store Generate] Hero: set style.backgroundImage fallback`);
               }
 
-              // Ensure overlay is set for text readability
               if (style.overlay === undefined) {
                 style.overlay = true;
               }
             }
           }
         } catch (heroErr) {
-          warn(`[Store Generate] Hero image backfill error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
+          warn(`[Store Generate] Hero guarantee error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
         }
 
         // ── Validate and fix componentMeta ─────────────────────
