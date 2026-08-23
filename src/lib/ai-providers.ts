@@ -2,9 +2,10 @@
 // AI Provider Abstraction Layer
 // ========================================
 // Provider chain (production):
-//   1. GLM / Zhipu AI (primary — requires balance on platform)
-//   2. Gemini (secondary — genuinely FREE, 15 RPM)
-//   3. OpenRouter (fallback, requires credits)
+//   1. Groq (if key available — fast, free tier)
+//   2. GLM / Zhipu AI (primary — requires balance on platform)
+//   3. Gemini (secondary — genuinely FREE, 15 RPM)
+//   4. OpenRouter (fallback, requires credits)
 //
 // Provider chain (sandbox / local dev):
 //   1. z-ai (sandbox-only, fastest)
@@ -797,6 +798,124 @@ export async function streamGemini(
   }
 }
 
+// ─── Groq Provider (OpenAI-compatible, free tier available) ──────────
+// API: https://api.groq.com/openai/v1/chat/completions
+// Get a key at https://console.groq.com
+
+const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
+
+const GROQ_FALLBACK_MODELS = [
+  'llama-3.1-8b-instant',
+  'gemma2-9b-it',
+  'mixtral-8x7b-32768',
+];
+
+class GroqProvider implements AIProvider {
+  readonly name = 'groq';
+  private _apiKey: string | null = null;
+
+  private getApiKey(): string {
+    if (!this._apiKey) {
+      const key = process.env.GROQ_API_KEY;
+      if (!key || key === 'placeholder') {
+        throw new Error('GROQ_API_KEY not configured');
+      }
+      if (key.length < 20) {
+        throw new Error(`GROQ_API_KEY too short (${key.length} chars)`);
+      }
+      this._apiKey = key;
+    }
+    return this._apiKey;
+  }
+
+  private getModel(): string {
+    return process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL;
+  }
+
+  async call(options: ProviderCallOptions): Promise<string> {
+    const apiKey = this.getApiKey();
+    const model = this.getModel();
+    const { messages, temperature = 0.7, maxTokens, jsonMode, timeout = 90_000 } = options;
+
+    const openaiMessages: Array<{ role: string; content: string }> = [];
+    let systemPrompt: string | undefined;
+
+    for (const msg of messages) {
+      if (msg.role === 'assistant' && openaiMessages.length === 0) {
+        systemPrompt = msg.content;
+      } else {
+        openaiMessages.push({ role: msg.role, content: msg.content });
+      }
+    }
+
+    const body: Record<string, unknown> = {
+      model,
+      messages: [
+        ...(systemPrompt ? [{ role: 'system', content: systemPrompt }] : []),
+        ...openaiMessages,
+      ],
+      temperature,
+    };
+
+    if (maxTokens) body.max_tokens = maxTokens;
+    if (jsonMode) body.response_format = { type: 'json_object' };
+
+    const modelsToTry = [model, ...GROQ_FALLBACK_MODELS.filter(m => m !== model)];
+
+    for (let mi = 0; mi < modelsToTry.length; mi++) {
+      const tryModel = modelsToTry[mi];
+      body.model = tryModel;
+
+      try {
+        const response = await Promise.race([
+          fetch(GROQ_API_URL, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify(body),
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeout)
+          ),
+        ]);
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => '');
+          const errMsg = `Groq ${response.status}: ${errBody.substring(0, 200)}`;
+          if (mi < modelsToTry.length - 1 && (response.status === 429 || response.status === 503)) continue;
+          throw new Error(errMsg);
+        }
+
+        const data = await response.json() as {
+          choices: Array<{ message?: { content?: string } }>;
+          error?: { message: string };
+        };
+
+        if (data.error) throw new Error(`Groq error: ${data.error.message}`);
+
+        const content = data.choices?.[0]?.message?.content;
+        if (!content || content.trim().length === 0) throw new Error('Empty response from Groq');
+
+        if (mi > 0) console.log(`[Groq] ✅ Fallback model ${tryModel} succeeded`);
+
+        return content.trim();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (mi === modelsToTry.length - 1 || (!msg.includes('429') && !msg.includes('503'))) throw err;
+      }
+    }
+
+    throw new Error('Groq: all models exhausted');
+  }
+
+  reset() {
+    this._apiKey = null;
+  }
+}
+
 // ─── Provider Chain Management ─────────────────────────────────
 
 let providers: AIProvider[] | null = null;
@@ -809,6 +928,13 @@ function createProviders(): AIProvider[] {
   // z-ai: ONLY in sandbox (non-production) environments.
   if (zaiCreate && process.env.NODE_ENV !== 'production') {
     chain.push(new ZAIProvider());
+  }
+
+  // Groq: Fast inference (OpenAI-compatible), free tier available.
+  // Requires GROQ_API_KEY — https://console.groq.com
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey && groqKey !== 'placeholder' && groqKey.length >= 20) {
+    chain.push(new GroqProvider());
   }
 
   // GLM / Zhipu AI: Primary production provider. Requires balance/resource package.
@@ -834,14 +960,20 @@ function createProviders(): AIProvider[] {
   if (chain.length === 0) {
     console.error('[AI Providers] CRITICAL: No AI providers configured!');
     console.error(`[AI Providers]   z-ai SDK: ${zaiCreate ? 'loaded (sandbox only)' : 'not available'}`);
+    console.error(`[AI Providers]   GROQ_API_KEY: ${groqKey ? 'set' : 'NOT SET'}`);
     console.error(`[AI Providers]   GLM_API_KEY: ${glmKey ? 'set' : 'NOT SET'}`);
     console.error(`[AI Providers]   GOOGLE_AI_API_KEY: ${gemKey ? 'set' : 'NOT SET'}`);
     console.error(`[AI Providers]   OPENROUTER_API_KEY: ${orKey ? 'set' : 'NOT SET'}`);
-    console.error('[AI Providers] Fix: Set GOOGLE_AI_API_KEY (free from https://aistudio.google.com/apikey)');
+    console.error('[AI Providers] Fix: Set GROQ_API_KEY (free from https://console.groq.com)');
   }
 
   providers = chain;
   const details = chain.map(p => {
+    if (p.name === 'groq') {
+      const k = process.env.GROQ_API_KEY;
+      const m = process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL;
+      return `groq(key=${k?.slice(0, 8)}..., model=${m})`;
+    }
     if (p.name === 'glm') {
       const k = process.env.GLM_API_KEY;
       const m = process.env.GLM_MODEL || DEFAULT_GLM_MODEL;
@@ -887,6 +1019,7 @@ export function getProviderDiagnostics(): {
   };
   return {
     env: {
+      GROQ_API_KEY: maskKey(process.env.GROQ_API_KEY),
       GLM_API_KEY: maskKey(process.env.GLM_API_KEY),
       OPENROUTER_API_KEY: maskKey(process.env.OPENROUTER_API_KEY),
       GOOGLE_AI_API_KEY: maskKey(process.env.GOOGLE_AI_API_KEY),
@@ -896,6 +1029,7 @@ export function getProviderDiagnostics(): {
     },
     zaiSdkLoaded: !!zaiCreate,
     nodeEnv: process.env.NODE_ENV || 'not set',
+    groqModel: process.env.GROQ_MODEL || DEFAULT_GROQ_MODEL,
     glmModel: process.env.GLM_MODEL || DEFAULT_GLM_MODEL,
     openrouterModel: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
   };

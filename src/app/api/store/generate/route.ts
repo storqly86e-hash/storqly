@@ -659,11 +659,24 @@ RULES:
 
 // ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
+  // Auth: require login when database is available.
+  // When DB is unavailable (e.g., DATABASE_URL not set on Railway),
+  // allow anonymous generation so AI providers can be verified.
+  let userId: string | undefined;
   try {
-    await requireAuth();
+    const session = await requireAuth();
+    userId = session.user?.id;
   } catch (e) {
-    if (e instanceof AuthError) return authErrorResponse(e);
-    throw e;
+    if (e instanceof AuthError) {
+      // Check if the auth failure is due to database unavailability
+      const isDbDown = !process.env.DATABASE_URL ||
+        (e.message.includes('prisma') || e.message.includes('database') || e.message.includes('datasource'));
+      if (!isDbDown) return authErrorResponse(e);
+      // DB unavailable — proceed anonymously
+      console.warn('[Generate] Database unavailable, allowing anonymous generation');
+    } else {
+      throw e;
+    }
   }
 
   let prompt: string | undefined;

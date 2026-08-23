@@ -37,6 +37,22 @@ function checkByFormat(): ProviderStatus[] {
     results.push({ name: 'z-ai', ok: true, latencyMs: Date.now() - start, method: 'format' });
   }
 
+  // Groq
+  const groqKey = process.env.GROQ_API_KEY;
+  if (groqKey && groqKey !== 'placeholder') {
+    if (groqKey.length >= 20) {
+      results.push({
+        name: 'groq',
+        ok: true,
+        latencyMs: Date.now() - start,
+        method: 'format',
+        model: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+      });
+    } else {
+      results.push({ name: 'groq', ok: false, error: 'Too short', latencyMs: Date.now() - start, method: 'format' });
+    }
+  }
+
   // GLM / Zhipu AI
   const glmKey = process.env.GLM_API_KEY;
   if (glmKey && glmKey !== 'placeholder') {

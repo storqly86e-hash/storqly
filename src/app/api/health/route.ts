@@ -38,6 +38,11 @@ export async function GET() {
     uptime: process.uptime(),
     database: { ok: dbOk, error: dbError || undefined },
     env: {
+      GROQ_API_KEY: {
+        present: !!process.env.GROQ_API_KEY,
+        validFormat: !!(process.env.GROQ_API_KEY && process.env.GROQ_API_KEY.length >= 20),
+        length: process.env.GROQ_API_KEY?.length || 0,
+      },
       GLM_API_KEY: {
         present: !!process.env.GLM_API_KEY,
         validFormat: !!(process.env.GLM_API_KEY && process.env.GLM_API_KEY.includes('.')),
