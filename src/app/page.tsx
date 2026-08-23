@@ -75,6 +75,7 @@ import {
 } from 'lucide-react'
 import AuthModal, { AuthButton } from '@/components/auth-modal'
 import { createDemoStore } from '@/lib/store-schema'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -256,11 +257,33 @@ const features = [
   },
 ]
 
-// ─── Progress Messages (fallback when no SSE progress received) ──
+// ─── Generation Stage Machine ──────────────────────────────────────
+// Ordered stages that correspond to SSE progress events from the server.
+// The client advances through these as SSE events arrive.
+// Fallback cycling only kicks in if no SSE progress events are received.
 
-const progressMessages = [
+type GenerationStage = {
+  id: string
+  label: string
+  icon: string // lucide icon name used for visual indicator
+}
+
+const GENERATION_STAGES: GenerationStage[] = [
+  { id: 'analyzing', label: 'Analyzing your vision', icon: 'search' },
+  { id: 'design-direction', label: 'Creating design direction', icon: 'palette' },
+  { id: 'building-store', label: 'Building store with AI', icon: 'wand-2' },
+  { id: 'processing', label: 'Processing AI response', icon: 'cpu' },
+  { id: 'applying-design', label: 'Applying design system', icon: 'brush' },
+  { id: 'quality-check', label: 'Running quality checks', icon: 'shield-check' },
+  { id: 'finalizing', label: 'Finalizing your store', icon: 'check-circle-2' },
+]
+
+const STAGE_INDEX_MAP = new Map(GENERATION_STAGES.map((s, i) => [s.id, i]))
+
+// Fallback messages used ONLY when SSE progress events stop arriving
+const fallbackMessages = [
   'Analyzing your store vision...',
-  'Generating store layout...',
+  'Building store layout...',
   'Creating product catalog...',
   'Applying design theme...',
   'Adding sections and content...',
@@ -302,6 +325,7 @@ function LandingPage() {
 
   // Local UI state (not in Zustand — this is view-level)
   const [generationStatus, setGenerationStatus] = useState('')
+  const [generationStage, setGenerationStage] = useState<string | null>(null)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [aiStatus, setAiStatus] = useState<{ anyWorking: boolean; providers: Array<{ name: string; ok: boolean; error?: string }> } | null>(null)
@@ -321,18 +345,16 @@ function LandingPage() {
 
   // ── Fetch user's stores on login ──
   useEffect(() => {
-    if (!session?.user?.id) {
-      setMyStores([])
-      return
-    }
+    if (!session?.user?.id) return
     let cancelled = false
-    setStoresLoading(true)
+    // Defer loading state to next frame to avoid synchronous setState in effect
+    const rafId = requestAnimationFrame(() => { if (!cancelled) setStoresLoading(true) })
     fetch('/api/store/list')
       .then((r) => { if (!r.ok) throw new Error(); return r.json() })
       .then((data) => { if (!cancelled) setMyStores(data.stores ?? []) })
       .catch(() => { if (!cancelled) setMyStores([]) })
-      .finally(() => { if (!cancelled) setStoresLoading(false) })
-    return () => { cancelled = true }
+      .finally(() => { cancelAnimationFrame(rafId); if (!cancelled) setStoresLoading(false) })
+    return () => { cancelled = true; cancelAnimationFrame(rafId) }
   }, [session?.user?.id])
 
   // ── Edit store: fetch full data via lookup, then load into editor ──
@@ -368,6 +390,7 @@ function LandingPage() {
     clearTimers()
     setIsGenerating(false)
     setGenerationStatus('')
+    setGenerationStage(null)
     setElapsedSeconds(0)
     setError(null)
   }, [clearTimers, setIsGenerating])
@@ -417,8 +440,8 @@ function LandingPage() {
     let receivedSSEProgress = false
     progressTimerRef.current = setInterval(() => {
       if (!receivedSSEProgress) {
-        fallbackIdx = (fallbackIdx + 1) % progressMessages.length
-        setGenerationStatus(progressMessages[fallbackIdx])
+        fallbackIdx = (fallbackIdx + 1) % fallbackMessages.length
+        setGenerationStatus(fallbackMessages[fallbackIdx])
       }
     }, 3000)
 
@@ -429,6 +452,7 @@ function LandingPage() {
       setError(message)
       setIsGenerating(false)
       setGenerationStatus('')
+      setGenerationStage(null)
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
@@ -438,6 +462,7 @@ function LandingPage() {
       clearTimers()
       setIsGenerating(false)
       setGenerationStatus('')
+      setGenerationStage(null)
       setElapsedSeconds(0)
     }
 
@@ -534,6 +559,10 @@ function LandingPage() {
               try {
                 const data = JSON.parse(dataStr)
                 setGenerationStatus(data.message || 'Processing...')
+                // If the stage maps to our stage machine, advance the visual
+                if (data.stage && STAGE_INDEX_MAP.has(data.stage)) {
+                  setGenerationStage(data.stage)
+                }
               } catch { /* ignore */ }
             } else if (currentEvent === 'result') {
               try {
@@ -606,6 +635,7 @@ function LandingPage() {
       setError(message)
       setIsGenerating(false)
       setGenerationStatus('')
+      setGenerationStage(null)
       setElapsedSeconds(0)
       toast.error('Store generation failed', { description: message })
     }
@@ -753,7 +783,7 @@ function LandingPage() {
             </div>
 
             {/* Status feedback area */}
-            <div className="mt-4 min-h-[48px]">
+            <div className="mt-4 min-h-[72px]">
               <AnimatePresence mode="wait">
                 {isGenerating && !error && (
                   <motion.div
@@ -761,14 +791,51 @@ function LandingPage() {
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
-                    className="flex flex-col items-center gap-1"
+                    className="flex flex-col items-center gap-2.5"
                   >
+                    {/* Stage progress indicator */}
+                    {generationStage && (
+                      <div className="flex items-center gap-1">
+                        {GENERATION_STAGES.map((stage, i) => {
+                          const stageIdx = STAGE_INDEX_MAP.get(generationStage) ?? 0
+                          const isActive = stage.id === generationStage
+                          const isDone = i < stageIdx
+                          return (
+                            <div key={stage.id} className="flex items-center gap-1">
+                              <div
+                                className={cn(
+                                  'flex items-center justify-center rounded-full transition-all duration-500',
+                                  isActive
+                                    ? 'h-6 w-6 bg-[#a855f7] shadow-lg shadow-[#a855f7]/30'
+                                    : isDone
+                                      ? 'h-5 w-5 bg-[#a855f7]/60'
+                                      : 'h-5 w-5 bg-zinc-800'
+                                )}
+                                title={stage.label}
+                              >
+                                {isDone ? (
+                                  <Check className="h-3 w-3 text-white" />
+                                ) : isActive ? (
+                                  <Loader2 className="h-3 w-3 animate-spin text-white" />
+                                ) : null}
+                              </div>
+                              {i < GENERATION_STAGES.length - 1 && (
+                                <div className={cn(
+                                  'h-0.5 w-3 rounded-full transition-colors duration-500',
+                                  i < stageIdx ? 'bg-[#a855f7]/60' : 'bg-zinc-800'
+                                )} />
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
                     <p className="flex items-center gap-2 text-sm text-zinc-400">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a855f7]" />
+                      {!generationStage && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#a855f7]" />}
                       {generationStatus}
                     </p>
                     <p className="text-xs text-zinc-600">
-                      Elapsed: {formatElapsed(elapsedSeconds)} · AI is building your store, this may take up to 2 minutes
+                      Elapsed: {formatElapsed(elapsedSeconds)}
                     </p>
                   </motion.div>
                 )}
@@ -899,7 +966,7 @@ function LandingPage() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => { window.location.href = `/?store=${s.slug}` }}
+                            onClick={() => { window.location.replace(`/?store=${s.slug}`) }}
                             className="h-7 gap-1.5 rounded-lg px-3 text-xs text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
                           >
                             <Eye className="h-3 w-3" />
@@ -967,8 +1034,14 @@ function LandingPage() {
               <p className="mt-2 text-sm leading-relaxed text-zinc-500">
                 {feature.description}
               </p>
-              <div className="mt-4 flex items-center gap-1 text-sm font-medium text-zinc-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
-                Learn more <ArrowRight className="h-3.5 w-3.5" />
+              <div className={cn(
+                'mt-4 flex items-center gap-1 text-sm font-medium text-zinc-600 opacity-0 transition-opacity duration-300 group-hover:opacity-100',
+                i === 0 && 'text-[#c084fc]',
+                i === 1 && 'text-[#f472b6]',
+                i === 2 && 'text-[#fb7185]',
+              )}>
+                Explore
+                <ArrowRight className="h-3.5 w-3.5" />
               </div>
             </motion.div>
           ))}
@@ -1512,7 +1585,7 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
         </p>
         <Button
           variant="outline"
-          onClick={() => window.location.href = '/'}
+          onClick={() => window.location.replace('/')}
           className="gap-2"
         >
           <ArrowLeft className="h-4 w-4" />

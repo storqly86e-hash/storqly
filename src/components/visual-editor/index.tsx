@@ -53,6 +53,16 @@ import {
 } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/sonner';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { type LucideIcon, useState, useCallback, useMemo } from 'react';
 
 // ── Section type metadata (shared with StoreRenderer) ──────────────
@@ -697,13 +707,13 @@ function HeroPropertiesPanel({
 interface PropertiesPanelProps {
   section: Section;
   pageId: string;
+  onRequestDelete: () => void;
 }
 
-function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
+function PropertiesPanel({ section, pageId, onRequestDelete }: PropertiesPanelProps) {
   const {
     updateSectionContent,
     updateSectionStyle,
-    removeSection,
     setSelectedSectionId,
     store,
     setStore,
@@ -733,10 +743,8 @@ function PropertiesPanel({ section, pageId }: PropertiesPanelProps) {
   );
 
   const handleDelete = useCallback(() => {
-    removeSection(pageId, section.id);
-    setSelectedSectionId(null);
-    toast.success('Section deleted');
-  }, [pageId, section.id, removeSection, setSelectedSectionId]);
+    onRequestDelete();
+  }, [onRequestDelete]);
 
   const handleVisibilityToggle = useCallback(() => {
     if (!store) return;
@@ -1124,6 +1132,9 @@ export function VisualEditor() {
   const [renamingPageId, setRenamingPageId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState('');
 
+  // State for delete confirmation
+  const [pendingDeleteSectionId, setPendingDeleteSectionId] = useState<string | null>(null);
+
   // State for add-page dialog
   const [showAddPageDialog, setShowAddPageDialog] = useState(false);
   const [newPageName, setNewPageName] = useState('');
@@ -1228,20 +1239,34 @@ export function VisualEditor() {
     [store, setStore]
   );
 
-  const handleDeleteSection = useCallback(
+  const handleRequestDeleteSection = useCallback(
     (sectionId: string) => {
-      if (!pageId) return;
-      const section = sections.find((s) => s.id === sectionId);
-      removeSection(pageId, sectionId);
-      if (selectedSectionId === sectionId) {
+      setPendingDeleteSectionId(sectionId);
+    },
+    []
+  );
+
+  const confirmDeleteSection = useCallback(
+    () => {
+      if (!pageId || !pendingDeleteSectionId) return;
+      const section = sections.find((s) => s.id === pendingDeleteSectionId);
+      removeSection(pageId, pendingDeleteSectionId);
+      if (selectedSectionId === pendingDeleteSectionId) {
         setSelectedSectionId(null);
       }
       if (section) {
         toast.success(`Deleted ${SECTION_TYPE_LABELS[section.type] || section.type} section`);
       }
+      setPendingDeleteSectionId(null);
     },
-    [pageId, sections, selectedSectionId, removeSection, setSelectedSectionId]
+    [pageId, pendingDeleteSectionId, sections, selectedSectionId, removeSection, setSelectedSectionId]
   );
+
+  const cancelDeleteSection = useCallback(() => {
+    setPendingDeleteSectionId(null);
+  }, []);
+
+  const handleDeleteSection = handleRequestDeleteSection;
 
   // Handle page tab click (before early return to satisfy rules-of-hooks)
   const handlePageTabClick = useCallback(
@@ -1448,13 +1473,29 @@ export function VisualEditor() {
         )}
       </div>
 
+      {/* Delete confirmation dialog */}
+      <AlertDialog open={pendingDeleteSectionId !== null} onOpenChange={(open) => { if (!open) cancelDeleteSection(); }}>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-zinc-100">Delete this section?</AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-zinc-100">Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={confirmDeleteSection}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Properties Panel — only for section-editable pages */}
       {selectedSection && !isTemplatePage && (
         <div className="hidden md:flex w-72 lg:w-80 flex-shrink-0 min-h-0 border-r border-zinc-800">
           {selectedSection.type === 'hero' ? (
             <HeroPropertiesPanel section={selectedSection} pageId={pageId} />
           ) : (
-            <PropertiesPanel section={selectedSection} pageId={pageId} />
+            <PropertiesPanel section={selectedSection} pageId={pageId} onRequestDelete={() => handleRequestDeleteSection(selectedSection.id)} />
           )}
         </div>
       )}

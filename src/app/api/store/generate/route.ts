@@ -563,10 +563,11 @@ export async function POST(req: NextRequest) {
         const providerChain = getProviders();
         log(`[Store Generate] Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
 
-        send('progress', { stage: 'generating', message: 'Generating your store...' });
+        send('progress', { stage: 'analyzing', message: 'Analyzing your store vision...' });
         log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
 
         // ── Library-aware composition ────────────────────────────────
+        send('progress', { stage: 'design-direction', message: 'Creating design direction...' });
         let libraryCtx: CompositionResult | null = null;
         let libraryPromptSection = '';
         try {
@@ -586,6 +587,9 @@ export async function POST(req: NextRequest) {
           ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
           : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
         log(`[Store Generate] System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
+
+        send('progress', { stage: 'building-store', message: 'Building your store with AI...' });
+        logGeneration({ event: 'generation_stage_changed', duration_ms: elapsed(), details: { stage: 'building-store' } });
 
         const phase1Result = await executeAI('store-generation', [
           { role: 'user', content: userMessage },
@@ -611,7 +615,8 @@ export async function POST(req: NextRequest) {
         log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
 
         // ── Parse JSON ──
-        send('progress', { stage: 'parsing', message: 'Processing store data...' });
+        send('progress', { stage: 'processing', message: 'Processing AI response...' });
+        logGeneration({ event: 'generation_ai_completed', duration_ms: elapsed(), details: { chars: phase1Result.content.length, attempts: phase1Result.attempts, provider: phase1Result.provider } });
 
         // Guard against oversized AI responses (potential OOM vector)
         const MAX_RESPONSE_CHARS = 500_000; // ~125K tokens — well above any reasonable store
@@ -653,6 +658,7 @@ export async function POST(req: NextRequest) {
         let store = normResult.store;
 
         // ── Bridge AI style tokens → renderer-consumable fields ──
+        send('progress', { stage: 'applying-design', message: 'Applying design system...' });
         store = bridgeSectionStyles(store);
 
         // ── Validate and fix componentMeta ─────────────────────
@@ -783,6 +789,7 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Quality guardrails + genericity detection + auto-repair ──
+        send('progress', { stage: 'quality-check', message: 'Running quality checks...' });
         let finalQualityScore = 0;
         try {
           const qualityReport = validateStoreQuality(store);
@@ -810,6 +817,7 @@ export async function POST(req: NextRequest) {
         }
 
         // ── Final result ──
+        send('progress', { stage: 'finalizing', message: 'Finalizing your store...' });
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
         log(`[Store Generate] Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
         logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });

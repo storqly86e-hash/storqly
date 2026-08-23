@@ -95,12 +95,15 @@ function Carousel({
 
   React.useEffect(() => {
     if (!api) return
-    onSelect(api)
-    api.on("reInit", onSelect)
+    // Trigger initial selection via the event listener to avoid direct setState in effect
+    const handleInit = () => onSelect(api)
+    handleInit()
+    api.on("reInit", handleInit)
     api.on("select", onSelect)
 
     return () => {
       api?.off("select", onSelect)
+      api?.off("reInit", handleInit)
     }
   }, [api, onSelect])
 

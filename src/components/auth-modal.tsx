@@ -354,7 +354,7 @@ export function AuthButton({
           className="h-8 w-8 text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800"
           onClick={async () => {
             await signOut({ redirect: false })
-            window.location.href = '/'
+            window.location.replace('/')
           }}
           aria-label="Sign out"
         >
