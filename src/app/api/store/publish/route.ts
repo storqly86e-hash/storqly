@@ -6,7 +6,7 @@
 // and publishedAt=now(). Returns the slug for the published store URL.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import type { Store } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
@@ -15,6 +15,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAuth();
     const userId = session.user.id;
+
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json(
+        { error: 'Database is currently unavailable. Please try again later.' },
+        { status: 503 }
+      );
+    }
 
     const body = await req.json();
     const { store } = body as { store?: Store };
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const now = new Date();
 
     // Ownership enforcement: if record exists and is owned by a different user, block
-    const existing = await db.store.findUnique({
+    const existing = await dbClient.store.findUnique({
       where: { id: store.id },
     });
     if (existing?.userId && existing.userId !== userId) {
@@ -41,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Upsert: create or update the store record
-    const record = await db.store.upsert({
+    const record = await dbClient.store.upsert({
       where: { id: store.id },
       update: {
         name: store.name,

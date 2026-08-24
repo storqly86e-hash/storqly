@@ -6,7 +6,7 @@
 // This is for auto-save / draft persistence.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import type { Store } from '@/lib/store-schema';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
@@ -15,6 +15,14 @@ export async function POST(req: NextRequest) {
   try {
     const session = await requireAuth();
     const userId = session.user.id;
+
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json(
+        { error: 'Database is currently unavailable. Please try again later.' },
+        { status: 503 }
+      );
+    }
 
     const body = await req.json();
     const { store } = body as { store?: Store };
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
     const now = new Date();
 
     // Upsert: create or update, preserving existing published state
-    const existing = await db.store.findUnique({
+    const existing = await dbClient.store.findUnique({
       where: { id: store.id },
     });
 
@@ -42,7 +50,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const record = await db.store.upsert({
+    const record = await dbClient.store.upsert({
       where: { id: store.id },
       update: {
         name: store.name,

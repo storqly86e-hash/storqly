@@ -1662,16 +1662,17 @@ function HomePage() {
 
 export default function Home() {
   return (
-    <Suspense fallback={<HomePageSkeleton />}>
-      <HomePage />
-    </Suspense>
+    <div suppressHydrationWarning>
+      <Suspense fallback={<HomePageSkeleton />}>
+        <HomePage />
+      </Suspense>
+    </div>
   )
 }
-
 /** Minimal skeleton shown while searchParams are resolving */
 function HomePageSkeleton() {
   return (
-    <main className="min-h-screen flex flex-col bg-[#09090b] text-white">
+    <main className="min-h-screen flex flex-col bg-[#09090b] text-white" suppressHydrationWarning>
       <div className="flex-1 flex items-center justify-center">
         <p className="text-sm text-zinc-500">Loading...</p>
       </div>

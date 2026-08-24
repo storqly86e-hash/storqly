@@ -7,7 +7,7 @@
 // Does NOT auto-login — client must call signIn() separately.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { hashPassword } from '@/lib/password';
 
 // ─── Input validation ──────────────────────────────────────────
@@ -63,8 +63,16 @@ export async function POST(req: NextRequest) {
 
     const { name, email, password } = validation;
 
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json(
+        { error: 'Database is not configured. Registration is not available in this environment.' },
+        { status: 503 },
+      );
+    }
+
     // Check for existing user (case-insensitive email)
-    const existing = await db.user.findUnique({
+    const existing = await dbClient.user.findUnique({
       where: { email: email.toLowerCase() },
     });
 
@@ -78,7 +86,7 @@ export async function POST(req: NextRequest) {
     // Hash password and create user
     const hashedPassword = await hashPassword(password);
 
-    const user = await db.user.create({
+    const user = await dbClient.user.create({
       data: {
         name,
         email: email.toLowerCase(),

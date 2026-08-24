@@ -8,7 +8,7 @@
 //   Unpublished stores → requires auth + ownership match
 
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 export async function GET(req: NextRequest) {
@@ -23,7 +23,15 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    const record = await db.store.findUnique({
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json(
+        { error: 'Store not found.' },
+        { status: 404 }
+      );
+    }
+
+    const record = await dbClient.store.findUnique({
       where: { slug: slug.trim() },
     });
 

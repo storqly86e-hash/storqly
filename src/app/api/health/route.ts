@@ -3,7 +3,7 @@
 // ═══════════════════════════════════════════════════════════════════
 
 import { NextResponse } from 'next/server'
-import { db } from '@/lib/db'
+import { getDb } from '@/lib/db'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,11 +25,16 @@ function safeDbUrlDiagnostics(url: string | undefined): Record<string, unknown> 
 export async function GET() {
   let dbOk = false
   let dbError = ''
-  try {
-    await db.$queryRaw`SELECT 1`
-    dbOk = true
-  } catch (e) {
-    dbError = e instanceof Error ? e.message.substring(0, 120) : String(e).substring(0, 120)
+  const dbClient = getDb()
+  if (!dbClient) {
+    dbError = 'Database not configured (DATABASE_URL not set or invalid)'
+  } else {
+    try {
+      await dbClient.$queryRaw`SELECT 1`
+      dbOk = true
+    } catch (e) {
+      dbError = e instanceof Error ? e.message.substring(0, 120) : String(e).substring(0, 120)
+    }
   }
 
   return NextResponse.json({

@@ -6,7 +6,7 @@
 // Lightweight metadata only — full store fetched on-demand via /api/store/lookup.
 
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 export async function GET() {
@@ -14,7 +14,12 @@ export async function GET() {
     const session = await requireAuth();
     const userId = session.user.id;
 
-    const stores = await db.store.findMany({
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json({ stores: [] });
+    }
+
+    const stores = await dbClient.store.findMany({
       where: { userId },
       orderBy: { updatedAt: 'desc' },
       select: {

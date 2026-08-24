@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,7 +10,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No items in order' }, { status: 400 });
     }
 
-    const order = await db.order.create({
+    const dbClient = getDb();
+    if (!dbClient) {
+      return NextResponse.json(
+        { error: 'Database is currently unavailable. Please try again later.' },
+        { status: 503 }
+      );
+    }
+
+    const order = await dbClient.order.create({
       data: {
         storeId: storeId || 'unknown',
         storeName: storeName || null,
