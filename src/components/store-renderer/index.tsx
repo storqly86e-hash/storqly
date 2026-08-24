@@ -542,7 +542,7 @@ export function StoreRenderer({
     >
       {/* Header */}
       {!isTemplatePage && header
-        ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate })
+        ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate, variantCssVars: tokenCssVars })
         : <AutoHeader store={{ ...store, pages: effectivePages }} theme={theme} onNavigate={handleNavigate} cartCount={cartCount} currentPageId={currentPageId} />
       }
 
@@ -581,6 +581,7 @@ export function StoreRenderer({
                     onViewProduct: handleHomeCardClick,
                     onNavigate: handleNavigate,
                     forceHideAddToCart: true,
+                    variantCssVars: tokenCssVars,
                   })}
                 </Fragment>
               );
@@ -641,7 +642,7 @@ export function StoreRenderer({
 
       {/* Footer */}
       {!isTemplatePage && footer
-        ? renderSection({ section: footer, theme, selectedSectionId, onSelectSection, products, onNavigate: handleNavigate })
+        ? renderSection({ section: footer, theme, selectedSectionId, onSelectSection, products, onNavigate: handleNavigate, variantCssVars: tokenCssVars })
         : <AutoFooter store={store} theme={theme} />
       }
     </div>

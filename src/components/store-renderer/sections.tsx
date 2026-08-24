@@ -3092,6 +3092,13 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
     variantCssVars = { ...variantCssVars, ...rhythmVars };
   }
 
+  // Merge global design token CSS vars (typography scale, spacing, radii, etc.)
+  // These come from the composition engine via StoreRenderer's variantCssVars prop.
+  // They provide the base layer that variant-specific vars can override.
+  if (props.variantCssVars) {
+    variantCssVars = { ...props.variantCssVars, ...variantCssVars };
+  }
+
   // Build effective props with the merged section + variant metadata
   const effectiveProps: SectionRendererProps = {
     ...props,

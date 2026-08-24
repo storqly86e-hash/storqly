@@ -20,7 +20,7 @@ import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
 import { ensureLibraryRegistered } from '@/lib/design-library/ensure-registered';
 import { composeStore } from '@/lib/design-library/composition';
 import type { CompositionResult } from '@/lib/design-library/design-intent';
-import { buildLibraryPromptContext, buildHeroLibraryBlock, buildImageArtDirectionPrompt } from '@/lib/design-library/prompt-context';
+import { buildLibraryPromptContext, buildHeroLibraryBlock } from '@/lib/design-library/prompt-context';
 import { getVariantMapping } from '@/lib/design-library/variant-mapping';
 import { validateAndFixComponentMeta } from '@/lib/design-library/componentmeta-validator';
 import { bridgeSectionStyles } from '@/lib/design-library/style-bridge';
@@ -761,6 +761,11 @@ export async function POST(req: NextRequest) {
           if (libraryCtx) {
             log(`[Store Generate] Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
             libraryPromptSection = buildLibraryPromptContext(libraryCtx);
+            // Append hero-specific architecture from the hero variant's summary
+            const heroSummary = libraryCtx.variantSummaries.find(v => v.family === 'hero');
+            if (heroSummary) {
+              libraryPromptSection += '\n\n' + buildHeroLibraryBlock(heroSummary);
+            }
           }
         } catch (e) {
           warn(`[Store Generate] Library composition failed (non-fatal): ${e}. Using legacy generation.`);
@@ -821,8 +826,23 @@ export async function POST(req: NextRequest) {
           return;
         }
 
+        // ── Bridge AI style tokens → renderer-consumable fields ──
+        // IMPORTANT: Bridge runs BEFORE normalize because normalize strips
+        // non-standard style fields (density, typographySystem, headingAlignment,
+        // cardVariant, etc.) that the bridge needs to read and transform.
+        send('progress', { stage: 'applying-design', message: 'Applying design system...' });
+        const preBridgeStore = typeof parsed === 'object' && parsed !== null ? parsed as Store : null;
+        let bridgedData = parsed;
+        if (preBridgeStore?.pages) {
+          try {
+            bridgedData = bridgeSectionStyles(preBridgeStore);
+          } catch (e) {
+            log(`[Store Generate] Style bridge failed (non-fatal):`, e);
+          }
+        }
+
         // ── Normalize to Store schema ──
-        const normResult = normalizeStore(parsed, trimmedPrompt, phase1Count);
+        const normResult = normalizeStore(bridgedData, trimmedPrompt, phase1Count);
 
         if (!normResult) {
           warn(`[Store Generate] normalizeStore returned null.`);
@@ -841,10 +861,6 @@ export async function POST(req: NextRequest) {
         }
 
         let store = normResult.store;
-
-        // ── Bridge AI style tokens → renderer-consumable fields ──
-        send('progress', { stage: 'applying-design', message: 'Applying design system...' });
-        store = bridgeSectionStyles(store);
 
         // ── Hero guarantee + image backfill (CRITICAL) ──
         // Ensures EVERY store has a homepage hero with 3 rotating images.
