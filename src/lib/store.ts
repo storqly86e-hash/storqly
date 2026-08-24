@@ -44,10 +44,94 @@ const SECTION_CONTENT_DEFAULTS: Record<string, Record<string, unknown>> = {
   'footer': { storeName: 'Store', columns: [] },
 };
 
+// ─── Hero carousel backfill (client-side migration) ─────────────
+// Ensures every store's hero section has 3 rotating images,
+// even for stores generated before the heroImages feature was added.
+const HERO_CAROUSEL_IMAGES: Record<string, string[]> = {
+  'skincare/beauty/spa': [
+    'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?w=1400',
+    'https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=1400',
+    'https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=1400',
+  ],
+  'fashion/clothing/apparel': [
+    'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=1400',
+    'https://images.unsplash.com/photo-1558618666-fcd25c85f82e?w=1400',
+    'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1400',
+  ],
+  'jewelry/watches/accessories': [
+    'https://images.unsplash.com/photo-1515562141589-67f0d569b6c3?w=1400',
+    'https://images.unsplash.com/photo-1573408301185-9146fe634ad0?w=1400',
+    'https://images.unsplash.com/photo-1602173574767-37ac01994b2a?w=1400',
+  ],
+  'food/coffee/bakery': [
+    'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=1400',
+    'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=1400',
+    'https://images.unsplash.com/photo-1445116572660-236099ec97a0?w=1400',
+  ],
+  'furniture/home/decor': [
+    'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=1400',
+    'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?w=1400',
+    'https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=1400',
+  ],
+  'electronics/tech/gadgets': [
+    'https://images.unsplash.com/photo-1468495244123-6c6c332eeece?w=1400',
+    'https://images.unsplash.com/photo-1518770660439-4636190af475?w=1400',
+    'https://images.unsplash.com/photo-1498049794561-7780e7231661?w=1400',
+  ],
+  'general/lifestyle': [
+    'https://images.unsplash.com/photo-1441984904996-e0b6ba687e04?w=1400',
+    'https://images.unsplash.com/photo-1490312278390-ab64016e0aa9?w=1400',
+    'https://images.unsplash.com/photo-1472851294608-062f824d29cc?w=1400',
+  ],
+};
+const DEFAULT_HERO_IMAGES = HERO_CAROUSEL_IMAGES['general/lifestyle'];
+
+function pickHeroCategory(name: string, description: string): string[] {
+  const text = `${name} ${description}`.toLowerCase();
+  for (const [cat, urls] of Object.entries(HERO_CAROUSEL_IMAGES)) {
+    const parts = cat.split('/');
+    if (parts.some(p => text.includes(p))) return urls;
+  }
+  return DEFAULT_HERO_IMAGES;
+}
+
+function ensureHeroCarousel(store: Store): Store {
+  let modified = false;
+  const heroPool = pickHeroCategory(store.name || '', store.description || '');
+  const storeName = store.name || 'Store';
+  const pages = store.pages.map(page => {
+    const sections = page.sections.map(section => {
+      if (section.type !== 'hero' || section.visible === false) return section;
+      const content = section.content as Record<string, unknown>;
+      const style = section.style as Record<string, unknown>;
+      // Check if heroImages needs backfill
+      const existing = content.heroImages;
+      if (Array.isArray(existing) && existing.length >= 2) return section;
+      // Backfill with 3 images
+      const images = heroPool.slice(0, 3).map((url, i) => ({
+        src: url,
+        alt: `${storeName} hero image ${i + 1}`,
+        role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i] as string,
+      }));
+      content.heroImages = images;
+      content.carouselEnabled = true;
+      content.carouselInterval = 5;
+      // Set backgroundImage fallback
+      if (!style.backgroundImage || typeof style.backgroundImage !== 'string') {
+        style.backgroundImage = heroPool[0];
+      }
+      modified = true;
+      return { ...section, content, style };
+    });
+    return { ...page, sections };
+  });
+  return modified ? { ...store, pages } : store;
+}
+
 function ensureSectionContent(section: Section): Section {
   const defaults = SECTION_CONTENT_DEFAULTS[section.type];
   if (!defaults) return section; // Unknown type — content stays as-is
-  
+
   const merged: Record<string, unknown> = { ...defaults };
   if (section.content && typeof section.content === 'object') {
     // Only copy over non-empty values from the AI-generated content.
@@ -173,13 +257,13 @@ export const useStoreEditor = create<StoreEditorState>((set, get) => ({
 
   store: null,
   setStore: (store) => set({
-    store,
+    store: ensureHeroCarousel(store),
     view: 'editor',
     editorCurrentPageId: store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || null,
     selectedSectionId: null,
   }),
   setStoreWithFallback: (store, isFallback, reason) => set({
-    store,
+    store: ensureHeroCarousel(store),
     view: 'editor',
     isFallbackStore: isFallback,
     fallbackReason: reason || '',
