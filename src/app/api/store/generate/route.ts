@@ -1075,18 +1075,47 @@ export async function POST(req: NextRequest) {
             log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
           }
 
+          // ── COMPOSITION ARCHITECTURE ENFORCEMENT ──
+          // If the AI returned fewer sections than the recipe requires,
+          // inject scaffold sections with correct componentMeta and content.
+          // This ensures the store always matches the selected recipe's architecture.
+          // NOTE: Rhythm vars are applied AFTER enforcement so injected sections also get rhythm.
+          try {
+            // DEFENSIVE: Ensure homepage exists before enforcement.
+            // The normalize step should handle this, but we add a safety net
+            // because enforcement requires a homepage to inject sections into.
+            if (!store.pages.find(p => p.isHomepage) && store.pages.length > 0) {
+              store.pages[0].isHomepage = true;
+              if (store.pages[0].type !== 'home') {
+                store.pages[0].type = 'home';
+              }
+              log(`[Store Generate] Defensive: forced pages[0] to homepage (name=${store.pages[0].name}, type=${store.pages[0].type})`);
+            }
+            
+            log(`[Store Generate] Enforcement check: libraryCtx.nodes.length=${libraryCtx?.nodes?.length ?? 'null'}, recipe=${libraryCtx?.recipeName}`);
+            const hp = store.pages.find(p => p.isHomepage);
+            const hpSecs = hp ? hp.sections.filter(s => s.visible) : [];
+            log(`[Store Generate] Enforcement: homepage=${!!hp}, hpSecs=${hpSecs.length}, types=${hpSecs.map(s => s.type + (s.componentMeta ? '✓' : '✗')).join(',')}`);
+            const heroCategory = pickCategory([sanitizedPrompt]);
+            const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+            const { enforceCompositionArchitecture } = await import('@/lib/design-library/composition-enforcement');
+            const enforcement = enforceCompositionArchitecture(store, libraryCtx, heroImagePool);
+            if (enforcement.injectedCount > 0) {
+              store = enforcement.store;
+              log(`[Store Generate] Composition enforcement: injected ${enforcement.injectedCount} sections (${enforcement.injectedFamilies.join(', ')}), matched ${enforcement.matchedCount}/${enforcement.totalNodes} nodes`);
+            } else {
+              log(`[Store Generate] Composition enforcement: all ${enforcement.matchedCount}/${enforcement.totalNodes} nodes matched`);
+            }
+          } catch (enfErr) {
+            warn(`[Store Generate] Composition enforcement error (non-fatal): ${enfErr instanceof Error ? enfErr.message : String(enfErr)}`);
+          }
+
           // ── Apply per-section rhythm CSS vars to section.style ──
-          // The composition engine produces sectionRhythm with rhythmCssVars,
-          // but these must be applied to the actual section.style so the
-          // renderer can consume them via section.style._rhythmCssVars.
-          // 
-          // ALIGNMENT FIX: Use componentId matching instead of positional index.
-          // The AI may reorder sections, so nodeIndex != visibleSection index.
-          // Match each rhythm entry's node componentId to a section's componentMeta.
+          // Applied AFTER composition enforcement so injected sections also get rhythm.
+          // Uses componentId matching instead of positional index.
           if (libraryCtx.sectionRhythm && libraryCtx.sectionRhythm.length > 0) {
             const homepage = store.pages.find(p => p.isHomepage);
             if (homepage) {
-              // Build a map: componentId → ordered list of section indices
               const sectionByComponentId = new Map<string, number[]>();
               homepage.sections.forEach((s, idx) => {
                 const cid = s.componentMeta?.componentId;
@@ -1096,7 +1125,6 @@ export async function POST(req: NextRequest) {
                   sectionByComponentId.set(cid, list);
                 }
               });
-              // Track which section indices have been matched (for dedup)
               const usedSections = new Set<number>();
               let rhythmApplied = 0;
               for (const rhythm of libraryCtx.sectionRhythm) {
@@ -1105,7 +1133,6 @@ export async function POST(req: NextRequest) {
                 const cid = node.component_id;
                 const candidates = sectionByComponentId.get(cid);
                 if (!candidates) continue;
-                // Find next unmatched section with this componentId
                 const sectionIdx = candidates.find(i => !usedSections.has(i));
                 if (sectionIdx === undefined) continue;
                 const section = homepage.sections[sectionIdx];

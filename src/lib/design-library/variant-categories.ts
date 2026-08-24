@@ -35,6 +35,7 @@ const PAGE_SECTION_FAMILIES = new Set([
   'footer',
   'header',
   'announcement',
+  'announcement-bar',
 ])
 
 export const SUB_COMPONENT_FAMILIES = new Set([
