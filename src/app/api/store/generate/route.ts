@@ -243,8 +243,67 @@ const PRODUCT_URLS: Record<string, string[]> = {
 
 // ─── Category Detection ─────────────────────────────────────
 
+// ── Keyword → category synonym mapping ──
+// Handles common terms that don't appear directly in category key paths.
+const CATEGORY_SYNONYMS: Record<string, string> = {
+  // Fashion synonyms → fashion/clothing/apparel
+  streetwear: 'fashion/clothing/apparel',
+  sneaker: 'fashion/clothing/apparel',
+  sneakers: 'fashion/clothing/apparel',
+  apparel: 'fashion/clothing/apparel',
+  garment: 'fashion/clothing/apparel',
+  outfit: 'fashion/clothing/apparel',
+  tshirt: 'fashion/clothing/apparel',
+  't-shirt': 'fashion/clothing/apparel',
+  hoodie: 'fashion/clothing/apparel',
+  dress: 'fashion/clothing/apparel',
+  denim: 'fashion/clothing/apparel',
+  // Jewelry synonyms → jewelry/watches/accessories
+  ring: 'jewelry/watches/accessories',
+  rings: 'jewelry/watches/accessories',
+  necklace: 'jewelry/watches/accessories',
+  earrings: 'jewelry/watches/accessories',
+  bracelet: 'jewelry/watches/accessories',
+  pendant: 'jewelry/watches/accessories',
+  gemstone: 'jewelry/watches/accessories',
+  diamond: 'jewelry/watches/accessories',
+  gold: 'jewelry/watches/accessories',
+  silver: 'jewelry/watches/accessories',
+  // Skincare synonyms → skincare/beauty/spa
+  serum: 'skincare/beauty/spa',
+  moisturizer: 'skincare/beauty/spa',
+  cleanser: 'skincare/beauty/spa',
+  cream: 'skincare/beauty/spa',
+  lotion: 'skincare/beauty/spa',
+  cosmetic: 'skincare/beauty/spa',
+  cosmetics: 'skincare/beauty/spa',
+  spa: 'skincare/beauty/spa',
+  skincare: 'skincare/beauty/spa',
+  beauty: 'skincare/beauty/spa',
+  // Coffee/food synonyms → food/coffee/bakery
+  tea: 'food/coffee/bakery',
+  bakery: 'food/coffee/bakery',
+  gourmet: 'food/coffee/bakery',
+  snack: 'food/coffee/bakery',
+  beverage: 'food/coffee/bakery',
+  // Furniture synonyms → furniture/home/decor
+  sofa: 'furniture/home/decor',
+  chair: 'furniture/home/decor',
+  table: 'furniture/home/decor',
+  lamp: 'furniture/home/decor',
+  rug: 'furniture/home/decor',
+  decor: 'furniture/home/decor',
+  interior: 'furniture/home/decor',
+  homeware: 'furniture/home/decor',
+};
+
 function pickCategory(keys: string[]): string {
   const lower = keys.join(' ').toLowerCase();
+  // Check synonyms first (more specific matches)
+  for (const [keyword, cat] of Object.entries(CATEGORY_SYNONYMS)) {
+    if (lower.includes(keyword)) return cat;
+  }
+  // Fall back to direct key part matching
   for (const [cat, ] of Object.entries(HERO_URLS)) {
     const catParts = cat.split('/');
     if (catParts.some(p => lower.includes(p))) return cat;
@@ -353,6 +412,32 @@ function getProductGuidance(category: string) {
 
 function pickProductCategory(keys: string[]): string {
   const lower = keys.join(' ').toLowerCase();
+  // Check synonyms first (more specific matches)
+  for (const [keyword, cat] of Object.entries(CATEGORY_SYNONYMS)) {
+    if (lower.includes(keyword)) {
+      // Map hero category to product category (they have slightly different keys)
+      const productCatMap: Record<string, string> = {
+        'fashion/clothing/apparel': 'fashion/clothing',
+        'jewelry/watches/accessories': 'jewelry/accessories',
+        'skincare/beauty/spa': 'skincare/beauty',
+        'food/coffee/bakery': 'food/coffee',
+        'furniture/home/decor': 'furniture/home',
+        'electronics/tech/gadgets': 'electronics/tech',
+        'fitness/sports/outdoor': 'fitness/sports',
+        'books/education/stationery': 'books/education',
+        'pets/animals': 'pets/animals',
+        'automotive/cars': 'automotive/cars',
+        'travel/luggage/adventure': 'travel/luggage',
+        'plants/garden/eco': 'plants/garden',
+        'kids/baby/toys': 'kids/baby',
+        'music/instruments/art': 'music/instruments',
+        'general/lifestyle': 'general',
+      };
+      const mappedCat = productCatMap[cat];
+      if (mappedCat && PRODUCT_URLS[mappedCat]) return mappedCat;
+    }
+  }
+  // Fall back to direct key part matching
   for (const [cat, ] of Object.entries(PRODUCT_URLS)) {
     const catParts = cat.split('/');
     if (catParts.some(p => lower.includes(p))) return cat;
@@ -905,6 +990,14 @@ export async function POST(req: NextRequest) {
               },
               visible: true,
             };
+            // Attach componentMeta from library context so the renderer resolves variant config
+            if (libraryCtx) {
+              const heroNode = libraryCtx.nodes.find(n => n.role === 'orient');
+              if (heroNode) {
+                const [family, variant] = heroNode.component_id.split('.');
+                heroSection.componentMeta = { componentId: heroNode.component_id, family, variant, role: heroNode.role } as ComponentMeta;
+              }
+            }
             homepage.sections.unshift(heroSection);
             log(`[Store Generate] Hero guarantee: INJECTED hero section (AI omitted it)`);
           }
@@ -986,17 +1079,43 @@ export async function POST(req: NextRequest) {
           // The composition engine produces sectionRhythm with rhythmCssVars,
           // but these must be applied to the actual section.style so the
           // renderer can consume them via section.style._rhythmCssVars.
+          // 
+          // ALIGNMENT FIX: Use componentId matching instead of positional index.
+          // The AI may reorder sections, so nodeIndex != visibleSection index.
+          // Match each rhythm entry's node componentId to a section's componentMeta.
           if (libraryCtx.sectionRhythm && libraryCtx.sectionRhythm.length > 0) {
             const homepage = store.pages.find(p => p.isHomepage);
             if (homepage) {
-              const visibleSections = homepage.sections.filter(s => s.visible);
+              // Build a map: componentId → ordered list of section indices
+              const sectionByComponentId = new Map<string, number[]>();
+              homepage.sections.forEach((s, idx) => {
+                const cid = s.componentMeta?.componentId;
+                if (cid) {
+                  const list = sectionByComponentId.get(cid) || [];
+                  list.push(idx);
+                  sectionByComponentId.set(cid, list);
+                }
+              });
+              // Track which section indices have been matched (for dedup)
+              const usedSections = new Set<number>();
+              let rhythmApplied = 0;
               for (const rhythm of libraryCtx.sectionRhythm) {
-                const section = visibleSections[rhythm.nodeIndex];
+                const node = libraryCtx.nodes[rhythm.nodeIndex];
+                if (!node) continue;
+                const cid = node.component_id;
+                const candidates = sectionByComponentId.get(cid);
+                if (!candidates) continue;
+                // Find next unmatched section with this componentId
+                const sectionIdx = candidates.find(i => !usedSections.has(i));
+                if (sectionIdx === undefined) continue;
+                const section = homepage.sections[sectionIdx];
                 if (section && rhythm.rhythmCssVars && Object.keys(rhythm.rhythmCssVars).length > 0) {
                   (section.style as Record<string, unknown>)._rhythmCssVars = rhythm.rhythmCssVars;
+                  usedSections.add(sectionIdx);
+                  rhythmApplied++;
                 }
               }
-              log(`[Store Generate] Applied rhythm CSS vars to ${Math.min(libraryCtx.sectionRhythm.length, visibleSections.length)} sections`);
+              log(`[Store Generate] Applied rhythm CSS vars to ${rhythmApplied}/${libraryCtx.sectionRhythm.length} sections`);
             }
           }
         }
@@ -1164,6 +1283,7 @@ export async function POST(req: NextRequest) {
         // ── Image relevance enforcement ──
         // Ensure ALL product images are category-appropriate.
         // Products with generic/wrong images get replaced.
+        // When DL art direction is available, log it for observability.
         try {
           const productCategory = pickProductCategory([sanitizedPrompt]);
           const safeImagePool = PRODUCT_URLS[productCategory] || PRODUCT_URLS['general'];
@@ -1180,7 +1300,10 @@ export async function POST(req: NextRequest) {
             const isFromWrongCategory = !isElectronicsStore && badPatterns.some(bp => img.toLowerCase().includes(bp));
             // Check if image is from the generic pool
             const isGeneric = img.includes('photo-1523275335684') || img.includes('photo-1505740420928') || img.includes('photo-1526170375885');
-            if (isFromWrongCategory || isGeneric) {
+            // Check if image URL contains any DL art direction avoid terms
+            const dlAvoidTerms = libraryCtx?.imageArtDirections?.flatMap(d => d.avoid ?? []);
+            const isAvoidedByDL = dlAvoidTerms && dlAvoidTerms.length > 0 && dlAvoidTerms.some(term => img.toLowerCase().includes(term));
+            if (isFromWrongCategory || isGeneric || isAvoidedByDL) {
               // Replace with a deterministic category-appropriate image
               const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % safeImagePool.length;
               p.images[0] = safeImagePool[imgIdx];
@@ -1188,7 +1311,11 @@ export async function POST(req: NextRequest) {
             }
           }
           if (imagesFixed > 0) {
-            log(`[Store Generate] Image relevance: replaced ${imagesFixed}/${store.products.length} wrong-category/generic images (category: ${productCategory})`);
+            log(`[Store Generate] Image relevance: replaced ${imagesFixed}/${store.products.length} wrong-category/generic/DL-avoid images (category: ${productCategory}, DL art directions: ${libraryCtx?.imageArtDirections?.length ?? 0})`);
+          }
+          // Log DL art direction usage for observability
+          if (libraryCtx?.imageArtDirections && libraryCtx.imageArtDirections.length > 0) {
+            log(`[Store Generate] DL art direction: ${libraryCtx.imageArtDirections.length} directions, categories: ${[...new Set(libraryCtx.imageArtDirections.map(d => d.slotType))].join(', ')}`);
           }
         } catch (imgErr) {
           warn(`[Store Generate] Image relevance check error (non-fatal): ${imgErr instanceof Error ? imgErr.message : String(imgErr)}`);

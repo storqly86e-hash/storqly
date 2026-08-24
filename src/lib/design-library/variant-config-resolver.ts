@@ -1065,6 +1065,138 @@ function resolvePromotion(
 }
 
 // ══════════════════════════════════════════════════════════════
+// COLLECTION RESOLVER
+// ══════════════════════════════════════════════════════════════
+
+function resolveCollection(componentId: string, content: Record<string, unknown>, theme: StoreTheme): ResolvedVariantConfig {
+  const contentOverrides: Record<string, unknown> = {}
+  const styleOverrides: Record<string, unknown> = {}
+  const cssVars: Record<string, string> = {}
+  let extraClasses = ''
+
+  if (componentId.includes('lookbook')) {
+    // Lookbook tiles — editorial grid with larger image ratios
+    contentOverrides.columns = 3
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-alignment'] = 'center'
+    cssVars['--section-image-ratio'] = '3/4'
+    cssVars['--section-heading-font'] = 'serif'
+    extraClasses = 'max-w-7xl mx-auto'
+  } else if (componentId.includes('filter')) {
+    // Filter sidebar — utility layout, denser
+    contentOverrides.layout = 'sidebar'
+    cssVars['--section-density'] = 'compact'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-border-mode'] = 'full'
+    extraClasses = 'max-w-5xl mx-auto'
+  } else if (componentId.includes('story')) {
+    // Story chapters — editorial narrative flow
+    contentOverrides.layout = 'narrative'
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-font'] = 'serif'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-surface'] = 'warm'
+    extraClasses = 'max-w-4xl mx-auto'
+  }
+
+  return { contentOverrides, styleOverrides, cssVars, extraClasses }
+}
+
+// ══════════════════════════════════════════════════════════════
+// CATEGORY RESOLVER
+// ══════════════════════════════════════════════════════════════
+
+function resolveCategory(componentId: string, content: Record<string, unknown>, theme: StoreTheme): ResolvedVariantConfig {
+  const contentOverrides: Record<string, unknown> = {}
+  const styleOverrides: Record<string, unknown> = {}
+  const cssVars: Record<string, string> = {}
+  let extraClasses = ''
+
+  if (componentId.includes('icon')) {
+    // Icon tiles — clean grid with centered items
+    contentOverrides.columns = 4
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-alignment'] = 'center'
+    extraClasses = 'max-w-5xl mx-auto'
+  } else if (componentId.includes('material')) {
+    // Material index — editorial list with left alignment
+    contentOverrides.columns = 2
+    cssVars['--section-density'] = 'balanced'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-heading-font'] = 'serif'
+    extraClasses = 'max-w-6xl mx-auto'
+  }
+
+  return { contentOverrides, styleOverrides, cssVars, extraClasses }
+}
+
+// ══════════════════════════════════════════════════════════════
+// EDITORIAL RESOLVER
+// ══════════════════════════════════════════════════════════════
+
+function resolveEditorial(componentId: string, content: Record<string, unknown>, theme: StoreTheme): ResolvedVariantConfig {
+  const contentOverrides: Record<string, unknown> = {}
+  const styleOverrides: Record<string, unknown> = {}
+  const cssVars: Record<string, string> = {}
+  let extraClasses = ''
+
+  if (componentId.includes('longform')) {
+    // Longform split — two-column editorial layout
+    contentOverrides.layout = 'split'
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-font'] = 'serif'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-surface'] = 'warm'
+    extraClasses = 'max-w-6xl mx-auto'
+  } else if (componentId.includes('quote')) {
+    // Quote feature — centered pull quote
+    contentOverrides.alignment = 'center'
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-font'] = 'serif'
+    cssVars['--section-heading-weight'] = '300'
+    cssVars['--section-contrast'] = 'high'
+    extraClasses = 'max-w-4xl mx-auto'
+  }
+
+  return { contentOverrides, styleOverrides, cssVars, extraClasses }
+}
+
+// ══════════════════════════════════════════════════════════════
+// FEATURE-BENEFITS RESOLVER
+// ══════════════════════════════════════════════════════════════
+
+function resolveFeatureBenefits(componentId: string, content: Record<string, unknown>, theme: StoreTheme): ResolvedVariantConfig {
+  const contentOverrides: Record<string, unknown> = {}
+  const styleOverrides: Record<string, unknown> = {}
+  const cssVars: Record<string, string> = {}
+  let extraClasses = ''
+
+  if (componentId.includes('ingredient')) {
+    // Ingredient index — grid with detailed cards
+    contentOverrides.columns = 3
+    cssVars['--section-density'] = 'spacious'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-surface'] = 'warm'
+    extraClasses = 'max-w-6xl mx-auto'
+  } else if (componentId.includes('icon')) {
+    // Icon row — horizontal icon strip
+    contentOverrides.layout = 'row'
+    cssVars['--section-density'] = 'compact'
+    cssVars['--section-heading-alignment'] = 'center'
+    extraClasses = 'max-w-5xl mx-auto'
+  } else if (componentId.includes('numbered')) {
+    // Numbered columns — step-by-step list
+    contentOverrides.layout = 'numbered'
+    cssVars['--section-density'] = 'balanced'
+    cssVars['--section-heading-alignment'] = 'left'
+    cssVars['--section-heading-weight'] = '700'
+    extraClasses = 'max-w-5xl mx-auto'
+  }
+
+  return { contentOverrides, styleOverrides, cssVars, extraClasses }
+}
+
+// ══════════════════════════════════════════════════════════════
 // GENERIC METADATA-DRIVEN FALLBACK
 // ══════════════════════════════════════════════════════════════
 // For any variant without a hand-crafted resolver above, derive
@@ -1330,6 +1462,38 @@ export function resolveVariantConfig(
         contentOverrides.alignment = 'center'
         cssVars['--section-heading-alignment'] = 'center'
       }
+      break
+    }
+    case 'collection': {
+      const resolved = resolveCollection(componentId, section.content as Record<string, unknown>, theme)
+      contentOverrides = mergeRecords(contentOverrides, resolved.contentOverrides ?? {})
+      styleOverrides = mergeRecords(styleOverrides, resolved.styleOverrides ?? {})
+      Object.assign(cssVars, resolved.cssVars ?? {})
+      extraClasses = resolved.extraClasses ?? ''
+      break
+    }
+    case 'category': {
+      const resolved = resolveCategory(componentId, section.content as Record<string, unknown>, theme)
+      contentOverrides = mergeRecords(contentOverrides, resolved.contentOverrides ?? {})
+      styleOverrides = mergeRecords(styleOverrides, resolved.styleOverrides ?? {})
+      Object.assign(cssVars, resolved.cssVars ?? {})
+      extraClasses = resolved.extraClasses ?? ''
+      break
+    }
+    case 'editorial': {
+      const resolved = resolveEditorial(componentId, section.content as Record<string, unknown>, theme)
+      contentOverrides = mergeRecords(contentOverrides, resolved.contentOverrides ?? {})
+      styleOverrides = mergeRecords(styleOverrides, resolved.styleOverrides ?? {})
+      Object.assign(cssVars, resolved.cssVars ?? {})
+      extraClasses = resolved.extraClasses ?? ''
+      break
+    }
+    case 'feature-benefits': {
+      const resolved = resolveFeatureBenefits(componentId, section.content as Record<string, unknown>, theme)
+      contentOverrides = mergeRecords(contentOverrides, resolved.contentOverrides ?? {})
+      styleOverrides = mergeRecords(styleOverrides, resolved.styleOverrides ?? {})
+      Object.assign(cssVars, resolved.cssVars ?? {})
+      extraClasses = resolved.extraClasses ?? ''
       break
     }
     default: {

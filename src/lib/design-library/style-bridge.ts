@@ -83,6 +83,20 @@
 //     density           → (consumed by renderer directly)
 //     surfaceTheme      → (consumed by renderer directly)
 //
+//   categories:
+//     columns           → content.columns
+//     sectionSpacing    → style.paddingY
+//     headingAlignment  → style.headingAlignment
+//     alignment         → content.alignment
+//     density           → (consumed by renderer directly)
+//
+//   rich-text:
+//     sectionSpacing    → style.paddingY
+//     alignment         → content.alignment
+//     density           → style.paddingY (if no sectionSpacing)
+//     typePairing       → (consumed by renderer directly)
+//     copyMeasure       → (consumed by renderer directly)
+//
 //   header:
 //     logoScale         → style.logoScale
 //     headerHeight      → style.headerHeight
@@ -113,6 +127,8 @@ const ALLOWED_FIELDS: Record<string, string[]> = {
   'image-gallery': ['masonryPattern', 'anchorSize', 'gap', 'captionStyle', 'columns', 'density'],
   faq: ['indexStyle', 'numberStyle', 'columns', 'dividerMode', 'density'],
   'text-banner': ['size', 'alignment', 'density', 'surfaceTheme'],
+  categories: ['columns', 'headingAlignment', 'sectionSpacing', 'alignment', 'density'],
+  'rich-text': ['sectionSpacing', 'alignment', 'density', 'typePairing', 'copyMeasure'],
   header: ['logoScale', 'headerHeight', 'borderMode', 'surface', 'navSpacing'],
   footer: ['columnCount', 'logoScale', 'typeSystem'],
 };
@@ -393,6 +409,54 @@ function bridgeTextBanner(s: Section): void {
   }
 }
 
+function bridgeCategories(s: Section): void {
+  const { style, content } = s;
+
+  // columns → content.columns
+  const cols = src(style, 'columns') as number | undefined;
+  if (cols) setContent(content, 'columns', cols);
+
+  // sectionSpacing → style.paddingY
+  const spacing = src(style, 'sectionSpacing') as string | undefined;
+  if (spacing) {
+    const padMap: Record<string, string> = { spacious: 'xl', compact: 'sm' };
+    const pad = padMap[spacing];
+    if (pad) setStyle(style, 'paddingY', pad);
+  }
+
+  // headingAlignment → style.headingAlignment
+  const headingAlign = src(style, 'headingAlignment') as string | undefined;
+  if (headingAlign) setStyle(style, 'headingAlignment', headingAlign);
+
+  // alignment → content.alignment
+  const align = src(style, 'alignment') as string | undefined;
+  if (align) setContent(content, 'alignment', align);
+}
+
+function bridgeRichText(s: Section): void {
+  const { style, content } = s;
+
+  // sectionSpacing → style.paddingY
+  const spacing = src(style, 'sectionSpacing') as string | undefined;
+  if (spacing) {
+    const padMap: Record<string, string> = { spacious: 'xl', compact: 'sm' };
+    const pad = padMap[spacing];
+    if (pad) setStyle(style, 'paddingY', pad);
+  }
+
+  // alignment → content.alignment
+  const align = src(style, 'alignment') as string | undefined;
+  if (align) setContent(content, 'alignment', align);
+
+  // density → style.paddingY (if no sectionSpacing)
+  const density = src(style, 'density') as string | undefined;
+  if (density && !(style as any).paddingY) {
+    const padMap: Record<string, string> = { airy: 'xl', compact: 'sm' };
+    const pad = padMap[density];
+    if (pad) setStyle(style, 'paddingY', pad);
+  }
+}
+
 function bridgeHeader(s: Section): void {
   const { style } = s;
 
@@ -425,6 +489,8 @@ const bridgeByType: Record<string, (s: Section) => void> = {
   'image-gallery': bridgeImageGallery,
   faq: bridgeFaq,
   'text-banner': bridgeTextBanner,
+  categories: bridgeCategories,
+  'rich-text': bridgeRichText,
   header: bridgeHeader,
   footer: bridgeFooter,
 };
