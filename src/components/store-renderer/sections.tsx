@@ -3066,6 +3066,14 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
     // produce visual differences between variants using default renderers.
     const config = resolveVariantConfig(section, theme);
     if (config) {
+      // Debug: log variant resolution details
+      const varCount = Object.keys(config.cssVars ?? {}).length;
+      const extraCls = config.extraClasses ?? '';
+      if (varCount > 0 || extraCls) {
+        console.log(
+          `[DL] ${section.type} | ${section.componentMeta?.componentId} | ${varCount} vars | ${extraCls}`,
+        );
+      }
       // Merge content overrides into section.content
       if (Object.keys(config.contentOverrides).length > 0) {
         effectiveSection = {
@@ -3171,8 +3179,19 @@ export function renderSection(props: SectionRendererProps): React.ReactNode {
         (wrapperStyle as Record<string, string>)[key] = value;
       });
     }
+    const debugLabel = section.componentMeta?.componentId
+      ? `${section.componentMeta.componentId} | ${Object.keys(variantCssVars ?? {}).length} vars`
+      : null;
     return (
-      <div className={variantExtraClasses || undefined} style={wrapperStyle}>
+      <div className={(variantExtraClasses || '') + ' relative'} style={wrapperStyle}>
+        {debugLabel && (
+          <span
+            className="absolute top-1 right-1 z-50 rounded px-1.5 py-0.5 text-[9px] font-mono leading-none text-white/80"
+            style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
+          >
+            {debugLabel}
+          </span>
+        )}
         {withBoundary}
       </div>
     );

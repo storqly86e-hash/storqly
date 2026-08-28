@@ -830,6 +830,13 @@ export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: numb
     updatedAt: str(r.updatedAt, now),
   };
 
+  // ── Preserve designLibrary metadata if present (DL integration data) ──
+  // normalizeStore creates a new Store object with explicit fields.
+  // Without this, designLibrary is silently dropped during normalization.
+  if (r.designLibrary && typeof r.designLibrary === 'object') {
+    store.designLibrary = r.designLibrary as Store['designLibrary'];
+  }
+
   // Log missing arrays
   if (!Array.isArray(r.pages)) log.log({ field: 'pages', action: 'missing' });
   if (!Array.isArray(r.products)) log.log({ field: 'products', action: 'missing' });

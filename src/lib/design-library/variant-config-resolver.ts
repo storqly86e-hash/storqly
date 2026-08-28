@@ -485,6 +485,7 @@ function resolveHero(
   // --- Fallback: generic hero with metadata-driven tweaks ---
   else {
     applyGenericMetadataOverrides(
+      componentId,
       meta,
       contentOverrides,
       styleOverrides,
@@ -606,6 +607,19 @@ function resolveProductGrid(
     extraClasses = ''
   }
 
+  // --- Fallback: generic product-grid with metadata-driven tweaks ---
+  else {
+    const meta = getLibraryMetadata(componentId)
+    applyGenericMetadataOverrides(
+      componentId,
+      meta,
+      contentOverrides,
+      styleOverrides,
+      cssVars,
+      theme,
+    )
+  }
+
   return { contentOverrides, styleOverrides, cssVars, extraClasses, cardStyle }
 }
 
@@ -700,6 +714,19 @@ function resolveCTA(
     extraClasses = 'max-w-2xl mx-auto text-center'
   }
 
+  // --- Fallback: generic CTA with metadata-driven tweaks ---
+  else {
+    const meta = getLibraryMetadata(componentId)
+    applyGenericMetadataOverrides(
+      componentId,
+      meta,
+      contentOverrides,
+      styleOverrides,
+      cssVars,
+      theme,
+    )
+  }
+
   return { contentOverrides, styleOverrides, cssVars, extraClasses }
 }
 
@@ -764,6 +791,19 @@ function resolveTestimonials(
     extraClasses = ''
   }
 
+  // --- Fallback: generic testimonials with metadata-driven tweaks ---
+  else {
+    const meta = getLibraryMetadata(componentId)
+    applyGenericMetadataOverrides(
+      componentId,
+      meta,
+      contentOverrides,
+      styleOverrides,
+      cssVars,
+      theme,
+    )
+  }
+
   return { contentOverrides, styleOverrides, cssVars, extraClasses }
 }
 
@@ -823,6 +863,19 @@ function resolveNewsletter(
     cssVars['--newsletter-status-style'] = 'visible'
     cssVars['--newsletter-urgency-color'] = '#dc2626'
     extraClasses = 'max-w-lg mx-auto text-center'
+  }
+
+  // --- Fallback: generic newsletter with metadata-driven tweaks ---
+  else {
+    const meta = getLibraryMetadata(componentId)
+    applyGenericMetadataOverrides(
+      componentId,
+      meta,
+      contentOverrides,
+      styleOverrides,
+      cssVars,
+      theme,
+    )
   }
 
   return { contentOverrides, styleOverrides, cssVars, extraClasses }
@@ -1203,6 +1256,7 @@ function resolveFeatureBenefits(componentId: string, content: Record<string, unk
 // overrides from the library metadata's styleHooks and tags.
 
 function applyGenericMetadataOverrides(
+  componentId: string,
   meta: {
     styleHooks?: string[]
     tags?: string[]
@@ -1214,98 +1268,247 @@ function applyGenericMetadataOverrides(
   cssVars: Record<string, string>,
   theme: StoreTheme,
 ): void {
-  if (!meta) return
+  const family = componentId.split('.')[0]
 
-  const hooks = new Set(meta.styleHooks ?? [])
-  const tags = new Set(meta.tags ?? [])
+  // ── Phase 1: Metadata-driven overrides (when metadata exists) ──
+  if (meta) {
+    const hooks = new Set(meta.styleHooks ?? [])
+    const tags = new Set(meta.tags ?? [])
 
-  // --- Density / spacing from styleHooks ---
-  if (hooks.has('density')) {
-    styleOverrides.paddingY = 'sm'
-    cssVars['--section-density'] = 'compact'
-  }
-  if (hooks.has('section_spacing')) {
-    styleOverrides.paddingY = 'xl'
-    cssVars['--section-density'] = 'spacious'
-  }
+    // --- Density / spacing from styleHooks ---
+    if (hooks.has('density')) {
+      styleOverrides.paddingY = 'sm'
+      cssVars['--section-density'] = 'compact'
+    }
+    if (hooks.has('section_spacing')) {
+      styleOverrides.paddingY = 'xl'
+      cssVars['--section-density'] = 'spacious'
+    }
 
-  // --- Surface theme ---
-  if (hooks.has('surface_theme')) {
-    if (tags.has('luxury') || tags.has('premium')) {
-      cssVars['--section-surface'] = 'warm'
-      styleOverrides.backgroundColor = theme.colors.surface
-    } else {
-      cssVars['--section-surface'] = 'default'
+    // --- Surface theme ---
+    if (hooks.has('surface_theme')) {
+      if (tags.has('luxury') || tags.has('premium')) {
+        cssVars['--section-surface'] = 'warm'
+        styleOverrides.backgroundColor = theme.colors.surface
+      } else {
+        cssVars['--section-surface'] = 'default'
+      }
+    }
+
+    // --- Alignment ---
+    if (hooks.has('alignment') || hooks.has('content_alignment')) {
+      if (tags.has('editorial')) {
+        contentOverrides.alignment = 'left'
+      } else if (tags.has('centered')) {
+        contentOverrides.alignment = 'center'
+      }
+    }
+
+    // --- Heading alignment from styleHooks ---
+    if (hooks.has('heading_alignment')) {
+      if (tags.has('luxury') || tags.has('gallery')) {
+        cssVars['--section-heading-alignment'] = 'center'
+      } else {
+        cssVars['--section-heading-alignment'] = 'left'
+      }
+    }
+
+    // --- Border mode ---
+    if (hooks.has('border_mode')) {
+      if (tags.has('bold') || tags.has('utility')) {
+        cssVars['--section-border-mode'] = 'full'
+      } else {
+        cssVars['--section-border-mode'] = 'none'
+      }
+    }
+
+    // --- Type system / pairing ---
+    if (hooks.has('type_system') || hooks.has('type_pairing')) {
+      if (tags.has('editorial') || tags.has('luxury')) {
+        cssVars['--section-heading-font'] = 'serif'
+        cssVars['--section-heading-weight'] = '400'
+      } else {
+        cssVars['--section-heading-weight'] = '700'
+      }
+    }
+
+    // --- Contrast ---
+    if (hooks.has('contrast')) {
+      cssVars['--section-contrast'] = 'high'
+      cssVars['--section-heading-weight'] = '800'
+    }
+
+    // --- Button variant from styleHooks ---
+    if (hooks.has('button_variant')) {
+      if (tags.has('premium') || tags.has('editorial')) {
+        cssVars['--section-button-variant'] = 'outline'
+      } else {
+        cssVars['--section-button-variant'] = 'solid'
+      }
+    }
+
+    // --- Divider mode ---
+    if (hooks.has('divider_mode')) {
+      if (tags.has('utility') || tags.has('dense')) {
+        cssVars['--section-divider-mode'] = 'border'
+      } else {
+        cssVars['--section-divider-mode'] = 'none'
+      }
+    }
+
+    // --- Image ratio ---
+    if (hooks.has('image_ratio') || hooks.has('media_ratio')) {
+      if (tags.has('editorial')) {
+        cssVars['--section-image-ratio'] = '3/4'
+      } else {
+        cssVars['--section-image-ratio'] = '1/1'
+      }
     }
   }
 
-  // --- Alignment ---
-  if (hooks.has('alignment') || hooks.has('content_alignment')) {
-    if (tags.has('editorial')) {
-      contentOverrides.alignment = 'left'
-    } else if (tags.has('centered')) {
-      contentOverrides.alignment = 'center'
+  // ── Phase 2: Per-family fallback styling ──
+  // Ensures that .default variants (or any variant without specific
+  // hardcoded config) still produce visible visual differentiation.
+  // These are applied AFTER metadata-driven overrides so they act
+  // as sensible defaults that metadata can override.
+  switch (family) {
+    case 'hero': {
+      // Left-aligned text with editorial overlay
+      cssVars['--hero-text-position'] = 'left'
+      cssVars['--hero-overlay'] = 'gradient'
+      cssVars['--hero-heading-weight'] = '500'
+      cssVars['--hero-content-alignment'] = 'left'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.layout = 'split'
+      break
     }
-  }
-
-  // --- Heading alignment from styleHooks ---
-  if (hooks.has('heading_alignment')) {
-    if (tags.has('luxury') || tags.has('gallery')) {
-      cssVars['--section-heading-alignment'] = 'center'
-    } else {
-      cssVars['--section-heading-alignment'] = 'left'
-    }
-  }
-
-  // --- Border mode ---
-  if (hooks.has('border_mode')) {
-    if (tags.has('bold') || tags.has('utility')) {
-      cssVars['--section-border-mode'] = 'full'
-    } else {
-      cssVars['--section-border-mode'] = 'none'
-    }
-  }
-
-  // --- Type system / pairing ---
-  if (hooks.has('type_system') || hooks.has('type_pairing')) {
-    if (tags.has('editorial') || tags.has('luxury')) {
-      cssVars['--section-heading-font'] = 'serif'
-      cssVars['--section-heading-weight'] = '400'
-    } else {
-      cssVars['--section-heading-weight'] = '700'
-    }
-  }
-
-  // --- Contrast ---
-  if (hooks.has('contrast')) {
-    cssVars['--section-contrast'] = 'high'
-    cssVars['--section-heading-weight'] = '800'
-  }
-
-  // --- Button variant from styleHooks ---
-  if (hooks.has('button_variant')) {
-    if (tags.has('premium') || tags.has('editorial')) {
-      cssVars['--section-button-variant'] = 'outline'
-    } else {
-      cssVars['--section-button-variant'] = 'solid'
-    }
-  }
-
-  // --- Divider mode ---
-  if (hooks.has('divider_mode')) {
-    if (tags.has('utility') || tags.has('dense')) {
-      cssVars['--section-divider-mode'] = 'border'
-    } else {
-      cssVars['--section-divider-mode'] = 'none'
-    }
-  }
-
-  // --- Image ratio ---
-  if (hooks.has('image_ratio') || hooks.has('media_ratio')) {
-    if (tags.has('editorial')) {
+    case 'product-grid': {
+      // Editorial portrait cards
+      cssVars['--grid-gap'] = '1.5rem'
+      cssVars['--grid-card-hover-lift'] = '0.125rem'
+      cssVars['--grid-show-price'] = 'true'
+      cssVars['--grid-heading-alignment'] = 'left'
       cssVars['--section-image-ratio'] = '3/4'
-    } else {
-      cssVars['--section-image-ratio'] = '1/1'
+      styleOverrides.paddingY = 'lg'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.columns = 3
+      contentOverrides.showPrice = true
+      break
+    }
+    case 'cta': {
+      // Gradient background with centered content
+      cssVars['--cta-button-variant'] = 'solid'
+      cssVars['--cta-headline-weight'] = '600'
+      cssVars['--cta-body-max-width'] = '32rem'
+      cssVars['--cta-section-spacing'] = 'normal'
+      cssVars['--cta-contrast'] = 'high'
+      styleOverrides.paddingY = 'lg'
+      styleOverrides.maxWidth = 'lg'
+      contentOverrides.alignment = 'center'
+      break
+    }
+    case 'testimonials': {
+      // Card-style layout
+      cssVars['--testimonials-card-mode'] = 'card'
+      cssVars['--testimonials-attribution-style'] = 'name-role'
+      cssVars['--testimonials-divider-mode'] = 'border'
+      cssVars['--testimonials-surface'] = 'surface'
+      cssVars['--testimonials-columns'] = '2'
+      styleOverrides.paddingY = 'lg'
+      styleOverrides.maxWidth = 'lg'
+      contentOverrides.layout = 'grid'
+      break
+    }
+    case 'newsletter': {
+      // Split layout
+      cssVars['--newsletter-layout'] = 'split'
+      cssVars['--newsletter-split-ratio'] = '1/1'
+      cssVars['--newsletter-input-style'] = 'bordered'
+      cssVars['--newsletter-button-variant'] = 'solid'
+      cssVars['--newsletter-copy-measure'] = 'normal'
+      cssVars['--newsletter-alignment'] = 'left'
+      styleOverrides.paddingY = 'lg'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.layout = 'split'
+      break
+    }
+    case 'brand-story': {
+      cssVars['--brand-layout'] = 'centered'
+      cssVars['--brand-copy-measure'] = 'narrow'
+      cssVars['--brand-type-pairing'] = 'serif-sans'
+      cssVars['--brand-heading-weight'] = '400'
+      styleOverrides.paddingY = 'xl'
+      styleOverrides.maxWidth = 'lg'
+      contentOverrides.alignment = 'center'
+      break
+    }
+    case 'gallery': {
+      cssVars['--gallery-layout'] = 'grid'
+      cssVars['--gallery-columns'] = '3'
+      cssVars['--gallery-gap'] = '1rem'
+      cssVars['--gallery-captions'] = 'below'
+      cssVars['--gallery-lightbox'] = 'enabled'
+      styleOverrides.paddingY = 'lg'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.columns = 3
+      break
+    }
+    case 'trust': {
+      cssVars['--trust-layout'] = 'strip'
+      cssVars['--trust-icon-style'] = 'line'
+      cssVars['--trust-density'] = 'compact'
+      cssVars['--trust-divider-mode'] = 'border'
+      cssVars['--trust-surface'] = 'surface'
+      styleOverrides.paddingY = 'sm'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.layout = 'horizontal'
+      break
+    }
+    case 'promotion': {
+      cssVars['--promo-layout'] = 'centered'
+      cssVars['--promo-contrast'] = 'high'
+      cssVars['--promo-button-variant'] = 'solid'
+      cssVars['--promo-fine-print'] = 'visible'
+      styleOverrides.paddingY = 'md'
+      styleOverrides.maxWidth = 'lg'
+      contentOverrides.alignment = 'center'
+      break
+    }
+    case 'collection': {
+      cssVars['--section-density'] = 'spacious'
+      cssVars['--section-heading-alignment'] = 'center'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.columns = 3
+      break
+    }
+    case 'category': {
+      cssVars['--section-density'] = 'balanced'
+      cssVars['--section-heading-alignment'] = 'left'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.columns = 3
+      break
+    }
+    case 'editorial': {
+      cssVars['--section-density'] = 'spacious'
+      cssVars['--section-heading-font'] = 'serif'
+      cssVars['--section-heading-alignment'] = 'left'
+      cssVars['--section-heading-weight'] = '400'
+      styleOverrides.maxWidth = 'lg'
+      break
+    }
+    case 'feature-benefits': {
+      cssVars['--section-density'] = 'balanced'
+      cssVars['--section-heading-alignment'] = 'left'
+      cssVars['--section-heading-weight'] = '600'
+      styleOverrides.maxWidth = 'xl'
+      contentOverrides.columns = 3
+      break
+    }
+    default: {
+      // Unknown family — apply a minimal generic surface hint
+      cssVars['--section-density'] = 'balanced'
+      cssVars['--section-heading-alignment'] = 'left'
+      break
     }
   }
 }
@@ -1500,6 +1703,7 @@ export function resolveVariantConfig(
       // For families without a specific resolver, apply generic
       // metadata-driven overrides
       applyGenericMetadataOverrides(
+        componentId,
         metadata,
         contentOverrides,
         styleOverrides,

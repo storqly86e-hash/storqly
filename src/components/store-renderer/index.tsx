@@ -534,12 +534,39 @@ export function StoreRenderer({
     });
   }
 
+  // ── Google Fonts preconnect + dynamic font loading ──
+  // Loads the heading/body fonts specified in the store theme via Google Fonts.
+  // This ensures typography differences between stores are VISIBLE.
+  const headingFont = theme.fonts?.heading || '';
+  const bodyFont = theme.fonts?.body || '';
+  const allFonts = [headingFont, bodyFont].filter(Boolean);
+  // Build a deduplicated Google Fonts URL for the unique fonts needed
+  const fontFamilies = new Set<string>();
+  for (const f of allFonts) {
+    // Clean font name: remove quotes, trim
+    const clean = f.replace(/['"]/g, '').trim();
+    if (clean && clean !== 'system-ui' && clean !== 'sans-serif' && clean !== 'serif') {
+      fontFamilies.add(clean);
+    }
+  }
+  const googleFontsUrl = fontFamilies.size > 0
+    ? `https://fonts.googleapis.com/css2?family=${[...fontFamilies].map(f => f.replace(/ /g, '+') + ':wght@300;400;500;600;700;800;900').join('&family=')}&display=swap`
+    : null;
+
   return (
     <div
       className="min-h-screen flex flex-col font-sans antialiased"
       style={baseStyle as React.CSSProperties}
       onClick={() => onSelectSection?.(null)}
     >
+      {/* Google Fonts — loaded dynamically per store theme */}
+      {googleFontsUrl && (
+        <>
+          <link rel="preconnect" href="https://fonts.googleapis.com" />
+          <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+          <link href={googleFontsUrl} rel="stylesheet" />
+        </>
+      )}
       {/* Header */}
       {!isTemplatePage && header
         ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate, variantCssVars: tokenCssVars })
@@ -559,21 +586,11 @@ export function StoreRenderer({
           />
         ) : (
           <>
-            {body.map((section, index) => {
-              // Find matching rhythm entry for this section by body index
-              const rhythmEntry = sectionRhythmArr?.find(r => r.nodeIndex === index);
-              const rhythmVars = rhythmEntry?.rhythmCssVars;
-              // Merge rhythm CSS vars into section.style so renderSection can pick them up
-              const sectionForRender = rhythmVars && Object.keys(rhythmVars).length > 0
-                ? {
-                    ...section,
-                    style: { ...section.style, _rhythmCssVars: rhythmVars },
-                  }
-                : section;
+            {body.map((section) => {
               return (
                 <Fragment key={section.id}>
                   {renderSection({
-                    section: sectionForRender,
+                    section,
                     theme,
                     selectedSectionId,
                     onSelectSection,
