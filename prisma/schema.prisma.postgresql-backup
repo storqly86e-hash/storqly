@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// AUTH — NextAuth v4 Prisma Adapter models
+// ═══════════════════════════════════════════════════════════════════
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  password      String?   // hashed via bcryptjs — null for future OAuth-only accounts
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  stores   Store[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STORE — E-commerce store data
+// ═══════════════════════════════════════════════════════════════════
+
+model Store {
+  id          String        @id @default(cuid())
+  name        String
+  slug        String        @unique
+  description String?
+  schema      String        // JSON string of the full store schema
+  published   Boolean       @default(false)
+  publishedAt DateTime?
+  userId      String?       // nullable — existing anonymous stores stay valid, new saved stores require a user
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  chatHistory ChatHistory[]
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model ChatHistory {
+  id        String   @id @default(cuid())
+  storeId   String
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+}

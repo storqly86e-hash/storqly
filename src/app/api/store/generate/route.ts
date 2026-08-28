@@ -1081,17 +1081,6 @@ export async function POST(req: NextRequest) {
           // This ensures the store always matches the selected recipe's architecture.
           // NOTE: Rhythm vars are applied AFTER enforcement so injected sections also get rhythm.
           try {
-            // DEFENSIVE: Ensure homepage exists before enforcement.
-            // The normalize step should handle this, but we add a safety net
-            // because enforcement requires a homepage to inject sections into.
-            if (!store.pages.find(p => p.isHomepage) && store.pages.length > 0) {
-              store.pages[0].isHomepage = true;
-              if (store.pages[0].type !== 'home') {
-                store.pages[0].type = 'home';
-              }
-              log(`[Store Generate] Defensive: forced pages[0] to homepage (name=${store.pages[0].name}, type=${store.pages[0].type})`);
-            }
-            
             log(`[Store Generate] Enforcement check: libraryCtx.nodes.length=${libraryCtx?.nodes?.length ?? 'null'}, recipe=${libraryCtx?.recipeName}`);
             const hp = store.pages.find(p => p.isHomepage);
             const hpSecs = hp ? hp.sections.filter(s => s.visible) : [];
