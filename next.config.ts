@@ -8,7 +8,7 @@ const nextConfig: NextConfig = {
   // Production: standalone output for Docker deployment (Railway, etc.)
   output: "standalone",
   // Allow cross-origin requests from Z.ai preview gateway (dev only, harmless in prod)
-  ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ["*"] as const } : {}),
+  ...(process.env.NODE_ENV === 'development' ? { allowedDevOrigins: ["preview-chat-.*.space-z.ai", "localhost", "127.0.0.1"] as unknown as string[] } : {}),
   // Prevent CDN from caching stale HTML (1 year default breaks redeployments)
   async headers() {
     return [

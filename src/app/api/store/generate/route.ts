@@ -1134,6 +1134,35 @@ export async function POST(req: NextRequest) {
               log(`[Store Generate] Applied rhythm CSS vars to ${rhythmApplied}/${libraryCtx.sectionRhythm.length} sections`);
             }
           }
+          // ── Attach design library metadata to the store ──
+          // This data is consumed by StoreRenderer on the frontend to apply
+          // typography, density, and rhythm CSS variables.
+          if (libraryCtx) {
+            store = {
+              ...store,
+              designLibrary: {
+                version: '1.0.0',
+                recipe: libraryCtx.recipeId,
+                typographySystem: libraryCtx.typographySystem,
+                densityPreset: libraryCtx.densityPreset,
+                compositionResult: {
+                  tokenCssVars: libraryCtx.tokenCssVars,
+                  sectionRhythm: libraryCtx.sectionRhythm?.map(r => ({
+                    nodeIndex: r.nodeIndex,
+                    rhythmConfig: {
+                      density: r.rhythmConfig.density,
+                      surfaceStyle: r.rhythmConfig.surfaceStyle,
+                      contentWidth: r.rhythmConfig.contentWidth,
+                      verticalSpacing: r.rhythmConfig.verticalSpacing,
+                      visualWeight: r.rhythmConfig.visualWeight,
+                    },
+                    rhythmCssVars: r.rhythmCssVars,
+                  })),
+                },
+              },
+            };
+            log(`[Store Generate] Design library metadata attached: recipe=${libraryCtx.recipeId}, typo=${libraryCtx.typographySystem}, density=${libraryCtx.densityPreset}, tokens=${Object.keys(libraryCtx.tokenCssVars ?? {}).length} vars, rhythm=${libraryCtx.sectionRhythm?.length ?? 0} entries`);
+          }
         }
 
         log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
