@@ -158,25 +158,10 @@ export function enforceCompositionArchitecture(
       heroImagePool,
     });
 
-    // Insert in recipe order: find the position after the last section
-    // with a lower order number
-    let insertIdx = sections.length;
-    for (let j = sections.length - 1; j >= 0; j--) {
-      const s = sections[j];
-      if (!s.visible) continue;
-      if (s.type === 'footer') continue;
-      // Keep after header and hero
-      if (s.type === 'header' || s.type === 'hero') continue;
-      insertIdx = j + 1;
-      break;
-    }
-
-    // Don't insert after footer
+    // Insert in recipe order: append at the end
+    // (sections are sorted by recipe order, so appending preserves sequence)
     const footerIdx = sections.findIndex(s => s.type === 'footer');
-    if (footerIdx >= 0 && insertIdx >= footerIdx) {
-      insertIdx = footerIdx;
-    }
-
+    const insertIdx = footerIdx >= 0 ? footerIdx : sections.length;
     sections.splice(insertIdx, 0, scaffold);
     injectedFamilies.push(node.family);
   }

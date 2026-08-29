@@ -604,9 +604,12 @@ function fixProductReferences(store: Store, log: ReturnType<typeof createLogger>
 
 /** Strip junk pages: pages with type='home' that are NOT the homepage.
  *  These are AI-generated pages (e.g. "About Us", "Shipping Policy") with no sections
- *  that get classified as type='home' by default but are not the actual homepage. */
+ *  that get classified as type='home' by default but are not the actual homepage.
+ *  IMPORTANT: Never strip the ONLY page — always keep at least one. */
 function stripJunkPages(store: Store, log: ReturnType<typeof createLogger>): void {
   const before = store.pages.length;
+  // If there's only 1 page, never strip it — keep it and let ensureHomepage promote it.
+  if (before <= 1) return;
   store.pages = store.pages.filter(
     (p) => !(p.type === 'home' && !p.isHomepage)
   );
@@ -861,9 +864,9 @@ export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: numb
   padProducts(store, log);
   fixProductReferences(store, log);
   stripJunkPages(store, log);
+  ensureTemplatePages(store, log);
   ensureHomepage(store, log);
   ensureFeaturedProducts(store, log);
-  ensureTemplatePages(store, log);
   ensurePageMetadata(store, log);
 
   // ── Build result ──
