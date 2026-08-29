@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider  = "postgresql"
+  provider  = "sqlite"
   url       = env("DATABASE_URL")
 }
 
@@ -107,5 +107,5 @@ model Order {
   status    String   @default("demo") // 'demo' = no real payment processed
   createdAt DateTime @default(now())
 
-  store Store? @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
 }

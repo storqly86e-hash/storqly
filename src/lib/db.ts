@@ -1,11 +1,10 @@
 import { PrismaClient } from '@prisma/client'
 
 /**
- * Lazy Prisma client singleton.
+ * Lazy Prisma client singleton (SQLite).
  *
- * Returns null when DATABASE_URL is not set, or when the URL format
- * doesn't match the Prisma schema provider (e.g. SQLite URL with
- * PostgreSQL schema). All API routes use `getDb()` and handle null.
+ * Returns null only when DATABASE_URL is not set.
+ * With SQLite the file is local, so connection failures are rare.
  */
 
 let _db: PrismaClient | null | undefined = undefined // undefined = not yet tried
@@ -16,18 +15,7 @@ export function getDb(): PrismaClient | null {
   const url = process.env.DATABASE_URL || ''
 
   if (!url) {
-    _db = null
-    return null
-  }
-
-  // Prisma schema uses provider = "postgresql".
-  // If the URL isn't a postgres:// URL, the client will fail on first query.
-  // Detect this early and return null so routes can fall back gracefully.
-  if (!url.startsWith('postgres://') && !url.startsWith('postgresql://')) {
-    console.warn(
-      '[db] DATABASE_URL is set but is not a PostgreSQL URL — database disabled.',
-      'URL prefix:', url.substring(0, 20),
-    )
+    console.warn('[db] DATABASE_URL is not set — database disabled.')
     _db = null
     return null
   }
