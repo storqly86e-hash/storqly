@@ -805,7 +805,13 @@ export async function POST(req: NextRequest) {
 
       const heartbeat = setInterval(() => {
         try { controller.enqueue(encoder.encode(': heartbeat\n\n')); }
-        catch { clearInterval(heartbeat); }
+        catch {
+          clearInterval(heartbeat);
+          if (!sendFailed) {
+            sendFailed = true;
+            log(`[GENERATE] Heartbeat failed at ${elapsed()}ms — client likely disconnected`);
+          }
+        }
       }, 4000);
 
       const startTime = Date.now();
@@ -820,6 +826,7 @@ export async function POST(req: NextRequest) {
 
         const trimmedPrompt = prompt.trim();
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
+        log(`[GENERATE] Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}`);
         let requestedCount = extractProductCount(trimmedPrompt);
 
         const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
@@ -1403,11 +1410,13 @@ export async function POST(req: NextRequest) {
         logGeneration({ event: 'store_saved', storeId: store.id, duration_ms: elapsed() });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        logErr(`[Store Generate] Unexpected error after ${elapsed()}ms:`, msg);
+        logErr(`[GENERATE ERROR] Unexpected error after ${elapsed()}ms:`, msg);
+        logErr(`[GENERATE ERROR] step=unknown`);
         logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
         send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
       } finally {
         clearInterval(heartbeat);
+        log(`[GENERATE] Stream closing after ${elapsed()}ms (sendFailed=${sendFailed})`);
         try { controller.close(); } catch { /* already closed */ }
       }
     },

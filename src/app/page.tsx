@@ -316,6 +316,8 @@ function LandingPage() {
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const abortRef = useRef<AbortController | null>(null)
+  // Ref to track elapsed seconds in the catch block (state may be stale due to closure)
+  const elapsedSecondsRef = useRef(0)
 
   const {
     isGenerating,
@@ -437,7 +439,9 @@ function LandingPage() {
     }, HARD_TIMEOUT_MS)
 
     // Elapsed time counter
+    elapsedSecondsRef.current = 0
     elapsedTimerRef.current = setInterval(() => {
+      elapsedSecondsRef.current += 1
       setElapsedSeconds((prev) => prev + 1)
     }, 1000)
 
@@ -629,10 +633,17 @@ function LandingPage() {
       let message = 'Something went wrong. Please try again.'
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
-          message = timedOut
-            ? 'Generation timed out after 5.5 minutes. The server may be overloaded — please try again with a shorter prompt.'
-            : 'Generation was cancelled.'
-          console.warn(`[Storqly] Request aborted: ${message}`)
+          if (timedOut) {
+            message = 'Generation timed out after 5.5 minutes. The server may be overloaded — please try again with a shorter prompt.'
+          } else if (elapsedSecondsRef.current > 10 && !resolved) {
+            // The request was aborted after significant time but before result was received.
+            // This typically means: proxy timeout, network drop, or server crash — NOT user cancel.
+            // A user cancel would happen quickly (within 1-2s of clicking the button).
+            message = `Connection lost after ${elapsedSecondsRef.current}s. The AI was still working — please try again. If this persists, the server may be restarting.`
+          } else {
+            message = 'Generation was cancelled.'
+          }
+          console.warn(`[Storqly] Request aborted: ${message} (elapsed=${elapsedSecondsRef.current}s, timedOut=${timedOut}, resolved=${resolved})`)
         } else {
           console.warn('[Storqly] Unexpected error (caught by safety net):', err.message)
           message = err.message
