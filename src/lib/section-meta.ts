@@ -187,7 +187,7 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
       return { html: '<p>Add your content here...</p>' };
     case 'header':
       return {
-        storeName: 'My Store',
+        storeName: '', // Populated from store.name at render time
         showSearch: true,
         showCart: true,
         menuItems: [
@@ -198,8 +198,8 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
       };
     case 'footer':
       return {
-        storeName: 'My Store',
-        tagline: 'Quality products, delivered fast.',
+        storeName: '', // Populated from store.name at render time
+        tagline: '',
         columns: [
           {
             title: 'Quick Links',
@@ -220,14 +220,14 @@ export function getDefaultContent(type: SectionType): Record<string, unknown> {
           },
         ],
         socialLinks: [
-          { platform: 'instagram', url: '#' },
-          { platform: 'twitter', url: '#' },
-          { platform: 'facebook', url: '#' },
+          { platform: 'instagram', url: '' },
+          { platform: 'twitter', url: '' },
+          { platform: 'facebook', url: '' },
         ],
         contactInfo: {
-          email: 'hello@mystore.com',
+          email: '',
         },
-        copyrightText: `© ${new Date().getFullYear()} My Store. All rights reserved.`,
+        copyrightText: '', // Populated from store.name at render time
       };
     default:
       return {};

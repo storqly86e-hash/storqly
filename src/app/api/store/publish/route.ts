@@ -80,10 +80,12 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     if (err instanceof AuthError) return authErrorResponse(err);
     const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
     console.error('[Store Publish] Unexpected error:', msg);
+    if (stack) console.error('[Store Publish] Stack:', stack);
 
     // Handle unique constraint violation on slug
-    if (msg.includes('Unique constraint') || msg.includes('UNIQUE constraint')) {
+    if (msg.includes('Unique constraint') || msg.includes('UNIQUE constraint') || (err as {code?:string})?.code === 'P2002') {
       return NextResponse.json(
         { error: 'A store with this slug already exists. Please use a different store name.' },
         { status: 409 }
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: 'An unexpected error occurred while publishing the store.' },
+      { error: `Publish failed: ${msg}` },
       { status: 500 }
     );
   }

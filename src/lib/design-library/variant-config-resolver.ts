@@ -688,7 +688,7 @@ function resolveCTA(
     contentOverrides.alignment = 'center'
     styleOverrides.paddingY = 'md'
     styleOverrides.maxWidth = 'md'
-    styleOverrides.backgroundColor = '#fef3c7' // warm amber tint
+    styleOverrides.backgroundColor = undefined // Let theme determine background; never hardcode bright yellow
     cssVars['--cta-button-variant'] = 'solid'
     cssVars['--cta-headline-weight'] = '700'
     cssVars['--cta-headline-letter-spacing'] = '0'

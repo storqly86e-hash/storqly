@@ -1097,10 +1097,11 @@ export function HeroSection({ section, theme, selectedSectionId, onSelectSection
                 className="absolute inset-0 transition-opacity duration-1000 ease-in-out"
                 style={{
                   opacity: i === activeSlide ? 1 : 0,
-                  backgroundImage: `url(${img.src})`,
+                  backgroundImage: img.src ? `url(${img.src})` : undefined,
                   backgroundSize: bgSize,
                   backgroundPosition: 'center',
                   filter: bgTreatmentFilter || undefined,
+                  backgroundColor: !img.src ? 'rgba(0,0,0,0.15)' : undefined,
                 }}
               />
             ))}
@@ -1616,7 +1617,7 @@ export function TextBannerSection({ section, theme, selectedSectionId, onSelectS
   const promoFinePrint = v('--promo-fine-print');
   // VARIANT: --promo-surface accent-light background
   const promoSurfaceStyle: React.CSSProperties = promoSurface === 'accent-light'
-    ? { backgroundColor: lightenHex(theme.colors.primary, 0.9) || '#fef3c7' }
+    ? { backgroundColor: lightenHex(theme.colors.primary, 0.9) || theme.colors.surface || '#f5f5f5' }
     : {};
   // VARIANT: --promo-border-mode full border
   const promoBorderClass = promoBorderMode === 'full' ? 'border' : '';

@@ -382,7 +382,7 @@ export const defaultTheme: StoreTheme = {
   colors: {
     primary: '#6366f1',
     secondary: '#ec4899',
-    accent: '#f59e0b',
+    accent: '#8b7e74',
     background: '#ffffff',
     surface: '#f8fafc',
     text: '#0f172a',

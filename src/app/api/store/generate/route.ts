@@ -246,7 +246,30 @@ const PRODUCT_URLS: Record<string, string[]> = {
 // ── Keyword → category synonym mapping ──
 // Handles common terms that don't appear directly in category key paths.
 const CATEGORY_SYNONYMS: Record<string, string> = {
+  // Skincare/beauty synonyms → skincare/beauty/spa (CHECKED FIRST to prevent
+  // generic material words like 'gold' or 'cream' from misrouting to jewelry)
+  skincare: 'skincare/beauty/spa',
+  beauty: 'skincare/beauty/spa',
+  cosmetic: 'skincare/beauty/spa',
+  cosmetics: 'skincare/beauty/spa',
+  spa: 'skincare/beauty/spa',
+  serum: 'skincare/beauty/spa',
+  moisturizer: 'skincare/beauty/spa',
+  cleanser: 'skincare/beauty/spa',
+  cream: 'skincare/beauty/spa',
+  lotion: 'skincare/beauty/spa',
+  toner: 'skincare/beauty/spa',
+  essence: 'skincare/beauty/spa',
+  retinol: 'skincare/beauty/spa',
+  hyaluronic: 'skincare/beauty/spa',
+  'eye cream': 'skincare/beauty/spa',
+  sunscreen: 'skincare/beauty/spa',
+  exfoliant: 'skincare/beauty/spa',
+  'face wash': 'skincare/beauty/spa',
+  'face mask': 'skincare/beauty/spa',
   // Fashion synonyms → fashion/clothing/apparel
+  fashion: 'fashion/clothing/apparel',
+  clothing: 'fashion/clothing/apparel',
   streetwear: 'fashion/clothing/apparel',
   sneaker: 'fashion/clothing/apparel',
   sneakers: 'fashion/clothing/apparel',
@@ -258,28 +281,24 @@ const CATEGORY_SYNONYMS: Record<string, string> = {
   hoodie: 'fashion/clothing/apparel',
   dress: 'fashion/clothing/apparel',
   denim: 'fashion/clothing/apparel',
+  blouse: 'fashion/clothing/apparel',
+  skirt: 'fashion/clothing/apparel',
+  jacket: 'fashion/clothing/apparel',
   // Jewelry synonyms → jewelry/watches/accessories
+  // NOTE: Removed 'gold' and 'silver' — these are generic materials used
+  // across many categories (e.g., 'gold-infused serum' should NOT match jewelry)
+  jewelry: 'jewelry/watches/accessories',
   ring: 'jewelry/watches/accessories',
   rings: 'jewelry/watches/accessories',
   necklace: 'jewelry/watches/accessories',
   earrings: 'jewelry/watches/accessories',
   bracelet: 'jewelry/watches/accessories',
+  bracelets: 'jewelry/watches/accessories',
   pendant: 'jewelry/watches/accessories',
   gemstone: 'jewelry/watches/accessories',
   diamond: 'jewelry/watches/accessories',
-  gold: 'jewelry/watches/accessories',
-  silver: 'jewelry/watches/accessories',
-  // Skincare synonyms → skincare/beauty/spa
-  serum: 'skincare/beauty/spa',
-  moisturizer: 'skincare/beauty/spa',
-  cleanser: 'skincare/beauty/spa',
-  cream: 'skincare/beauty/spa',
-  lotion: 'skincare/beauty/spa',
-  cosmetic: 'skincare/beauty/spa',
-  cosmetics: 'skincare/beauty/spa',
-  spa: 'skincare/beauty/spa',
-  skincare: 'skincare/beauty/spa',
-  beauty: 'skincare/beauty/spa',
+  watch: 'jewelry/watches/accessories',
+  watches: 'jewelry/watches/accessories',
   // Coffee/food synonyms → food/coffee/bakery
   tea: 'food/coffee/bakery',
   bakery: 'food/coffee/bakery',
@@ -527,11 +546,13 @@ TYPOGRAPHY RULES:
 
 COLOR PALETTE STRATEGY:
 - Analyze the brand mood from the prompt and generate a matching palette.
+- CRITICAL: background must ALWAYS be near-white (#fafafa, #f8f7f4, #fefefe, #f9f8f6) or dark (#111827, #0f172a). NEVER use bright yellow (#FFFF99, #ffff00, #ffe066), saturated amber (#f59e0b, #fbbf24), or neon colors as backgrounds.
 - Dark/moody brands: dark backgrounds (#111827, #0f172a), light text, vivid accents
-- Luxury brands: neutral backgrounds, gold/silver accents, elegant typography
+- Luxury brands: neutral ivory/cream backgrounds (#f9f8f6, #faf9f7), muted metallic accents (#b8a99a, #8b7e74), elegant typography
 - Bright/energetic: white backgrounds, vibrant primary + secondary, playful accent
-- Minimal/clean: white/light gray backgrounds, one accent color, lots of whitespace
-- Nature/organic: earthy tones (greens, browns, warm grays), cream backgrounds
+- Minimal/clean: white/light gray backgrounds, one muted accent color, lots of whitespace
+- Nature/organic: earthy tones (sage greens, warm browns, muted grays), cream backgrounds (#faf8f5)
+- CRITICAL: accent colors should be MUTED and SOPHISTICATED, never bright/saturated. Use desaturated versions of any hue.
 
 ═══ SECTION SYSTEM ═══
 Each section: {"id":"<uuid>","type":"<type>","content":{...},"style":{...},"visible":true,"componentMeta":{...}}
@@ -592,11 +613,11 @@ HERO IMAGE SYSTEM (CRITICAL):
 6. TESTIMONIALS:
    {headline, items: [{id, quote (realistic customer words), author, role (e.g. 'Verified Buyer'), rating: 4-5}]}
    - Include 3 testimonials with diverse, realistic quotes.
-   - Style: backgroundColor should be surface color or a subtle tint.
+   - Style: use the theme's surface color or a very subtle tint of it. NEVER use bright yellow or saturated colors as background.
 
 7. NEWSLETTER:
    {headline, subtitle, placeholderText, buttonText}
-   - Style: backgroundColor = primary color, textColor = white.
+   - Style: use a DARK neutral (e.g., theme.text color like #1a1a2e or #111827) as background with white/light text. This creates a sophisticated editorial feel. NEVER use a bright primary color as the full background.
 
 8. IMAGE-GALLERY:
    {images: [{src, alt, caption}], columns: 3 or 4, gap: "md"}

@@ -151,6 +151,19 @@ function normalizeTheme(raw: unknown, log: ReturnType<typeof createLogger>): Sto
     }
   }
 
+  // ── Guard against bright/saturated background colors ──
+  // Reject backgrounds that are too bright (lightness > 90%) or too saturated for backgrounds
+  const bg = theme.colors.background;
+  if (bg && isBrightYellowish(bg)) {
+    log.log({ field: 'theme.colors.background', action: 'too_bright', from: bg, to: '#fafaf9' });
+    theme.colors.background = '#fafaf9';
+  }
+  const sf = theme.colors.surface;
+  if (sf && isBrightYellowish(sf)) {
+    log.log({ field: 'theme.colors.surface', action: 'too_bright', from: sf, to: '#f5f5f4' });
+    theme.colors.surface = '#f5f5f4';
+  }
+
   // Fonts
   const fonts = obj(t.fonts, {} as Record<string, unknown>);
   theme.fonts.heading = str(fonts.heading, 'Inter');
@@ -168,13 +181,46 @@ function normalizeTheme(raw: unknown, log: ReturnType<typeof createLogger>): Sto
   return theme;
 }
 
+/** Detect bright yellowish/amber backgrounds that look unprofessional */
+function isBrightYellowish(hex: string): boolean {
+  try {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    // Relative luminance
+    const [lr, lg, lb] = [r, g, b].map(c => {
+      const s = c / 255;
+      return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+    });
+    const luminance = 0.2126 * lr + 0.7152 * lg + 0.0722 * lb;
+    // Check if it's a bright background (high luminance)
+    if (luminance < 0.85) return false;
+    // Check if it's yellowish (high red+green, low blue)
+    const maxRG = Math.max(r, g);
+    const minRG = Math.min(r, g);
+    if (b < maxRG * 0.65 && (r + g) > 350) return true;
+    // Check for very high saturation warm colors
+    if (g > 200 && r > 180 && b < 150 && luminance > 0.8) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Section style normalization ──────────────────────────────────
 
 function normalizeSectionStyle(raw: unknown, log: ReturnType<typeof createLogger>): SectionStyle {
   const s = obj(raw, {} as Record<string, unknown>);
   const style: SectionStyle = {};
 
-  if (typeof s.backgroundColor === 'string' && s.backgroundColor) style.backgroundColor = s.backgroundColor;
+  if (typeof s.backgroundColor === 'string' && s.backgroundColor) {
+    // Reject bright yellowish section backgrounds
+    if (isBrightYellowish(s.backgroundColor)) {
+      log.log({ field: 'style.backgroundColor', action: 'too_bright', from: s.backgroundColor, to: '(removed)' });
+    } else {
+      style.backgroundColor = s.backgroundColor;
+    }
+  }
   if (typeof s.textColor === 'string' && s.textColor) style.textColor = s.textColor;
   if (typeof s.backgroundImage === 'string' && s.backgroundImage) style.backgroundImage = s.backgroundImage;
   if (typeof s.overlay === 'boolean') style.overlay = s.overlay;
@@ -326,7 +372,7 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
       const menuItems = arr<Record<string, unknown>>(c.menuItems, []);
       return {
         logo: c.logo !== undefined ? str(c.logo, '') : undefined,
-        storeName: str(c.storeName, 'My Store'),
+        storeName: str(c.storeName, ''),
         showSearch: bool(c.showSearch, true),
         showCart: bool(c.showCart, true),
         menuItems: menuItems.slice(0, 8).map((mi) => ({
@@ -347,7 +393,7 @@ function normalizeSectionContent(type: SectionType, raw: unknown, log: ReturnTyp
       // Strip empty contactInfo
       const hasContact = contactInfo.email || contactInfo.phone || contactInfo.address;
       return {
-        storeName: str(c.storeName, 'My Store'),
+        storeName: str(c.storeName, ''),
         tagline: c.tagline !== undefined ? str(c.tagline, '') : undefined,
         logo: c.logo !== undefined ? str(c.logo, '') : undefined,
         columns: columns.slice(0, 4).map((col) => ({
@@ -685,7 +731,7 @@ function ensureTemplatePages(store: Store, log: ReturnType<typeof createLogger>)
 
 /** Fill in default metadata for template pages using store name for branding */
 function ensurePageMetadata(store: Store, log: ReturnType<typeof createLogger>): void {
-  const name = store.name || 'My Store';
+  const name = store.name || 'Store';
 
   // Generate branded metadata from store name (deterministic — no AI needed)
   const branded: Record<string, Record<string, string>> = {
@@ -869,6 +915,33 @@ export function normalizeStore(raw: unknown, prompt?: string, maxProducts?: numb
   ensureFeaturedProducts(store, log);
   ensurePageMetadata(store, log);
 
+  // ── Brand propagation: ensure header/footer use actual store name ──
+  for (const page of store.pages) {
+    for (const section of page.sections) {
+      if (section.type === 'header' || section.type === 'footer') {
+        const content = section.content as Record<string, unknown> | undefined;
+        if (content) {
+          const current = content.storeName as string | undefined;
+          if (!current || current === 'My Store') {
+            content.storeName = store.name;
+            log.log({ field: `${section.type}.storeName`, action: 'branding', from: current || '(empty)', to: store.name });
+          }
+          // Footer copyright
+          if (section.type === 'footer') {
+            const copyright = content.copyrightText as string | undefined;
+            if (!copyright || copyright.includes('My Store')) {
+              content.copyrightText = `© ${new Date().getFullYear()} ${store.name}. All rights reserved.`;
+            }
+            // Footer tagline — use empty rather than generic
+            if (!content.tagline) {
+              content.tagline = '';
+            }
+          }
+        }
+      }
+    }
+  }
+
   // ── Build result ──
   const logEntries = log.getLogs();
   const logLines = logEntries.map(
@@ -971,5 +1044,5 @@ function extractStoreNameFromPrompt(prompt: string): string {
     if (candidate.length >= 2 && candidate.length <= 40) return candidate;
   }
 
-  return 'My Store';
+  return 'Store';
 }
