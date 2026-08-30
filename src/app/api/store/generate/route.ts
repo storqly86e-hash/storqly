@@ -29,6 +29,7 @@ import { detectGenericity } from '@/lib/design-library/genericity-detector';
 import { attemptAutoRepair } from '@/lib/design-library/auto-repair';
 import type { ComponentMeta } from '@/lib/store-schema';
 import { logGeneration } from '@/lib/logger';
+import { cacheGenerationResult, cacheGenerationError } from '@/lib/generation-cache';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -806,6 +807,9 @@ export async function POST(req: NextRequest) {
   const encoder = new TextEncoder();
   let sendFailed = false;
 
+  // Generate a jobId for stream-drop recovery
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (event: string, data: unknown) => {
@@ -842,7 +846,8 @@ export async function POST(req: NextRequest) {
 
         const trimmedPrompt = prompt.trim();
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
-        reqLog(`Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}`);
+        reqLog(`Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}, jobId=${jobId}`);
+        send('progress', { stage: 'starting', message: 'Starting generation...', jobId });
         let requestedCount = extractProductCount(trimmedPrompt);
 
         const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
@@ -933,7 +938,9 @@ export async function POST(req: NextRequest) {
           const providerDetails = phase1Result.providerErrors
             ?.map(e => `* ${e.provider}: ${e.error}`)
             .join('\n') || phase1Result.error || 'Unknown error';
-          send('error', { message: `AI generation failed. Each provider error:\n${providerDetails}`, providerErrors: phase1Result.providerErrors });
+          const aiErrorMsg = `AI generation failed. Each provider error:\n${providerDetails}`;
+          try { cacheGenerationError(jobId, aiErrorMsg); } catch { /* non-fatal */ }
+          send('error', { message: aiErrorMsg, providerErrors: phase1Result.providerErrors });
           return;
         }
 
@@ -1420,16 +1427,31 @@ export async function POST(req: NextRequest) {
         send('progress', { stage: 'finalizing', message: 'Finalizing your store...' });
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
         reqLog(`SUCCESS in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations, clientDisconnected=${clientDisconnected})`);
-        logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
 
-        send('result', {
-          store,
+        // ── CRITICAL: Cache the result BEFORE sending — if the stream drops
+        //    between send('result') and the client receiving it, the client
+        //    can recover via /api/store/generate/recover?jobId=xxx
+        const resultMeta = {
           _normalizations: normResult.normalizationCount,
           _productCapHit: wasCapped,
           _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
           _generatedCount: store.products.length,
+        };
+        try {
+          cacheGenerationResult(jobId, store, resultMeta);
+        } catch (cacheErr) {
+          reqWarn(`Failed to cache generation result (non-fatal): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`);
+        }
+
+        send('result', {
+          store,
+          ...resultMeta,
         });
-        logGeneration({ event: 'store_saved', storeId: store.id, duration_ms: elapsed() });
+
+        // Send a done sentinel AFTER result — helps client distinguish
+        // "stream ended normally" from "stream dropped mid-generation"
+        send('done', { jobId, storeId: store.id, storeName: store.name });
+        logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
         const stack = err instanceof Error ? err.stack : undefined;
@@ -1437,6 +1459,10 @@ export async function POST(req: NextRequest) {
         if (stack) reqErr(`Stack: ${stack}`);
         reqErr(`step=unknown, clientDisconnected=${clientDisconnected}`);
         logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
+        // Cache the error so the client can get a meaningful error message on recovery
+        try {
+          cacheGenerationError(jobId, msg.substring(0, 200));
+        } catch { /* non-fatal */ }
         send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
       } finally {
         clearInterval(heartbeat);
