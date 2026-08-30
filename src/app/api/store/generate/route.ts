@@ -1,16 +1,18 @@
 // ========================================
-// Store Generation API — SSE Streaming + 2-Phase Chunked Product Generation
+// Store Generation API — Background Job + Polling Architecture
 // ========================================
+// POST returns { jobId } immediately. Generation runs in background.
+// Client polls GET /api/store/generate/status?jobId=xxx for progress + result.
+//
 // Phase 1: AI generates store structure (theme, pages, sections) + first batch of products (up to 8)
 // Phase 2 (if requested > 8): Additional product-only batches of 6, with independent normalization & image enrichment
 //
 // Safety nets:
-// - SSE heartbeats every 4s to keep the proxy connection alive
+// - No long-lived HTTP connections (proxy-safe)
 // - Hard time budget: 300s total (5 min) for the entire generation
 // - Per-batch time budget check — abort remaining batches if < 20s remaining
-// - Auth guard: returns 401 JSON before creating the SSE stream (defense-in-depth)
 
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { executeAI } from '@/lib/ai-orchestrator';
 import { getProviders } from '@/lib/ai-providers';
 import { normalizeStore, normalizeProducts } from '@/lib/normalize-store';
@@ -29,7 +31,13 @@ import { detectGenericity } from '@/lib/design-library/genericity-detector';
 import { attemptAutoRepair } from '@/lib/design-library/auto-repair';
 import type { ComponentMeta } from '@/lib/store-schema';
 import { logGeneration } from '@/lib/logger';
-import { cacheGenerationResult, cacheGenerationError } from '@/lib/generation-cache';
+import {
+  cacheGenerationResult,
+  cacheGenerationError,
+  markJobStarted,
+  markJobCompleted,
+  updateJobProgress,
+} from '@/lib/generation-cache';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -764,721 +772,662 @@ RULES:
 - Product names should be creative and realistic, not generic.`;
 }
 
-// ─── POST handler — SSE stream ──────────────────────────────────
-export async function POST(req: NextRequest) {
-  // ── Extract request ID from client for end-to-end tracing ──
-  const requestId = req.headers.get('x-request-id') || `srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+// ─── Background generation runner ──────────────────────────────
+async function runGeneration(
+  jobId: string,
+  prompt: string,
+  userId: string | undefined,
+  requestId: string,
+): Promise<void> {
   const reqLog = (msg: string) => log(`[GENERATE:SERVER][${requestId}] ${msg}`);
   const reqWarn = (msg: string) => warn(`[GENERATE:SERVER][${requestId}] ${msg}`);
   const reqErr = (msg: string, ...args: unknown[]) => logErr(`[GENERATE:SERVER][${requestId}] ${msg}`, ...args);
 
-  // Auth: optional — allow anonymous generation.
-  // Save/publish will require auth when accounts are set up.
+  const startTime = Date.now();
+  const elapsed = () => Date.now() - startTime;
+  const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
+
+  markJobStarted(jobId);
+
+  try {
+    const trimmedPrompt = prompt;
+    const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
+    reqLog(`Background generation started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}, jobId=${jobId}`);
+    updateJobProgress(jobId, 'starting', 'Starting generation...');
+    let requestedCount = extractProductCount(trimmedPrompt);
+
+    const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
+    if (wasCapped) {
+      console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
+      requestedCount = MAX_PRACTICAL_PRODUCTS;
+    }
+
+    const phase1Count = Math.min(requestedCount, PHASE1_BATCH_SIZE);
+    const needsPhase2 = requestedCount > PHASE1_BATCH_SIZE;
+    const phase2BatchCount = needsPhase2
+      ? Math.ceil((requestedCount - PHASE1_BATCH_SIZE) / PHASE2_BATCH_SIZE)
+      : 0;
+
+    reqLog(`Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
+
+    if (sanitizedPrompt.length < trimmedPrompt.length) {
+      reqLog(`Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
+    }
+
+    logGeneration({ event: 'generation_started', details: { prompt_length: sanitizedPrompt.length, product_count: requestedCount } });
+
+    if (elapsed() > TOTAL_TIME_BUDGET_MS) {
+      reqWarn(`Time budget exceeded before AI call (${elapsed()}ms).`);
+      cacheGenerationError(jobId, 'Generation timed out before AI could respond. Please try again.');
+      return;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 1: Store Structure + First Batch of Products
+    // ═══════════════════════════════════════════════════════════
+    const providerChain = getProviders();
+    reqLog(`Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
+
+    updateJobProgress(jobId, 'analyzing', 'Analyzing your store vision...');
+    reqLog(`Phase 1: Generating store with ${phase1Count} products...`);
+
+    // ── Library-aware composition ────────────────────────────────
+    updateJobProgress(jobId, 'design-direction', 'Creating design direction...');
+    let libraryCtx: CompositionResult | null = null;
+    let libraryPromptSection = '';
+    try {
+      ensureLibraryRegistered();
+      libraryCtx = await composeStore(sanitizedPrompt);
+      if (libraryCtx) {
+        reqLog(`Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
+        libraryPromptSection = buildLibraryPromptContext(libraryCtx);
+        // Append hero-specific architecture from the hero variant's summary
+        const heroSummary = libraryCtx.variantSummaries.find(v => v.family === 'hero');
+        if (heroSummary) {
+          libraryPromptSection += '\n\n' + buildHeroLibraryBlock(heroSummary);
+        }
+      }
+    } catch (e) {
+      reqWarn(`Library composition failed (non-fatal): ${e}. Using legacy generation.`);
+    }
+
+    const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
+
+    const systemPrompt = libraryCtx
+      ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
+      : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
+    reqLog(`System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
+
+    updateJobProgress(jobId, 'building-store', 'Building your store with AI...');
+    logGeneration({ event: 'generation_stage_changed', duration_ms: elapsed(), details: { stage: 'building-store' } });
+
+    const phase1Result = await executeAI('store-generation', [
+      { role: 'user', content: userMessage },
+    ], {
+      systemPrompt,
+      temperature: 0.6,
+      timeout: 90_000,
+      maxRetries: 3,
+      responseFormat: 'json_object',
+      enableThinking: true,
+      maxTokens: 16000,
+    });
+
+    if (!phase1Result.success || !phase1Result.content) {
+      reqErr(`Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
+      const providerDetails = phase1Result.providerErrors
+        ?.map(e => `* ${e.provider}: ${e.error}`)
+        .join('\n') || phase1Result.error || 'Unknown error';
+      const aiErrorMsg = `AI generation failed. Each provider error:\n${providerDetails}`;
+      cacheGenerationError(jobId, aiErrorMsg);
+      return;
+    }
+
+    reqLog(`Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
+
+    // ── Parse JSON ──
+    updateJobProgress(jobId, 'processing', 'Processing AI response...');
+    logGeneration({ event: 'generation_ai_completed', duration_ms: elapsed(), details: { chars: phase1Result.content.length, attempts: phase1Result.attempts, provider: phase1Result.provider } });
+
+    // Guard against oversized AI responses (potential OOM vector)
+    const MAX_RESPONSE_CHARS = 500_000; // ~125K tokens — well above any reasonable store
+    if (phase1Result.content.length > MAX_RESPONSE_CHARS) {
+      reqErr(`Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
+      logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { reason: 'response_too_large', size: phase1Result.content.length } });
+      cacheGenerationError(jobId, 'AI response was too large. Please try again with a simpler prompt.');
+      return;
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(phase1Result.content);
+    } catch (e) {
+      reqErr(`Phase 1 JSON parse failed:`, e);
+      cacheGenerationError(jobId, 'AI returned invalid data. Please try again.');
+      return;
+    }
+
+    // ── Bridge AI style tokens → renderer-consumable fields ──
+    // IMPORTANT: Bridge runs BEFORE normalize because normalize strips
+    // non-standard style fields (density, typographySystem, headingAlignment,
+    // cardVariant, etc.) that the bridge needs to read and transform.
+    updateJobProgress(jobId, 'applying-design', 'Applying design system...');
+    const preBridgeStore = typeof parsed === 'object' && parsed !== null ? parsed as Store : null;
+    let bridgedData = parsed;
+    if (preBridgeStore?.pages) {
+      try {
+        bridgedData = bridgeSectionStyles(preBridgeStore);
+      } catch (e) {
+        log(`[Store Generate] Style bridge failed (non-fatal):`, e);
+      }
+    }
+
+    // ── Normalize to Store schema ──
+    const normResult = normalizeStore(bridgedData, trimmedPrompt, phase1Count);
+
+    if (!normResult) {
+      warn(`[Store Generate] normalizeStore returned null.`);
+      logGeneration({ event: 'normalization_failed', duration_ms: elapsed(), details: { reason: 'normalizeStore returned null' } });
+      cacheGenerationError(jobId, 'AI response could not be processed into a valid store. Please try again.');
+      return;
+    }
+
+    if (normResult.normalizationCount > 0) {
+      log(`[Store Generate] Normalization applied (${normResult.summary}):`);
+      for (const line of normResult.log) {
+        log(`  ${line}`);
+      }
+    } else {
+      log(`[Store Generate] Normalization: 0 fixes needed — clean output.`);
+    }
+
+    let store = normResult.store;
+
+    // ── Hero guarantee + image backfill (CRITICAL) ──
+    // Ensures EVERY store has a homepage hero with 3 rotating images.
+    // Handles: missing hero section, empty heroImages, invalid URLs.
+    try {
+      const heroCategory = pickCategory([sanitizedPrompt]);
+      const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+      const homepage = store.pages.find(p => p.isHomepage) || store.pages[0];
+
+      // Step 1: Ensure homepage has a hero section
+      const hasHero = homepage.sections.some(s => s.type === 'hero' && s.visible !== false);
+      if (!hasHero) {
+        const heroSection: Section = {
+          id: crypto.randomUUID(),
+          type: 'hero',
+          content: {
+            headline: store.name || 'Welcome to Our Store',
+            subheadline: store.description || 'Discover our curated collection',
+            ctaText: 'Shop Now',
+            ctaLink: '/shop',
+            alignment: 'center',
+            height: 'xl',
+            badge: 'NEW COLLECTION',
+            layout: 'minimal',
+            visualPriority: 'headline',
+            backgroundTreatment: 'editorial',
+            vignette: true,
+            heroImages: heroImagePool.slice(0, 3).map((url, i) => ({
+              src: url,
+              alt: `${store.name} hero image ${i + 1}`,
+              role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+            })),
+            carouselEnabled: true,
+            carouselInterval: 5,
+          },
+          style: {
+            paddingY: 'xl',
+            maxWidth: 'xl',
+            backgroundImage: heroImagePool[0],
+            overlay: true,
+            backgroundColor: undefined,
+          },
+          visible: true,
+        };
+        // Attach componentMeta from library context so the renderer resolves variant config
+        if (libraryCtx) {
+          const heroNode = libraryCtx.nodes.find(n => n.role === 'orient');
+          if (heroNode) {
+            const [family, variant] = heroNode.component_id.split('.');
+            heroSection.componentMeta = { componentId: heroNode.component_id, family, variant, role: heroNode.role } as ComponentMeta;
+          }
+        }
+        homepage.sections.unshift(heroSection);
+        log(`[Store Generate] Hero guarantee: INJECTED hero section (AI omitted it)`);
+      }
+
+      // Step 2: Backfill hero images on existing hero sections
+      for (const page of store.pages) {
+        for (const section of page.sections) {
+          if (section.type !== 'hero') continue;
+          const content = section.content as Record<string, unknown>;
+          const style = section.style as Record<string, unknown>;
+
+          let heroImages = content.heroImages;
+          if (!Array.isArray(heroImages) || heroImages.length === 0) {
+            const images = heroImagePool.slice(0, 3).map((url, i) => ({
+              src: url,
+              alt: `${store.name} hero image ${i + 1}`,
+              role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+            }));
+            content.heroImages = images;
+            log(`[Store Generate] Hero backfill: injected 3 hero images from ${heroCategory}`);
+          } else {
+            let hadInvalid = false;
+            const validated = (heroImages as Array<Record<string, unknown>>).slice(0, 3).map((img, i) => {
+              const src = typeof img?.src === 'string' && img.src.startsWith('https://') ? img.src : '';
+              if (!src) hadInvalid = true;
+              return {
+                src: src || heroImagePool[i % heroImagePool.length],
+                alt: typeof img?.alt === 'string' ? img.alt : `${store.name} hero image ${i + 1}`,
+                role: typeof img?.role === 'string' ? img.role : ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
+              };
+            });
+            if (hadInvalid) {
+              content.heroImages = validated;
+              log(`[Store Generate] Hero validation: replaced invalid hero image URLs`);
+            }
+          }
+
+          content.carouselEnabled = true;
+          content.carouselInterval = 5;
+
+          if (!style.backgroundImage || typeof style.backgroundImage !== 'string') {
+            style.backgroundImage = heroImagePool[0];
+            log(`[Store Generate] Hero: set style.backgroundImage fallback`);
+          }
+
+          if (style.overlay === undefined) {
+            style.overlay = true;
+          }
+        }
+      }
+      // Step 3: Ensure hero is FIRST non-chrome visible section (after header)
+      const bodySections = homepage.sections.filter(s => s.type !== 'header' && s.type !== 'footer' && s.type !== 'spacer' && s.type !== 'divider' && s.visible !== false);
+      const firstBodyIdx = homepage.sections.indexOf(bodySections[0]);
+      const heroIdx = homepage.sections.findIndex(s => s.type === 'hero' && s.visible !== false);
+      if (heroIdx > 0 && firstBodyIdx >= 0 && heroIdx !== firstBodyIdx) {
+        const [hero] = homepage.sections.splice(heroIdx, 1);
+        homepage.sections.splice(firstBodyIdx, 0, hero);
+        log(`[Store Generate] Hero guarantee: moved hero from index ${heroIdx} to ${firstBodyIdx} (first position)`);
+      }
+    } catch (heroErr) {
+      warn(`[Store Generate] Hero guarantee error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
+    }
+
+    // ── Validate and fix componentMeta ─────────────────────
+    if (libraryCtx) {
+      const { store: validatedStore, result: vr } = validateAndFixComponentMeta(store, libraryCtx);
+      store = validatedStore;
+      if (vr.fixedMeta > 0 || vr.errors.length > 0) {
+        log(`[Store Generate] componentMeta validation: ${vr.validMeta} valid, ${vr.fixedMeta} fixed, ${vr.attachedMissingMeta} attached, ${vr.errors.length} errors`);
+        for (const e of vr.errors) log(`  [componentMeta] ${e}`);
+        if (vr.errors.length > 0) {
+          logGeneration({ event: 'validation_failed', duration_ms: elapsed(), details: { valid: vr.validMeta, fixed: vr.fixedMeta, errors: vr.errors.length } });
+        }
+      } else {
+        log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
+      }
+
+      // ── COMPOSITION ARCHITECTURE ENFORCEMENT ──
+      // If the AI returned fewer sections than the recipe requires,
+      // inject scaffold sections with correct componentMeta and content.
+      // This ensures the store always matches the selected recipe's architecture.
+      // NOTE: Rhythm vars are applied AFTER enforcement so injected sections also get rhythm.
+      try {
+        log(`[Store Generate] Enforcement check: libraryCtx.nodes.length=${libraryCtx?.nodes?.length ?? 'null'}, recipe=${libraryCtx?.recipeName}`);
+        const hp = store.pages.find(p => p.isHomepage);
+        const hpSecs = hp ? hp.sections.filter(s => s.visible) : [];
+        log(`[Store Generate] Enforcement: homepage=${!!hp}, hpSecs=${hpSecs.length}, types=${hpSecs.map(s => s.type + (s.componentMeta ? '✓' : '✗')).join(',')}`);
+        const heroCategory = pickCategory([sanitizedPrompt]);
+        const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
+        const { enforceCompositionArchitecture } = await import('@/lib/design-library/composition-enforcement');
+        const enforcement = enforceCompositionArchitecture(store, libraryCtx, heroImagePool);
+        if (enforcement.injectedCount > 0) {
+          store = enforcement.store;
+          log(`[Store Generate] Composition enforcement: injected ${enforcement.injectedCount} sections (${enforcement.injectedFamilies.join(', ')}), matched ${enforcement.matchedCount}/${enforcement.totalNodes} nodes`);
+        } else {
+          log(`[Store Generate] Composition enforcement: all ${enforcement.matchedCount}/${enforcement.totalNodes} nodes matched`);
+        }
+      } catch (enfErr) {
+        warn(`[Store Generate] Composition enforcement error (non-fatal): ${enfErr instanceof Error ? enfErr.message : String(enfErr)}`);
+      }
+
+      // ── Apply per-section rhythm CSS vars to section.style ──
+      // Applied AFTER composition enforcement so injected sections also get rhythm.
+      // Uses componentId matching instead of positional index.
+      if (libraryCtx.sectionRhythm && libraryCtx.sectionRhythm.length > 0) {
+        const homepage = store.pages.find(p => p.isHomepage);
+        if (homepage) {
+          const sectionByComponentId = new Map<string, number[]>();
+          homepage.sections.forEach((s, idx) => {
+            const cid = s.componentMeta?.componentId;
+            if (cid) {
+              const list = sectionByComponentId.get(cid) || [];
+              list.push(idx);
+              sectionByComponentId.set(cid, list);
+            }
+          });
+          const usedSections = new Set<number>();
+          let rhythmApplied = 0;
+          for (const rhythm of libraryCtx.sectionRhythm) {
+            const node = libraryCtx.nodes[rhythm.nodeIndex];
+            if (!node) continue;
+            const cid = node.component_id;
+            const candidates = sectionByComponentId.get(cid);
+            if (!candidates) continue;
+            const sectionIdx = candidates.find(i => !usedSections.has(i));
+            if (sectionIdx === undefined) continue;
+            const section = homepage.sections[sectionIdx];
+            if (section && rhythm.rhythmCssVars && Object.keys(rhythm.rhythmCssVars).length > 0) {
+              (section.style as Record<string, unknown>)._rhythmCssVars = rhythm.rhythmCssVars;
+              usedSections.add(sectionIdx);
+              rhythmApplied++;
+            }
+          }
+          log(`[Store Generate] Applied rhythm CSS vars to ${rhythmApplied}/${libraryCtx.sectionRhythm.length} sections`);
+        }
+      }
+      // ── Attach design library metadata to the store ──
+      // This data is consumed by StoreRenderer on the frontend to apply
+      // typography, density, and rhythm CSS variables.
+      if (libraryCtx) {
+        store = {
+          ...store,
+          designLibrary: {
+            version: '1.0.0',
+            recipe: libraryCtx.recipeId,
+            typographySystem: libraryCtx.typographySystem,
+            densityPreset: libraryCtx.densityPreset,
+            compositionResult: {
+              tokenCssVars: libraryCtx.tokenCssVars,
+              sectionRhythm: libraryCtx.sectionRhythm?.map(r => ({
+                nodeIndex: r.nodeIndex,
+                rhythmConfig: {
+                  density: r.rhythmConfig.density,
+                  surfaceStyle: r.rhythmConfig.surfaceStyle,
+                  contentWidth: r.rhythmConfig.contentWidth,
+                  verticalSpacing: r.rhythmConfig.verticalSpacing,
+                  visualWeight: r.rhythmConfig.visualWeight,
+                },
+                rhythmCssVars: r.rhythmCssVars,
+              })),
+            },
+          },
+        };
+        log(`[Store Generate] Design library metadata attached: recipe=${libraryCtx.recipeId}, typo=${libraryCtx.typographySystem}, density=${libraryCtx.densityPreset}, tokens=${Object.keys(libraryCtx.tokenCssVars ?? {}).length} vars, rhythm=${libraryCtx.sectionRhythm?.length ?? 0} entries`);
+      }
+    }
+
+    reqLog(`Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: Additional Product Batches
+    // ═══════════════════════════════════════════════════════════
+    if (needsPhase2) {
+      const productsStillNeeded = requestedCount - store.products.length;
+
+      if (productsStillNeeded > 0 && remaining() > MIN_REMAINING_MS) {
+        reqLog(`Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
+
+        const existingNames = store.products.map(p => p.name);
+        const storeDescription = store.description || 'e-commerce store';
+        let batchNum = 0;
+
+        for (let offset = store.products.length; offset < requestedCount; offset += PHASE2_BATCH_SIZE) {
+          batchNum++;
+
+          const thisBatchSize = Math.min(PHASE2_BATCH_SIZE, requestedCount - offset);
+          const batchRange = `${offset + 1}-${offset + thisBatchSize}`;
+
+          if (remaining() < MIN_REMAINING_MS) {
+            warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
+            break;
+          }
+
+          updateJobProgress(jobId, 'generating', `Generating products ${batchRange}...`);
+          log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
+
+          try {
+            const batchResult = await executeAI('product-batch', [
+              { role: 'user', content: `Generate ${thisBatchSize} products.` },
+            ], {
+              systemPrompt: buildPhase2SystemPrompt(
+                thisBatchSize,
+                store.name,
+                storeDescription,
+                existingNames,
+                sanitizedPrompt,
+              ),
+              responseFormat: 'json_object',
+              maxRetries: 1,
+              timeout: 45_000,
+            });
+
+            if (!batchResult.success || !batchResult.content) {
+              warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
+              break;
+            }
+
+            let batchParsed: unknown;
+            try {
+              batchParsed = JSON.parse(batchResult.content);
+            } catch (e) {
+              warn(`[Store Generate] Phase 2 batch ${batchNum} JSON parse failed. Keeping ${store.products.length} products.`);
+              break;
+            }
+
+            let batchProducts: unknown[];
+            if (Array.isArray(batchParsed)) {
+              batchProducts = batchParsed;
+            } else if (batchParsed && typeof batchParsed === 'object' && !Array.isArray(batchParsed)) {
+              const obj = batchParsed as Record<string, unknown>;
+              batchProducts = Array.isArray(obj.products) ? obj.products
+                : Array.isArray(obj.items) ? obj.items
+                : Array.isArray(obj.data) ? obj.data
+                : [];
+            } else {
+              batchProducts = [];
+            }
+
+            const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
+
+            // ── Phase 2 image enrichment: replace AI-generated images ──
+            // Phase 2 products get random AI-chosen Unsplash URLs.
+            // Replace them with category-appropriate images from PRODUCT_URLS.
+            const p2Category = pickProductCategory([sanitizedPrompt]);
+            const p2ImagePool = PRODUCT_URLS[p2Category] || PRODUCT_URLS['general'];
+            let p2ImagesReplaced = 0;
+            for (const p of normalizedBatch) {
+              if (p.images.length > 0) {
+                // Replace with a deterministic category-appropriate image
+                const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % p2ImagePool.length;
+                const prevImg = p.images[0];
+                p.images[0] = p2ImagePool[imgIdx];
+                if (prevImg !== p.images[0]) p2ImagesReplaced++;
+              }
+            }
+            if (p2ImagesReplaced > 0) {
+              log(`[Store Generate] Phase 2 batch ${batchNum}: replaced ${p2ImagesReplaced}/${normalizedBatch.length} images with category-appropriate ones (category: ${p2Category})`);
+            }
+
+            if (normalizedBatch.length === 0) {
+              warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
+              break;
+            }
+
+            for (const p of normalizedBatch) {
+              existingNames.push(p.name);
+              store.products.push(p);
+            }
+
+            log(`[Store Generate] Phase 2 batch ${batchNum} complete: +${normalizedBatch.length} products. Total: ${store.products.length}. ${Math.round(remaining() / 1000)}s remaining.`);
+
+          } catch (batchErr) {
+            const batchMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
+            warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
+            break;
+          }
+        }
+      } else {
+        log(`[Store Generate] Phase 2 skipped: ${productsStillNeeded > 0 ? 'not enough time remaining' : 'already have enough products'}.`);
+      }
+    }
+
+    // ── Fix product references in featured-products sections ──
+    const allProductIds = store.products.map(p => p.id);
+    for (const page of store.pages) {
+      for (const section of page.sections) {
+        if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
+          const validIds = (section.content.productIds as string[]).filter(id => allProductIds.includes(id));
+          const usedIds = new Set(validIds);
+          for (const pid of allProductIds) {
+            if (!usedIds.has(pid)) {
+              validIds.push(pid);
+              usedIds.add(pid);
+            }
+          }
+          section.content.productIds = validIds;
+        }
+      }
+    }
+
+    // ── Quality guardrails + genericity detection + auto-repair ──
+    updateJobProgress(jobId, 'quality-check', 'Running quality checks...');
+    let finalQualityScore = 0;
+    try {
+      const qualityReport = validateStoreQuality(store);
+      const genericityReport = detectGenericity(store);
+      finalQualityScore = qualityReport.overallScore;
+      log(`[Store Generate] Quality: ${qualityReport.status} (score=${qualityReport.overallScore.toFixed(2)}, violations=${qualityReport.violations.length}). Genericity: ${genericityReport.status} (score=${genericityReport.genericityScore.toFixed(2)})`);
+
+      if (genericityReport.status === 'REJECT') {
+        logGeneration({ event: 'genericity_rejected', duration_ms: elapsed(), details: { score: genericityReport.genericityScore } });
+      }
+
+      if (qualityReport.status === 'FAIL' || genericityReport.status === 'REJECT') {
+        log(`[Store Generate] Attempting auto-repair...`);
+        logGeneration({ event: 'auto_repair_started', duration_ms: elapsed(), details: { quality_status: qualityReport.status, genericity_status: genericityReport.status, quality_score: qualityReport.overallScore, genericity_score: genericityReport.genericityScore, attempt: 1 } });
+        const repairResult = await attemptAutoRepair(store, sanitizedPrompt);
+        store = repairResult.store;
+        log(`[Store Generate] Repair: ${repairResult.repaired ? 'SUCCESS' : 'BEST_EFFORT'} (${repairResult.attempts} attempts, actions: ${repairResult.repairActions.join(', ') || 'none'})`);
+        logGeneration({ event: 'auto_repair_completed', duration_ms: elapsed(), details: { succeeded: repairResult.repaired, attempts: repairResult.attempts, actions: repairResult.repairActions } });
+        log(`[Store Generate] Post-repair quality: ${repairResult.qualityReport.status} (score=${repairResult.qualityReport.overallScore.toFixed(2)}). Genericity: ${repairResult.genericityReport.status} (score=${repairResult.genericityReport.genericityScore.toFixed(2)})`);
+      } else if (qualityReport.status === 'WARN') {
+        log(`[Store Generate] Quality WARN — ${qualityReport.violations.filter(v => v.severity === 'warning').map(v => v.rule).join(', ')}`);
+      }
+    } catch (guardErr) {
+      warn(`[Store Generate] Quality guardrails error (non-fatal): ${guardErr instanceof Error ? guardErr.message : String(guardErr)}`);
+    }
+
+    // ── Image relevance enforcement ──
+    // Ensure ALL product images are category-appropriate.
+    // Products with generic/wrong images get replaced.
+    // When DL art direction is available, log it for observability.
+    try {
+      const productCategory = pickProductCategory([sanitizedPrompt]);
+      const safeImagePool = PRODUCT_URLS[productCategory] || PRODUCT_URLS['general'];
+      // Build a set of known-bad image patterns (electronics/general for non-electronics stores)
+      const isElectronicsStore = productCategory === 'electronics/tech';
+      const badPatterns = isElectronicsStore
+        ? [] // electronics stores can have any electronics images
+        : ['headphone', 'laptop', 'camera', 'keyboard', 'monitor', 'speaker', 'printer'];
+      let imagesFixed = 0;
+      for (const p of store.products) {
+        if (p.images.length === 0) continue;
+        const img = p.images[0];
+        // Check if image is from the wrong category
+        const isFromWrongCategory = !isElectronicsStore && badPatterns.some(bp => img.toLowerCase().includes(bp));
+        // Check if image is from the generic pool
+        const isGeneric = img.includes('photo-1523275335684') || img.includes('photo-1505740420928') || img.includes('photo-1526170375885');
+        // Check if image URL contains any DL art direction avoid terms
+        const dlAvoidTerms = libraryCtx?.imageArtDirections?.flatMap(d => d.avoid ?? []);
+        const isAvoidedByDL = dlAvoidTerms && dlAvoidTerms.length > 0 && dlAvoidTerms.some(term => img.toLowerCase().includes(term));
+        if (isFromWrongCategory || isGeneric || isAvoidedByDL) {
+          // Replace with a deterministic category-appropriate image
+          const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % safeImagePool.length;
+          p.images[0] = safeImagePool[imgIdx];
+          imagesFixed++;
+        }
+      }
+      if (imagesFixed > 0) {
+        log(`[Store Generate] Image relevance: replaced ${imagesFixed}/${store.products.length} wrong-category/generic/DL-avoid images (category: ${productCategory}, DL art directions: ${libraryCtx?.imageArtDirections?.length ?? 0})`);
+      }
+      // Log DL art direction usage for observability
+      if (libraryCtx?.imageArtDirections && libraryCtx.imageArtDirections.length > 0) {
+        log(`[Store Generate] DL art direction: ${libraryCtx.imageArtDirections.length} directions, categories: ${[...new Set(libraryCtx.imageArtDirections.map(d => d.slotType))].join(', ')}`);
+      }
+    } catch (imgErr) {
+      warn(`[Store Generate] Image relevance check error (non-fatal): ${imgErr instanceof Error ? imgErr.message : String(imgErr)}`);
+    }
+
+    // ── Final result ──
+    updateJobProgress(jobId, 'finalizing', 'Finalizing your store...');
+    const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
+    reqLog(`SUCCESS in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+
+    // ── Cache the result for client polling ──
+    const resultMeta = {
+      _normalizations: normResult.normalizationCount,
+      _productCapHit: wasCapped,
+      _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
+      _generatedCount: store.products.length,
+    };
+    try {
+      cacheGenerationResult(jobId, store, resultMeta);
+    } catch (cacheErr) {
+      reqWarn(`Failed to cache generation result (non-fatal): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`);
+    }
+
+    logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    reqErr(`Unexpected error after ${elapsed()}ms: ${msg}`);
+    if (stack) reqErr(`Stack: ${stack}`);
+    logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
+    // Cache the error so the client can get a meaningful error message on polling
+    try {
+      cacheGenerationError(jobId, msg.substring(0, 200));
+    } catch { /* non-fatal */ }
+  } finally {
+    markJobCompleted(jobId);
+    reqLog(`Generation completed after ${elapsed()}ms`);
+  }
+}
+
+// ─── POST handler — background job + polling ──────────────────
+export async function POST(req: NextRequest) {
+  const requestId = req.headers.get('x-request-id') || `srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
   let userId: string | undefined;
   try {
     const session = await requireAuth();
     userId = session.user?.id;
-  } catch {
-    // Not logged in — proceed anonymously
-    reqWarn('No session, allowing anonymous generation');
-  }
-
-  // ── Monitor request signal for client disconnection ──
-  let clientDisconnected = false;
-  const reqStartTime = Date.now();
-  if (req.signal) {
-    req.signal.addEventListener('abort', () => {
-      clientDisconnected = true;
-      reqWarn(`Client disconnected (request.signal aborted). elapsed=${Date.now() - reqStartTime}ms`);
-    }, { once: true });
-  }
+  } catch { /* anonymous */ }
 
   let prompt: string | undefined;
   try {
     const body = await req.json();
     prompt = body?.prompt;
-  } catch (e) {
-    return new Response(JSON.stringify({ error: 'Invalid request body.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body.' }, { status: 400 });
   }
 
-  const encoder = new TextEncoder();
-  let sendFailed = false;
+  if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+    return NextResponse.json({ error: 'A prompt is required.' }, { status: 400 });
+  }
 
-  // Generate a jobId for stream-drop recovery
   const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      const send = (event: string, data: unknown) => {
-        try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch (e) {
-          if (!sendFailed) {
-            sendFailed = true;
-            reqErr(`send('${event}') failed — stream likely closed. Error: ${e instanceof Error ? e.message : e}`);
-          }
-        }
-      };
-
-      const heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(': heartbeat\n\n')); }
-        catch {
-          clearInterval(heartbeat);
-          if (!sendFailed) {
-            sendFailed = true;
-            reqWarn(`Heartbeat failed at ${elapsed()}ms — client likely disconnected`);
-          }
-        }
-      }, 4000);
-
-      const startTime = Date.now();
-      const elapsed = () => Date.now() - startTime;
-      const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
-
-      try {
-        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
-          send('error', { message: 'A prompt is required.' });
-          return;
-        }
-
-        const trimmedPrompt = prompt.trim();
-        const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
-        reqLog(`Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}, jobId=${jobId}`);
-        send('progress', { stage: 'starting', message: 'Starting generation...', jobId });
-        let requestedCount = extractProductCount(trimmedPrompt);
-
-        const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
-        if (wasCapped) {
-          console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
-          requestedCount = MAX_PRACTICAL_PRODUCTS;
-        }
-
-        const phase1Count = Math.min(requestedCount, PHASE1_BATCH_SIZE);
-        const needsPhase2 = requestedCount > PHASE1_BATCH_SIZE;
-        const phase2BatchCount = needsPhase2
-          ? Math.ceil((requestedCount - PHASE1_BATCH_SIZE) / PHASE2_BATCH_SIZE)
-          : 0;
-
-        reqLog(`Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
-
-        if (sanitizedPrompt.length < trimmedPrompt.length) {
-          reqLog(`Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
-        }
-
-        logGeneration({ event: 'generation_started', details: { prompt_length: sanitizedPrompt.length, product_count: requestedCount } });
-
-        if (elapsed() > TOTAL_TIME_BUDGET_MS) {
-          reqWarn(`Time budget exceeded before AI call (${elapsed()}ms).`);
-          send('error', { message: 'Generation timed out before AI could respond. Please try again.' });
-          return;
-        }
-
-        // Early exit if client already disconnected before starting the expensive AI call
-        if (clientDisconnected) {
-          reqWarn('Client already disconnected before AI call — skipping generation');
-          return;
-        }
-
-        // ═══════════════════════════════════════════════════════════
-        // PHASE 1: Store Structure + First Batch of Products
-        // ═══════════════════════════════════════════════════════════
-        const providerChain = getProviders();
-        reqLog(`Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
-
-        send('progress', { stage: 'analyzing', message: 'Analyzing your store vision...' });
-        reqLog(`Phase 1: Generating store with ${phase1Count} products...`);
-
-        // ── Library-aware composition ────────────────────────────────
-        send('progress', { stage: 'design-direction', message: 'Creating design direction...' });
-        let libraryCtx: CompositionResult | null = null;
-        let libraryPromptSection = '';
-        try {
-          ensureLibraryRegistered();
-          libraryCtx = await composeStore(sanitizedPrompt);
-          if (libraryCtx) {
-            reqLog(`Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
-            libraryPromptSection = buildLibraryPromptContext(libraryCtx);
-            // Append hero-specific architecture from the hero variant's summary
-            const heroSummary = libraryCtx.variantSummaries.find(v => v.family === 'hero');
-            if (heroSummary) {
-              libraryPromptSection += '\n\n' + buildHeroLibraryBlock(heroSummary);
-            }
-          }
-        } catch (e) {
-          reqWarn(`Library composition failed (non-fatal): ${e}. Using legacy generation.`);
-        }
-
-        const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
-
-        const systemPrompt = libraryCtx
-          ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
-          : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
-        reqLog(`System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
-
-        send('progress', { stage: 'building-store', message: 'Building your store with AI...' });
-        logGeneration({ event: 'generation_stage_changed', duration_ms: elapsed(), details: { stage: 'building-store' } });
-
-        const phase1Result = await executeAI('store-generation', [
-          { role: 'user', content: userMessage },
-        ], {
-          systemPrompt,
-          temperature: 0.6,
-          timeout: 90_000,
-          maxRetries: 3,
-          responseFormat: 'json_object',
-          enableThinking: true,
-          maxTokens: 16000,
-        });
-
-        if (!phase1Result.success || !phase1Result.content) {
-          reqErr(`Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
-          const providerDetails = phase1Result.providerErrors
-            ?.map(e => `* ${e.provider}: ${e.error}`)
-            .join('\n') || phase1Result.error || 'Unknown error';
-          const aiErrorMsg = `AI generation failed. Each provider error:\n${providerDetails}`;
-          try { cacheGenerationError(jobId, aiErrorMsg); } catch { /* non-fatal */ }
-          send('error', { message: aiErrorMsg, providerErrors: phase1Result.providerErrors });
-          return;
-        }
-
-        reqLog(`Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
-
-        // ── Parse JSON ──
-        send('progress', { stage: 'processing', message: 'Processing AI response...' });
-        logGeneration({ event: 'generation_ai_completed', duration_ms: elapsed(), details: { chars: phase1Result.content.length, attempts: phase1Result.attempts, provider: phase1Result.provider } });
-
-        // Guard against oversized AI responses (potential OOM vector)
-        const MAX_RESPONSE_CHARS = 500_000; // ~125K tokens — well above any reasonable store
-        if (phase1Result.content.length > MAX_RESPONSE_CHARS) {
-          reqErr(`Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
-          logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { reason: 'response_too_large', size: phase1Result.content.length } });
-          send('error', { message: 'AI response was too large. Please try again with a simpler prompt.' });
-          return;
-        }
-
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(phase1Result.content);
-        } catch (e) {
-          reqErr(`Phase 1 JSON parse failed:`, e);
-          send('error', { message: 'AI returned invalid data. Please try again.' });
-          return;
-        }
-
-        // ── Bridge AI style tokens → renderer-consumable fields ──
-        // IMPORTANT: Bridge runs BEFORE normalize because normalize strips
-        // non-standard style fields (density, typographySystem, headingAlignment,
-        // cardVariant, etc.) that the bridge needs to read and transform.
-        send('progress', { stage: 'applying-design', message: 'Applying design system...' });
-        const preBridgeStore = typeof parsed === 'object' && parsed !== null ? parsed as Store : null;
-        let bridgedData = parsed;
-        if (preBridgeStore?.pages) {
-          try {
-            bridgedData = bridgeSectionStyles(preBridgeStore);
-          } catch (e) {
-            log(`[Store Generate] Style bridge failed (non-fatal):`, e);
-          }
-        }
-
-        // ── Normalize to Store schema ──
-        const normResult = normalizeStore(bridgedData, trimmedPrompt, phase1Count);
-
-        if (!normResult) {
-          warn(`[Store Generate] normalizeStore returned null.`);
-          logGeneration({ event: 'normalization_failed', duration_ms: elapsed(), details: { reason: 'normalizeStore returned null' } });
-          send('error', { message: 'AI response could not be processed into a valid store. Please try again.' });
-          return;
-        }
-
-        if (normResult.normalizationCount > 0) {
-          log(`[Store Generate] Normalization applied (${normResult.summary}):`);
-          for (const line of normResult.log) {
-            log(`  ${line}`);
-          }
-        } else {
-          log(`[Store Generate] Normalization: 0 fixes needed — clean output.`);
-        }
-
-        let store = normResult.store;
-
-        // ── Hero guarantee + image backfill (CRITICAL) ──
-        // Ensures EVERY store has a homepage hero with 3 rotating images.
-        // Handles: missing hero section, empty heroImages, invalid URLs.
-        try {
-          const heroCategory = pickCategory([sanitizedPrompt]);
-          const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
-          const homepage = store.pages.find(p => p.isHomepage) || store.pages[0];
-
-          // Step 1: Ensure homepage has a hero section
-          const hasHero = homepage.sections.some(s => s.type === 'hero' && s.visible !== false);
-          if (!hasHero) {
-            const heroSection: Section = {
-              id: crypto.randomUUID(),
-              type: 'hero',
-              content: {
-                headline: store.name || 'Welcome to Our Store',
-                subheadline: store.description || 'Discover our curated collection',
-                ctaText: 'Shop Now',
-                ctaLink: '/shop',
-                alignment: 'center',
-                height: 'xl',
-                badge: 'NEW COLLECTION',
-                layout: 'minimal',
-                visualPriority: 'headline',
-                backgroundTreatment: 'editorial',
-                vignette: true,
-                heroImages: heroImagePool.slice(0, 3).map((url, i) => ({
-                  src: url,
-                  alt: `${store.name} hero image ${i + 1}`,
-                  role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
-                })),
-                carouselEnabled: true,
-                carouselInterval: 5,
-              },
-              style: {
-                paddingY: 'xl',
-                maxWidth: 'xl',
-                backgroundImage: heroImagePool[0],
-                overlay: true,
-                backgroundColor: undefined,
-              },
-              visible: true,
-            };
-            // Attach componentMeta from library context so the renderer resolves variant config
-            if (libraryCtx) {
-              const heroNode = libraryCtx.nodes.find(n => n.role === 'orient');
-              if (heroNode) {
-                const [family, variant] = heroNode.component_id.split('.');
-                heroSection.componentMeta = { componentId: heroNode.component_id, family, variant, role: heroNode.role } as ComponentMeta;
-              }
-            }
-            homepage.sections.unshift(heroSection);
-            log(`[Store Generate] Hero guarantee: INJECTED hero section (AI omitted it)`);
-          }
-
-          // Step 2: Backfill hero images on existing hero sections
-          for (const page of store.pages) {
-            for (const section of page.sections) {
-              if (section.type !== 'hero') continue;
-              const content = section.content as Record<string, unknown>;
-              const style = section.style as Record<string, unknown>;
-
-              let heroImages = content.heroImages;
-              if (!Array.isArray(heroImages) || heroImages.length === 0) {
-                const images = heroImagePool.slice(0, 3).map((url, i) => ({
-                  src: url,
-                  alt: `${store.name} hero image ${i + 1}`,
-                  role: ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
-                }));
-                content.heroImages = images;
-                log(`[Store Generate] Hero backfill: injected 3 hero images from ${heroCategory}`);
-              } else {
-                let hadInvalid = false;
-                const validated = (heroImages as Array<Record<string, unknown>>).slice(0, 3).map((img, i) => {
-                  const src = typeof img?.src === 'string' && img.src.startsWith('https://') ? img.src : '';
-                  if (!src) hadInvalid = true;
-                  return {
-                    src: src || heroImagePool[i % heroImagePool.length],
-                    alt: typeof img?.alt === 'string' ? img.alt : `${store.name} hero image ${i + 1}`,
-                    role: typeof img?.role === 'string' ? img.role : ['product-hero', 'editorial-lifestyle', 'brand-atmosphere'][i],
-                  };
-                });
-                if (hadInvalid) {
-                  content.heroImages = validated;
-                  log(`[Store Generate] Hero validation: replaced invalid hero image URLs`);
-                }
-              }
-
-              content.carouselEnabled = true;
-              content.carouselInterval = 5;
-
-              if (!style.backgroundImage || typeof style.backgroundImage !== 'string') {
-                style.backgroundImage = heroImagePool[0];
-                log(`[Store Generate] Hero: set style.backgroundImage fallback`);
-              }
-
-              if (style.overlay === undefined) {
-                style.overlay = true;
-              }
-            }
-          }
-          // Step 3: Ensure hero is FIRST non-chrome visible section (after header)
-          const bodySections = homepage.sections.filter(s => s.type !== 'header' && s.type !== 'footer' && s.type !== 'spacer' && s.type !== 'divider' && s.visible !== false);
-          const firstBodyIdx = homepage.sections.indexOf(bodySections[0]);
-          const heroIdx = homepage.sections.findIndex(s => s.type === 'hero' && s.visible !== false);
-          if (heroIdx > 0 && firstBodyIdx >= 0 && heroIdx !== firstBodyIdx) {
-            const [hero] = homepage.sections.splice(heroIdx, 1);
-            homepage.sections.splice(firstBodyIdx, 0, hero);
-            log(`[Store Generate] Hero guarantee: moved hero from index ${heroIdx} to ${firstBodyIdx} (first position)`);
-          }
-        } catch (heroErr) {
-          warn(`[Store Generate] Hero guarantee error (non-fatal): ${heroErr instanceof Error ? heroErr.message : String(heroErr)}`);
-        }
-
-        // ── Validate and fix componentMeta ─────────────────────
-        if (libraryCtx) {
-          const { store: validatedStore, result: vr } = validateAndFixComponentMeta(store, libraryCtx);
-          store = validatedStore;
-          if (vr.fixedMeta > 0 || vr.errors.length > 0) {
-            log(`[Store Generate] componentMeta validation: ${vr.validMeta} valid, ${vr.fixedMeta} fixed, ${vr.attachedMissingMeta} attached, ${vr.errors.length} errors`);
-            for (const e of vr.errors) log(`  [componentMeta] ${e}`);
-            if (vr.errors.length > 0) {
-              logGeneration({ event: 'validation_failed', duration_ms: elapsed(), details: { valid: vr.validMeta, fixed: vr.fixedMeta, errors: vr.errors.length } });
-            }
-          } else {
-            log(`[Store Generate] componentMeta: ${vr.validMeta} valid, ${vr.attachedMissingMeta} attached from composition`);
-          }
-
-          // ── COMPOSITION ARCHITECTURE ENFORCEMENT ──
-          // If the AI returned fewer sections than the recipe requires,
-          // inject scaffold sections with correct componentMeta and content.
-          // This ensures the store always matches the selected recipe's architecture.
-          // NOTE: Rhythm vars are applied AFTER enforcement so injected sections also get rhythm.
-          try {
-            log(`[Store Generate] Enforcement check: libraryCtx.nodes.length=${libraryCtx?.nodes?.length ?? 'null'}, recipe=${libraryCtx?.recipeName}`);
-            const hp = store.pages.find(p => p.isHomepage);
-            const hpSecs = hp ? hp.sections.filter(s => s.visible) : [];
-            log(`[Store Generate] Enforcement: homepage=${!!hp}, hpSecs=${hpSecs.length}, types=${hpSecs.map(s => s.type + (s.componentMeta ? '✓' : '✗')).join(',')}`);
-            const heroCategory = pickCategory([sanitizedPrompt]);
-            const heroImagePool = HERO_URLS[heroCategory] || HERO_URLS['general/lifestyle'];
-            const { enforceCompositionArchitecture } = await import('@/lib/design-library/composition-enforcement');
-            const enforcement = enforceCompositionArchitecture(store, libraryCtx, heroImagePool);
-            if (enforcement.injectedCount > 0) {
-              store = enforcement.store;
-              log(`[Store Generate] Composition enforcement: injected ${enforcement.injectedCount} sections (${enforcement.injectedFamilies.join(', ')}), matched ${enforcement.matchedCount}/${enforcement.totalNodes} nodes`);
-            } else {
-              log(`[Store Generate] Composition enforcement: all ${enforcement.matchedCount}/${enforcement.totalNodes} nodes matched`);
-            }
-          } catch (enfErr) {
-            warn(`[Store Generate] Composition enforcement error (non-fatal): ${enfErr instanceof Error ? enfErr.message : String(enfErr)}`);
-          }
-
-          // ── Apply per-section rhythm CSS vars to section.style ──
-          // Applied AFTER composition enforcement so injected sections also get rhythm.
-          // Uses componentId matching instead of positional index.
-          if (libraryCtx.sectionRhythm && libraryCtx.sectionRhythm.length > 0) {
-            const homepage = store.pages.find(p => p.isHomepage);
-            if (homepage) {
-              const sectionByComponentId = new Map<string, number[]>();
-              homepage.sections.forEach((s, idx) => {
-                const cid = s.componentMeta?.componentId;
-                if (cid) {
-                  const list = sectionByComponentId.get(cid) || [];
-                  list.push(idx);
-                  sectionByComponentId.set(cid, list);
-                }
-              });
-              const usedSections = new Set<number>();
-              let rhythmApplied = 0;
-              for (const rhythm of libraryCtx.sectionRhythm) {
-                const node = libraryCtx.nodes[rhythm.nodeIndex];
-                if (!node) continue;
-                const cid = node.component_id;
-                const candidates = sectionByComponentId.get(cid);
-                if (!candidates) continue;
-                const sectionIdx = candidates.find(i => !usedSections.has(i));
-                if (sectionIdx === undefined) continue;
-                const section = homepage.sections[sectionIdx];
-                if (section && rhythm.rhythmCssVars && Object.keys(rhythm.rhythmCssVars).length > 0) {
-                  (section.style as Record<string, unknown>)._rhythmCssVars = rhythm.rhythmCssVars;
-                  usedSections.add(sectionIdx);
-                  rhythmApplied++;
-                }
-              }
-              log(`[Store Generate] Applied rhythm CSS vars to ${rhythmApplied}/${libraryCtx.sectionRhythm.length} sections`);
-            }
-          }
-          // ── Attach design library metadata to the store ──
-          // This data is consumed by StoreRenderer on the frontend to apply
-          // typography, density, and rhythm CSS variables.
-          if (libraryCtx) {
-            store = {
-              ...store,
-              designLibrary: {
-                version: '1.0.0',
-                recipe: libraryCtx.recipeId,
-                typographySystem: libraryCtx.typographySystem,
-                densityPreset: libraryCtx.densityPreset,
-                compositionResult: {
-                  tokenCssVars: libraryCtx.tokenCssVars,
-                  sectionRhythm: libraryCtx.sectionRhythm?.map(r => ({
-                    nodeIndex: r.nodeIndex,
-                    rhythmConfig: {
-                      density: r.rhythmConfig.density,
-                      surfaceStyle: r.rhythmConfig.surfaceStyle,
-                      contentWidth: r.rhythmConfig.contentWidth,
-                      verticalSpacing: r.rhythmConfig.verticalSpacing,
-                      visualWeight: r.rhythmConfig.visualWeight,
-                    },
-                    rhythmCssVars: r.rhythmCssVars,
-                  })),
-                },
-              },
-            };
-            log(`[Store Generate] Design library metadata attached: recipe=${libraryCtx.recipeId}, typo=${libraryCtx.typographySystem}, density=${libraryCtx.densityPreset}, tokens=${Object.keys(libraryCtx.tokenCssVars ?? {}).length} vars, rhythm=${libraryCtx.sectionRhythm?.length ?? 0} entries`);
-          }
-        }
-
-        reqLog(`Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
-
-        // ═══════════════════════════════════════════════════════════
-        // PHASE 2: Additional Product Batches
-        // ═══════════════════════════════════════════════════════════
-        if (needsPhase2) {
-          const productsStillNeeded = requestedCount - store.products.length;
-
-          if (productsStillNeeded > 0 && remaining() > MIN_REMAINING_MS) {
-            reqLog(`Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
-
-            const existingNames = store.products.map(p => p.name);
-            const storeDescription = store.description || 'e-commerce store';
-            let batchNum = 0;
-
-            for (let offset = store.products.length; offset < requestedCount; offset += PHASE2_BATCH_SIZE) {
-              batchNum++;
-              const thisBatchSize = Math.min(PHASE2_BATCH_SIZE, requestedCount - offset);
-              const batchRange = `${offset + 1}-${offset + thisBatchSize}`;
-
-              if (remaining() < MIN_REMAINING_MS) {
-                warn(`[Store Generate] Phase 2: Only ${Math.round(remaining() / 1000)}s remaining — skipping remaining batches. Have ${store.products.length} products total.`);
-                break;
-              }
-
-              send('progress', { stage: 'generating', message: `Generating products ${batchRange}...` });
-              log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
-
-              try {
-                const batchResult = await executeAI('product-batch', [
-                  { role: 'user', content: `Generate ${thisBatchSize} products.` },
-                ], {
-                  systemPrompt: buildPhase2SystemPrompt(
-                    thisBatchSize,
-                    store.name,
-                    storeDescription,
-                    existingNames,
-                    sanitizedPrompt,
-                  ),
-                  responseFormat: 'json_object',
-                  maxRetries: 1,
-                  timeout: 45_000,
-                });
-
-                if (!batchResult.success || !batchResult.content) {
-                  warn(`[Store Generate] Phase 2 batch ${batchNum} failed: ${batchResult.error}. Keeping ${store.products.length} products.`);
-                  break;
-                }
-
-                let batchParsed: unknown;
-                try {
-                  batchParsed = JSON.parse(batchResult.content);
-                } catch (e) {
-                  warn(`[Store Generate] Phase 2 batch ${batchNum} JSON parse failed. Keeping ${store.products.length} products.`);
-                  break;
-                }
-
-                let batchProducts: unknown[];
-                if (Array.isArray(batchParsed)) {
-                  batchProducts = batchParsed;
-                } else if (batchParsed && typeof batchParsed === 'object' && !Array.isArray(batchParsed)) {
-                  const obj = batchParsed as Record<string, unknown>;
-                  batchProducts = Array.isArray(obj.products) ? obj.products
-                    : Array.isArray(obj.items) ? obj.items
-                    : Array.isArray(obj.data) ? obj.data
-                    : [];
-                } else {
-                  batchProducts = [];
-                }
-
-                const normalizedBatch: StoreProduct[] = normalizeProducts(batchProducts);
-
-                // ── Phase 2 image enrichment: replace AI-generated images ──
-                // Phase 2 products get random AI-chosen Unsplash URLs.
-                // Replace them with category-appropriate images from PRODUCT_URLS.
-                const p2Category = pickProductCategory([sanitizedPrompt]);
-                const p2ImagePool = PRODUCT_URLS[p2Category] || PRODUCT_URLS['general'];
-                let p2ImagesReplaced = 0;
-                for (const p of normalizedBatch) {
-                  if (p.images.length > 0) {
-                    // Replace with a deterministic category-appropriate image
-                    const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % p2ImagePool.length;
-                    const prevImg = p.images[0];
-                    p.images[0] = p2ImagePool[imgIdx];
-                    if (prevImg !== p.images[0]) p2ImagesReplaced++;
-                  }
-                }
-                if (p2ImagesReplaced > 0) {
-                  log(`[Store Generate] Phase 2 batch ${batchNum}: replaced ${p2ImagesReplaced}/${normalizedBatch.length} images with category-appropriate ones (category: ${p2Category})`);
-                }
-
-                if (normalizedBatch.length === 0) {
-                  warn(`[Store Generate] Phase 2 batch ${batchNum} produced 0 valid products. Keeping ${store.products.length} products.`);
-                  break;
-                }
-
-                for (const p of normalizedBatch) {
-                  existingNames.push(p.name);
-                  store.products.push(p);
-                }
-
-                log(`[Store Generate] Phase 2 batch ${batchNum} complete: +${normalizedBatch.length} products. Total: ${store.products.length}. ${Math.round(remaining() / 1000)}s remaining.`);
-
-              } catch (batchErr) {
-                const batchMsg = batchErr instanceof Error ? batchErr.message : String(batchErr);
-                warn(`[Store Generate] Phase 2 batch ${batchNum} error: ${batchMsg}. Keeping ${store.products.length} products.`);
-                break;
-              }
-            }
-          } else {
-            log(`[Store Generate] Phase 2 skipped: ${productsStillNeeded > 0 ? 'not enough time remaining' : 'already have enough products'}.`);
-          }
-        }
-
-        // ── Fix product references in featured-products sections ──
-        const allProductIds = store.products.map(p => p.id);
-        for (const page of store.pages) {
-          for (const section of page.sections) {
-            if (section.type === 'featured-products' && Array.isArray(section.content.productIds)) {
-              const validIds = (section.content.productIds as string[]).filter(id => allProductIds.includes(id));
-              const usedIds = new Set(validIds);
-              for (const pid of allProductIds) {
-                if (!usedIds.has(pid)) {
-                  validIds.push(pid);
-                  usedIds.add(pid);
-                }
-              }
-              section.content.productIds = validIds;
-            }
-          }
-        }
-
-        // ── Quality guardrails + genericity detection + auto-repair ──
-        send('progress', { stage: 'quality-check', message: 'Running quality checks...' });
-        let finalQualityScore = 0;
-        try {
-          const qualityReport = validateStoreQuality(store);
-          const genericityReport = detectGenericity(store);
-          finalQualityScore = qualityReport.overallScore;
-          log(`[Store Generate] Quality: ${qualityReport.status} (score=${qualityReport.overallScore.toFixed(2)}, violations=${qualityReport.violations.length}). Genericity: ${genericityReport.status} (score=${genericityReport.genericityScore.toFixed(2)})`);
-
-          if (genericityReport.status === 'REJECT') {
-            logGeneration({ event: 'genericity_rejected', duration_ms: elapsed(), details: { score: genericityReport.genericityScore } });
-          }
-
-          if (qualityReport.status === 'FAIL' || genericityReport.status === 'REJECT') {
-            log(`[Store Generate] Attempting auto-repair...`);
-            logGeneration({ event: 'auto_repair_started', duration_ms: elapsed(), details: { quality_status: qualityReport.status, genericity_status: genericityReport.status, quality_score: qualityReport.overallScore, genericity_score: genericityReport.genericityScore, attempt: 1 } });
-            const repairResult = await attemptAutoRepair(store, sanitizedPrompt);
-            store = repairResult.store;
-            log(`[Store Generate] Repair: ${repairResult.repaired ? 'SUCCESS' : 'BEST_EFFORT'} (${repairResult.attempts} attempts, actions: ${repairResult.repairActions.join(', ') || 'none'})`);
-            logGeneration({ event: 'auto_repair_completed', duration_ms: elapsed(), details: { succeeded: repairResult.repaired, attempts: repairResult.attempts, actions: repairResult.repairActions } });
-            log(`[Store Generate] Post-repair quality: ${repairResult.qualityReport.status} (score=${repairResult.qualityReport.overallScore.toFixed(2)}). Genericity: ${repairResult.genericityReport.status} (score=${repairResult.genericityReport.genericityScore.toFixed(2)})`);
-          } else if (qualityReport.status === 'WARN') {
-            log(`[Store Generate] Quality WARN — ${qualityReport.violations.filter(v => v.severity === 'warning').map(v => v.rule).join(', ')}`);
-          }
-        } catch (guardErr) {
-          warn(`[Store Generate] Quality guardrails error (non-fatal): ${guardErr instanceof Error ? guardErr.message : String(guardErr)}`);
-        }
-
-        // ── Image relevance enforcement ──
-        // Ensure ALL product images are category-appropriate.
-        // Products with generic/wrong images get replaced.
-        // When DL art direction is available, log it for observability.
-        try {
-          const productCategory = pickProductCategory([sanitizedPrompt]);
-          const safeImagePool = PRODUCT_URLS[productCategory] || PRODUCT_URLS['general'];
-          // Build a set of known-bad image patterns (electronics/general for non-electronics stores)
-          const isElectronicsStore = productCategory === 'electronics/tech';
-          const badPatterns = isElectronicsStore
-            ? [] // electronics stores can have any electronics images
-            : ['headphone', 'laptop', 'camera', 'keyboard', 'monitor', 'speaker', 'printer'];
-          let imagesFixed = 0;
-          for (const p of store.products) {
-            if (p.images.length === 0) continue;
-            const img = p.images[0];
-            // Check if image is from the wrong category
-            const isFromWrongCategory = !isElectronicsStore && badPatterns.some(bp => img.toLowerCase().includes(bp));
-            // Check if image is from the generic pool
-            const isGeneric = img.includes('photo-1523275335684') || img.includes('photo-1505740420928') || img.includes('photo-1526170375885');
-            // Check if image URL contains any DL art direction avoid terms
-            const dlAvoidTerms = libraryCtx?.imageArtDirections?.flatMap(d => d.avoid ?? []);
-            const isAvoidedByDL = dlAvoidTerms && dlAvoidTerms.length > 0 && dlAvoidTerms.some(term => img.toLowerCase().includes(term));
-            if (isFromWrongCategory || isGeneric || isAvoidedByDL) {
-              // Replace with a deterministic category-appropriate image
-              const imgIdx = (p.name.length * 7 + p.name.charCodeAt(0) * 13) % safeImagePool.length;
-              p.images[0] = safeImagePool[imgIdx];
-              imagesFixed++;
-            }
-          }
-          if (imagesFixed > 0) {
-            log(`[Store Generate] Image relevance: replaced ${imagesFixed}/${store.products.length} wrong-category/generic/DL-avoid images (category: ${productCategory}, DL art directions: ${libraryCtx?.imageArtDirections?.length ?? 0})`);
-          }
-          // Log DL art direction usage for observability
-          if (libraryCtx?.imageArtDirections && libraryCtx.imageArtDirections.length > 0) {
-            log(`[Store Generate] DL art direction: ${libraryCtx.imageArtDirections.length} directions, categories: ${[...new Set(libraryCtx.imageArtDirections.map(d => d.slotType))].join(', ')}`);
-          }
-        } catch (imgErr) {
-          warn(`[Store Generate] Image relevance check error (non-fatal): ${imgErr instanceof Error ? imgErr.message : String(imgErr)}`);
-        }
-
-        // ── Final result ──
-        send('progress', { stage: 'finalizing', message: 'Finalizing your store...' });
-        const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
-        reqLog(`SUCCESS in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations, clientDisconnected=${clientDisconnected})`);
-
-        // ── CRITICAL: Cache the result BEFORE sending — if the stream drops
-        //    between send('result') and the client receiving it, the client
-        //    can recover via /api/store/generate/recover?jobId=xxx
-        const resultMeta = {
-          _normalizations: normResult.normalizationCount,
-          _productCapHit: wasCapped,
-          _requestedCount: wasCapped ? extractProductCount(trimmedPrompt) : undefined,
-          _generatedCount: store.products.length,
-        };
-        try {
-          cacheGenerationResult(jobId, store, resultMeta);
-        } catch (cacheErr) {
-          reqWarn(`Failed to cache generation result (non-fatal): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`);
-        }
-
-        send('result', {
-          store,
-          ...resultMeta,
-        });
-
-        // Send a done sentinel AFTER result — helps client distinguish
-        // "stream ended normally" from "stream dropped mid-generation"
-        send('done', { jobId, storeId: store.id, storeName: store.name });
-        logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : String(err);
-        const stack = err instanceof Error ? err.stack : undefined;
-        reqErr(`Unexpected error after ${elapsed()}ms: ${msg}`);
-        if (stack) reqErr(`Stack: ${stack}`);
-        reqErr(`step=unknown, clientDisconnected=${clientDisconnected}`);
-        logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
-        // Cache the error so the client can get a meaningful error message on recovery
-        try {
-          cacheGenerationError(jobId, msg.substring(0, 200));
-        } catch { /* non-fatal */ }
-        send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
-      } finally {
-        clearInterval(heartbeat);
-        reqLog(`Stream closing after ${elapsed()}ms (sendFailed=${sendFailed}, clientDisconnected=${clientDisconnected})`);
-        try { controller.close(); } catch { /* already closed */ }
-      }
-    },
+  console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] POST received → jobId=${jobId}, starting background generation`);
+
+  // Fire-and-forget: generation runs in background, client polls for status
+  runGeneration(jobId, prompt.trim(), userId, requestId).catch(err => {
+    console.error(`[${ts()}] [GENERATE:SERVER][${requestId}] Unhandled error in runGeneration:`, err);
+    markJobCompleted(jobId);
   });
 
-  return new Response(stream, {
-    status: 200,
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache, no-transform',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    },
-  });
+  return NextResponse.json({ jobId });
 }

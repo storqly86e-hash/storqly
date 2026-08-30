@@ -258,9 +258,8 @@ const features = [
 ]
 
 // ─── Generation Stage Machine ──────────────────────────────────────
-// Ordered stages that correspond to SSE progress events from the server.
-// The client advances through these as SSE events arrive.
-// Fallback cycling only kicks in if no SSE progress events are received.
+// Ordered stages that correspond to progress updates from the server.
+// The client advances through these as poll responses arrive.
 
 type GenerationStage = {
   id: string
@@ -280,7 +279,7 @@ const GENERATION_STAGES: GenerationStage[] = [
 
 const STAGE_INDEX_MAP = new Map(GENERATION_STAGES.map((s, i) => [s.id, i]))
 
-// Fallback messages used ONLY when SSE progress events stop arriving
+// Fallback messages used when no progress updates are received from server
 const fallbackMessages = [
   'Analyzing your store vision...',
   'Building store layout...',
@@ -313,17 +312,11 @@ function LandingPage() {
   const [storesLoading, setStoresLoading] = useState(false)
   const [editingSlug, setEditingSlug] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const abortRef = useRef<AbortController | null>(null)
-  // Ref to track elapsed seconds in the catch block (state may be stale due to closure)
-  const elapsedSecondsRef = useRef(0)
-  // Tracks whether the USER explicitly clicked Cancel (vs. programmatic abort from unmount/timeout)
-  const userCancelledRef = useRef(false)
-  // Tracks whether a generation is actively in progress (between start and finishOk/finishWithError)
+  // Ref to track if the user explicitly cancelled (for poll loop)
+  const cancelledRef = useRef(false)
+  // Tracks whether a generation is actively in progress
   const generationActiveRef = useRef(false)
-  // Stores the jobId from the server for stream-drop recovery
-  const jobIdRef = useRef<string | null>(null)
 
   const {
     isGenerating,
@@ -353,7 +346,6 @@ function LandingPage() {
   }, [])
 
   const clearTimers = useCallback(() => {
-    if (progressTimerRef.current) { clearTimeout(progressTimerRef.current); progressTimerRef.current = null }
     if (elapsedTimerRef.current) { clearInterval(elapsedTimerRef.current); elapsedTimerRef.current = null }
   }, [])
 
@@ -400,16 +392,16 @@ function LandingPage() {
   }, [])
 
   const handleCancel = useCallback(() => {
-    console.warn('[GENERATE:CLIENT] User clicked Cancel — aborting generation')
-    userCancelledRef.current = true
+    console.log('[GENERATE:CLIENT] User clicked Cancel')
+    cancelledRef.current = true
     generationActiveRef.current = false
-    abortRef.current?.abort()
     clearTimers()
     setIsGenerating(false)
     setGenerationStatus('')
     setGenerationStage(null)
     setElapsedSeconds(0)
     setError(null)
+    toast.info('Generation cancelled.')
   }, [clearTimers, setIsGenerating])
 
   const handleGenerate = useCallback(async () => {
@@ -420,438 +412,186 @@ function LandingPage() {
       return
     }
 
-    // Auth gate disabled — backend allows anonymous generation
-    // TODO: re-enable when user accounts are set up
-    // if (!session?.user?.id && dbAvailable) {
-    //   setAuthOpen(true)
-    //   return
-    // }
-
     // Reset state
     setError(null)
     setIsGenerating(true)
     setGenerationStatus('Starting generation...')
     setElapsedSeconds(0)
-    userCancelledRef.current = false
+    cancelledRef.current = false
     generationActiveRef.current = true
-    jobIdRef.current = null
 
-    // Create abort controller for this request
-    const controller = new AbortController()
-    abortRef.current = controller
-
-    // Generate a unique request ID for end-to-end tracing
+    // Generate a unique request ID for logging
     const requestId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     console.log(`[GENERATE:CLIENT][${requestId}] CLICK → Request started. Prompt: "${trimmed.slice(0, 80)}..."`)
 
-    // Hard timeout: 330 seconds — must exceed server's 300s total time budget + safety margin.
-    const HARD_TIMEOUT_MS = 330_000
-    let timedOut = false
-    const timeoutId = setTimeout(() => {
-      timedOut = true
-      console.warn(`[GENERATE:CLIENT][${requestId}] Hard timeout (${HARD_TIMEOUT_MS / 1000}s) reached — aborting. elapsed=${elapsedSecondsRef.current}s`)
-      controller.abort()
-    }, HARD_TIMEOUT_MS)
-
-    // Elapsed time counter
-    elapsedSecondsRef.current = 0
+    // Start elapsed time counter
     elapsedTimerRef.current = setInterval(() => {
-      elapsedSecondsRef.current += 1
       setElapsedSeconds((prev) => prev + 1)
     }, 1000)
 
-    // Fallback progress cycling (used only if SSE progress events stop)
-    let fallbackIdx = 0
-    let receivedSSEProgress = false
-    progressTimerRef.current = setInterval(() => {
-      if (!receivedSSEProgress) {
-        fallbackIdx = (fallbackIdx + 1) % fallbackMessages.length
-        setGenerationStatus(fallbackMessages[fallbackIdx])
-      }
-    }, 3000)
-
-    // ── Error classification helper ──
-    type ErrorReason = 'user_cancel' | 'timeout' | 'network_disconnect' | 'server_error' | 'ai_error' | 'stream_dropped' | 'parse_error' | 'unknown'
-    const classifyAndShowError = (reason: ErrorReason, context?: string) => {
-      const elapsed = elapsedSecondsRef.current
-      let message: string
-      let description: string
-
-      switch (reason) {
-        case 'user_cancel':
-          message = 'Generation was cancelled.'
-          description = 'You cancelled the generation.'
-          break
-        case 'timeout':
-          message = 'Generation timed out.'
-          description = `The AI was still working after ${Math.round(elapsed / 60)} minutes. The server may be overloaded — please try again.`
-          break
-        case 'network_disconnect':
-          message = 'Connection lost.'
-          description = `Connection to the server was lost after ${elapsed}s. ${context || 'Please check your connection and try again.'}`
-          break
-        case 'server_error':
-          message = 'Server error.'
-          description = context || 'The server encountered an error. Please try again.'
-          break
-        case 'ai_error':
-          message = 'AI generation failed.'
-          description = context || 'The AI provider failed to generate a response. Please try again.'
-          break
-        case 'stream_dropped':
-          message = 'Connection interrupted.'
-          description = context || 'The connection was lost before the result arrived. Attempting recovery...'
-          break
-        case 'parse_error':
-          message = 'Failed to process response.'
-          description = context || 'The server sent an invalid response. Please try again.'
-          break
-        default:
-          message = 'Generation failed.'
-          description = context || 'Something went wrong. Please try again.'
-      }
-
-      console.warn(`[GENERATE:CLIENT][${requestId}] ERROR: reason=${reason}, message="${message}", elapsed=${elapsed}s, userCancelled=${userCancelledRef.current}`)
-      clearTimeout(timeoutId)
-      clearTimers()
-      generationActiveRef.current = false
-      setError(message)
-      setIsGenerating(false)
-      setGenerationStatus('')
-      setGenerationStage(null)
-      setElapsedSeconds(0)
-      toast.error('Store generation failed', { description })
-    }
-
-    // ── Recovery helper: try to fetch result from server cache ──
-    const attemptRecovery = async (): Promise<boolean> => {
-      const jobId = jobIdRef.current
-      if (!jobId) {
-        console.log(`[GENERATE:CLIENT][${requestId}] No jobId available for recovery`)
-        return false
-      }
-      console.log(`[GENERATE:CLIENT][${requestId}] Attempting recovery via jobId=${jobId}...`)
-      setGenerationStatus('Recovering your store...')
-      try {
-        const res = await fetch(`/api/store/generate/recover?jobId=${encodeURIComponent(jobId)}`)
-        if (!res.ok) return false
-        const data = await res.json()
-        if (data.success && data.store) {
-          console.log(`[GENERATE:CLIENT][${requestId}] Recovery SUCCESS: store="${data.store.name}"`)
-          // CRITICAL: Mark generation complete BEFORE setStore to prevent unmount abort
-          generationActiveRef.current = false
-          clearTimeout(timeoutId)
-          clearTimers()
-          setIsGenerating(false)
-          setGenerationStatus('')
-          setGenerationStage(null)
-          setElapsedSeconds(0)
-          setError(null)
-          setStore(data.store)
-          triggerBackgroundImageEnrichment(data.store)
-          if (data.meta?._productCapHit) {
-            toast.info(`Recovered store: ${data.store.name}. Generated ${data.meta._generatedCount} products.`, { duration: 8000 })
-          } else {
-            toast.success(`Recovered: ${data.store.name}`, { description: 'Your store was generated successfully but the connection was briefly interrupted.' })
-          }
-          return true
-        }
-        if (data.error) {
-          console.log(`[GENERATE:CLIENT][${requestId}] Recovery found cached error: ${data.error.slice(0, 100)}`)
-        }
-        return false
-      } catch (recoveryErr) {
-        console.warn(`[GENERATE:CLIENT][${requestId}] Recovery failed: ${recoveryErr instanceof Error ? recoveryErr.message : String(recoveryErr)}`)
-        return false
-      }
-    }
-
-    // ── Helper: clean up on success ──
-    const finishOk = () => {
-      console.log(`[GENERATE:CLIENT][${requestId}] SUCCESS: generation completed. elapsed=${elapsedSecondsRef.current}s`)
-      clearTimeout(timeoutId)
-      clearTimers()
-      generationActiveRef.current = false
-      setIsGenerating(false)
-      setGenerationStatus('')
-      setGenerationStage(null)
-      setElapsedSeconds(0)
-    }
+    // Helper: sleep for a given number of milliseconds
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
     try {
-      console.log(`[GENERATE:CLIENT][${requestId}] FETCH_START`)
-
-      // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
-      const RETRYABLE_STATUSES = [502, 503, 504]
-      let res: Response | undefined
-      let retryCount = 0
-      const maxRetries = 2
-
-      while (retryCount <= maxRetries) {
-        try {
-          res = await fetch('/api/store/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
-            body: JSON.stringify({ prompt: trimmed }),
-            signal: controller.signal,
-          })
-
-          console.log(`[GENERATE:CLIENT][${requestId}] FETCH_RESPONSE: status=${res.status}, ok=${res.ok}`)
-
-          if (!res.ok && RETRYABLE_STATUSES.includes(res.status) && retryCount < maxRetries) {
-            retryCount++
-            console.warn(`[GENERATE:CLIENT][${requestId}] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 3s...`)
-            setGenerationStatus('Connection issue — retrying...')
-            await new Promise(r => setTimeout(r, 3000))
-            continue
-          }
-          break
-        } catch (fetchErr: unknown) {
-          if (fetchErr instanceof TypeError && retryCount < maxRetries) {
-            retryCount++
-            console.warn(`[GENERATE:CLIENT][${requestId}] Network error, retrying (${retryCount}/${maxRetries}) in 3s...`)
-            setGenerationStatus('Connection issue — retrying...')
-            await new Promise(r => setTimeout(r, 3000))
-            continue
-          }
-          const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
-          const errName = fetchErr instanceof Error ? fetchErr.name : 'Unknown'
-          console.warn(`[GENERATE:CLIENT][${requestId}] FETCH_FAILED: name=${errName}, msg="${msg}", aborted=${controller.signal.aborted}, userCancelled=${userCancelledRef.current}, elapsed=${elapsedSecondsRef.current}s`)
-          if (controller.signal.aborted) {
-            if (userCancelledRef.current) {
-              classifyAndShowError('user_cancel')
-            } else {
-              classifyAndShowError('network_disconnect', 'The request was aborted unexpectedly. The page may have reloaded or the connection was lost.')
-            }
-          } else {
-            classifyAndShowError('network_disconnect', 'Could not connect to the server. Please check your connection and try again.')
-          }
-          return
-        }
+      // ── Step 1: POST to start generation ──
+      console.log(`[GENERATE:CLIENT][${requestId}] POST → Starting generation job...`)
+      let res: Response
+      try {
+        res = await fetch('/api/store/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
+          body: JSON.stringify({ prompt: trimmed }),
+        })
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.warn(`[GENERATE:CLIENT][${requestId}] POST_FAILED: network error: ${msg}`)
+        clearTimers()
+        generationActiveRef.current = false
+        setIsGenerating(false)
+        setGenerationStatus('')
+        setError('Could not connect to the server. Please check your connection and try again.')
+        toast.error('Connection failed', { description: 'Could not reach the server. Please try again.' })
+        return
       }
 
-      if (!res!.ok) {
-        let errorMsg = `Server error (${res!.status})`
+      console.log(`[GENERATE:CLIENT][${requestId}] POST_RESPONSE: status=${res.status}, ok=${res.ok}`)
+
+      if (!res.ok) {
+        let errorMsg = `Server error (${res.status})`
         try {
-          const errorData = await res!.json()
+          const errorData = await res.json()
           errorMsg = errorData.error || errorMsg
         } catch { /* ignore parse error */ }
-        console.warn(`[GENERATE:CLIENT][${requestId}] HTTP_ERROR: ${errorMsg}`)
-        classifyAndShowError('server_error', errorMsg)
+        console.warn(`[GENERATE:CLIENT][${requestId}] POST_ERROR: ${errorMsg}`)
+        clearTimers()
+        generationActiveRef.current = false
+        setIsGenerating(false)
+        setGenerationStatus('')
+        setError(errorMsg)
+        toast.error('Store generation failed', { description: errorMsg })
         return
       }
 
-      // ── Consume SSE stream ──
-      console.log(`[GENERATE:CLIENT][${requestId}] STREAM_OPEN: SSE stream opened, starting reader loop...`)
-      const reader = res.body?.getReader()
-      if (!reader) {
-        classifyAndShowError('server_error', 'No response stream received from server.')
+      // Extract jobId from response
+      let jobId: string
+      try {
+        const data = await res.json()
+        jobId = data.jobId
+        if (!jobId) {
+          console.warn(`[GENERATE:CLIENT][${requestId}] POST_RESPONSE: missing jobId`)
+          clearTimers()
+          generationActiveRef.current = false
+          setIsGenerating(false)
+          setGenerationStatus('')
+          setError('Server did not return a job ID. Please try again.')
+          toast.error('Generation failed', { description: 'Server did not return a job ID.' })
+          return
+        }
+        console.log(`[GENERATE:CLIENT][${requestId}] jobId received: ${jobId}`)
+      } catch {
+        clearTimers()
+        generationActiveRef.current = false
+        setIsGenerating(false)
+        setGenerationStatus('')
+        setError('Failed to parse server response. Please try again.')
+        toast.error('Generation failed', { description: 'Could not parse server response.' })
         return
       }
 
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let resolved = false
-      let doneReceived = false
-      let currentEvent = '' // Persists across chunks — event: and data: lines can arrive in separate TCP segments
-      let eventCount = 0
-
-      // Listen for abort events (diagnostics only)
-      const onAbort = () => {
-        console.warn(`[GENERATE:CLIENT][${requestId}] ABORT_CALLED: reason=${controller.signal.reason}, userCancelled=${userCancelledRef.current}, elapsed=${elapsedSecondsRef.current}s, resolved=${resolved}`)
-      }
-      controller.signal.addEventListener('abort', onAbort, { once: true })
+      // ── Step 2: Poll for status ──
+      console.log(`[GENERATE:CLIENT][${requestId}] POLL → Starting poll loop for jobId=${jobId}`)
+      let consecutiveErrors = 0
+      const MAX_POLL_ERRORS = 3
 
       while (true) {
-        const { done, value } = await reader.read()
-        if (done) {
-          console.log(`[GENERATE:CLIENT][${requestId}] STREAM_DONE: reader done. resolved=${resolved}, doneReceived=${doneReceived}, events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
+        await sleep(2500)
+
+        // Check if user cancelled
+        if (cancelledRef.current) {
+          console.log(`[GENERATE:CLIENT][${requestId}] POLL_CANCELLED: user cancelled generation`)
           break
         }
 
-        buffer += decoder.decode(value, { stream: true })
+        try {
+          const pollRes = await fetch(`/api/store/generate/status?jobId=${encodeURIComponent(jobId)}`)
+          const pollData = await pollRes.json()
+          consecutiveErrors = 0 // Reset on successful poll
 
-        // Parse SSE events from buffer
-        const lines = buffer.split('\n')
-        buffer = lines.pop() || ''
-
-        for (const line of lines) {
-          if (line.startsWith(':')) continue // heartbeat comment
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice(7).trim()
-          } else if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6)
-
-            if (currentEvent === 'progress') {
-              receivedSSEProgress = true
-              eventCount++
-              try {
-                const data = JSON.parse(dataStr)
-                // Capture jobId from the first progress event
-                if (data.jobId && !jobIdRef.current) {
-                  jobIdRef.current = data.jobId
-                  console.log(`[GENERATE:CLIENT][${requestId}] jobId received: ${data.jobId}`)
-                }
-                setGenerationStatus(data.message || 'Processing...')
-                if (data.stage && STAGE_INDEX_MAP.has(data.stage)) {
-                  setGenerationStage(data.stage)
-                }
-              } catch { /* ignore */ }
-            } else if (currentEvent === 'result') {
-              eventCount++
-              console.log(`[GENERATE:CLIENT][${requestId}] RESULT_EVENT: received. events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
-              try {
-                const data = JSON.parse(dataStr)
-                if (!data.store) {
-                  console.warn(`[GENERATE:CLIENT][${requestId}] RESULT_EVENT: missing store data`)
-                  classifyAndShowError('parse_error', 'The AI response was missing store data.')
-                  return
-                }
-                console.log(`[GENERATE:CLIENT][${requestId}] RESULT_EVENT: store="${data.store.name}", products=${data.store.products?.length ?? 0}`)
-                resolved = true
-
-                // IMPORTANT: Call finishOk BEFORE setStore, because setStore changes
-                // the Zustand view to 'editor', which unmounts LandingPage and triggers
-                // the cleanup effect. We must mark generation as complete BEFORE that.
-                finishOk()
-                setStore(data.store)
-                triggerBackgroundImageEnrichment(data.store)
-
-                if (data._productCapHit) {
-                  toast.info(
-                    `Generated ${data._generatedCount} products — for larger catalogs, you can add more via the chat editor.`,
-                    { duration: 8000 }
-                  )
-                }
-
-                return
-              } catch (parseErr) {
-                const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-                console.warn(`[GENERATE:CLIENT][${requestId}] RESULT_EVENT: parse failed: ${msg}`)
-                classifyAndShowError('parse_error', msg)
-                return
-              }
-            } else if (currentEvent === 'done') {
-              eventCount++
-              doneReceived = true
-              console.log(`[GENERATE:CLIENT][${requestId}] DONE_EVENT: received. events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
-              // The done event is a sentinel — the result should have already been processed.
-              // If we get here without resolved=true, the result event was missed.
-            } else if (currentEvent === 'error') {
-              eventCount++
-              try {
-                const data = JSON.parse(dataStr)
-                const serverMsg = data.message || 'Generation failed'
-                console.warn(`[GENERATE:CLIENT][${requestId}] ERROR_EVENT: "${serverMsg.slice(0, 200)}"`)
-                // Classify based on error message content
-                if (serverMsg.includes('AI generation failed') || serverMsg.includes('provider error')) {
-                  classifyAndShowError('ai_error', serverMsg.slice(0, 300))
-                } else {
-                  classifyAndShowError('server_error', serverMsg.slice(0, 300))
-                }
-                return
-              } catch {
-                classifyAndShowError('parse_error', 'Generation failed — could not parse server error.')
-                return
-              }
+          if (pollData.status === 'processing') {
+            // Update progress UI from server-reported progress
+            if (pollData.progress?.message) {
+              setGenerationStatus(pollData.progress.message)
             }
-            currentEvent = ''
+            if (pollData.progress?.stage && STAGE_INDEX_MAP.has(pollData.progress.stage)) {
+              setGenerationStage(pollData.progress.stage)
+            }
+          } else if (pollData.status === 'completed') {
+            // Generation succeeded
+            console.log(`[GENERATE:CLIENT][${requestId}] POLL_COMPLETED: store="${pollData.store?.name}", products=${pollData.store?.products?.length ?? 0}`)
+            generationActiveRef.current = false
+            clearTimers()
+            setIsGenerating(false)
+            setGenerationStatus('')
+            setGenerationStage(null)
+            setStore(pollData.store)
+            triggerBackgroundImageEnrichment(pollData.store)
+
+            if (pollData.meta?._productCapHit) {
+              toast.info(
+                `Generated ${pollData.meta._generatedCount} products — for larger catalogs, you can add more via the chat editor.`,
+                { duration: 8000 }
+              )
+            } else {
+              toast.success('Store generated!', { description: `"${pollData.store.name}" is ready to customize.` })
+            }
+            return
+          } else if (pollData.status === 'failed') {
+            console.warn(`[GENERATE:CLIENT][${requestId}] POLL_FAILED: ${pollData.error?.slice(0, 200)}`)
+            toast.error('Generation failed', { description: pollData.error || 'The AI failed to generate a store. Please try again.' })
+            break
+          } else if (pollData.status === 'not_found') {
+            console.warn(`[GENERATE:CLIENT][${requestId}] POLL_NOT_FOUND: jobId=${jobId}`)
+            toast.error('Generation job not found', { description: 'The server may have restarted. Please try again.' })
+            break
           }
+        } catch (pollErr) {
+          consecutiveErrors++
+          const msg = pollErr instanceof Error ? pollErr.message : String(pollErr)
+          console.warn(`[GENERATE:CLIENT][${requestId}] POLL_ERROR: attempt ${consecutiveErrors}/${MAX_POLL_ERRORS}: ${msg}`)
+
+          if (consecutiveErrors >= MAX_POLL_ERRORS) {
+            console.warn(`[GENERATE:CLIENT][${requestId}] POLL_MAX_ERRORS: giving up after ${MAX_POLL_ERRORS} consecutive errors`)
+            toast.error('Connection lost', { description: 'Connection lost during generation. Please check your connection and try again.' })
+            break
+          }
+          // Continue polling — will retry on next iteration
         }
       }
 
-      // ── Stream ended without result ──
-      // Three possible scenarios:
-      // 1. doneReceived=true, resolved=false → result event was missed (network corruption)
-      // 2. doneReceived=false, resolved=false → stream dropped mid-generation
-      // 3. doneReceived=true, resolved=true → should not reach here (returned above)
-
-      if (!resolved) {
-        console.warn(`[GENERATE:CLIENT][${requestId}] STREAM_ENDED_NO_RESULT: doneReceived=${doneReceived}, events=${eventCount}, elapsed=${elapsedSecondsRef.current}s, jobId=${jobIdRef.current}`)
-
-        // Attempt recovery from server cache
-        const recovered = await attemptRecovery()
-        if (recovered) return
-
-        // Recovery failed — show appropriate error
-        if (doneReceived) {
-          // Server completed generation but result event was lost in transit
-          classifyAndShowError('stream_dropped', 'The server generated your store but the response was lost in transit. Please try again — the server-side cache may help recover it.')
-        } else if (eventCount > 3 && elapsedSecondsRef.current > 10) {
-          // Received some events then connection dropped — likely network issue
-          classifyAndShowError('network_disconnect', `Connection was lost after receiving ${eventCount} events over ${elapsedSecondsRef.current}s. The AI may have still completed your store — please try again.`)
-        } else if (eventCount === 0) {
-          // No events received at all — connection failed immediately
-          classifyAndShowError('network_disconnect', 'No data was received from the server. The connection may have been blocked or the server is unreachable.')
-        } else {
-          classifyAndShowError('stream_dropped', `Stream ended without a result after ${eventCount} events and ${elapsedSecondsRef.current}s.`)
-        }
-      }
-    } catch (err: unknown) {
-      // Last-resort safety net — reader.read() or JSON.parse threw
-      clearTimeout(timeoutId)
+      // ── Cleanup after poll loop ends without success ──
       clearTimers()
       generationActiveRef.current = false
-      let reason: ErrorReason = 'unknown'
-      let context = ''
-
-      if (err instanceof Error) {
-        const errName = err.name
-        const errMsg = err.message
-        if (errName === 'AbortError') {
-          if (timedOut) {
-            reason = 'timeout'
-          } else if (userCancelledRef.current) {
-            reason = 'user_cancel'
-          } else if (elapsedSecondsRef.current > 10 && !resolved) {
-            reason = 'network_disconnect'
-            context = `Connection lost after ${elapsedSecondsRef.current}s while the AI was still working. Please try again.`
-          } else {
-            reason = 'network_disconnect'
-            context = 'The request was interrupted unexpectedly. Please try again.'
-          }
-        } else {
-          reason = 'unknown'
-          context = errMsg
-        }
-        console.warn(`[GENERATE:CLIENT][${requestId}] CAUGHT: name=${errName}, reason=${reason}, message="${context}", elapsed=${elapsedSecondsRef.current}s, timedOut=${timedOut}, resolved=${resolved}, userCancelled=${userCancelledRef.current}, events=${eventCount}`)
-      } else {
-        console.warn(`[GENERATE:CLIENT][${requestId}] CAUGHT non-Error: ${String(err)}`)
-      }
-
-      // Attempt recovery for network-related failures (NOT for user cancel — handleCancel already cleaned up)
-      if ((reason === 'network_disconnect' || reason === 'stream_dropped') && !resolved) {
-        const recovered = await attemptRecovery()
-        if (recovered) return
-      }
-
-      // If user explicitly cancelled, handleCancel() already cleaned up state.
-      // Don't overwrite with error state or show another toast.
-      if (reason === 'user_cancel') {
-        console.log(`[GENERATE:CLIENT][${requestId}] User cancel confirmed in catch block — state already cleaned up by handleCancel`)
-        return
-      }
-
-      setError(reason === 'timeout' ? 'Generation timed out.' : 'Generation failed.')
       setIsGenerating(false)
       setGenerationStatus('')
       setGenerationStage(null)
       setElapsedSeconds(0)
-      toast.error('Store generation failed', { description: context || 'Something went wrong. Please try again.' })
-    }
-  }, [promptText, session, setIsGenerating, setStore, clearTimers, setAuthOpen, dbAvailable])
-
-  // Cleanup on unmount — abort ONLY if generation is still actively in progress.
-  // This prevents aborting a just-completed generation when setStore() triggers
-  // the view change to 'editor' and unmounts LandingPage.
-  useEffect(() => {
-    return () => {
+    } catch (err) {
+      // Safety net for unexpected errors
       clearTimers()
-      if (generationActiveRef.current && abortRef.current) {
-        console.warn('[GENERATE:CLIENT] Component unmounting while generation active — aborting')
-        abortRef.current.abort()
-      }
+      generationActiveRef.current = false
+      setIsGenerating(false)
+      setGenerationStatus('')
+      setGenerationStage(null)
+      setElapsedSeconds(0)
+      const msg = err instanceof Error ? err.message : String(err)
+      console.warn(`[GENERATE:CLIENT][${requestId}] UNEXPECTED_ERROR: ${msg}`)
+      toast.error('Generation failed', { description: msg || 'Something went wrong. Please try again.' })
     }
+  }, [promptText, setIsGenerating, setStore, clearTimers])
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => { clearTimers() }
   }, [clearTimers])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
