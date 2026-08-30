@@ -7,28 +7,46 @@ import { PrismaClient } from '@prisma/client'
  * With SQLite the file is local, so connection failures are rare.
  */
 
-let _db: PrismaClient | null | undefined = undefined // undefined = not yet tried
+// Use globalThis to survive HMR in Next.js dev
+const globalForDb = globalThis as unknown as {
+  _db?: PrismaClient | null
+}
 
 export function getDb(): PrismaClient | null {
-  if (_db !== undefined) return _db
+  if (globalForDb._db !== undefined) return globalForDb._db
 
   const url = process.env.DATABASE_URL || ''
 
   if (!url) {
     console.warn('[db] DATABASE_URL is not set — database disabled.')
-    _db = null
+    globalForDb._db = null
+    return null
+  }
+
+  // Validate the URL format for SQLite
+  if (!url.startsWith('file:')) {
+    console.error(`[db] DATABASE_URL must start with "file:" for SQLite. Got: ${url.slice(0, 30)}...`)
+    globalForDb._db = null
     return null
   }
 
   try {
-    _db = new PrismaClient({
+    globalForDb._db = new PrismaClient({
       log: ['error'] as const,
+      // Explicitly pass the datasource URL so Prisma never has to
+      // re-resolve process.env.DATABASE_URL at query time (fixes the
+      // "URL must start with file:" error in Next.js Turbopack).
+      datasources: {
+        db: {
+          url,
+        },
+      },
     })
-    return _db
+    return globalForDb._db
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
     console.error('[db] Failed to create PrismaClient:', msg)
-    _db = null
+    globalForDb._db = null
     return null
   }
 }
