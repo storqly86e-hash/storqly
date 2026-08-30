@@ -1557,7 +1557,30 @@ function PublishedStoreViewer({ slug }: { slug: string }) {
           throw new Error(data.error || `Store not found (${res.status})`)
         }
         const data = await res.json()
-        if (!cancelled) setStore(data.store)
+        // Normalize the store so the renderer never crashes on missing fields
+        const raw = data.store as Record<string, unknown>
+        const normalized: Store = {
+          id: String(raw.id || ''),
+          name: String(raw.name || 'Untitled Store'),
+          slug: String(raw.slug || slug),
+          description: raw.description != null ? String(raw.description) : undefined,
+          announcementText: raw.announcementText != null ? String(raw.announcementText) : undefined,
+          theme: (raw.theme as Store['theme']) || {
+            colors: { primary: '#000000', secondary: '#333333', accent: '#666666', background: '#ffffff', surface: '#f5f5f5', text: '#111111', textMuted: '#666666', border: '#e5e5e5' },
+            fonts: { heading: 'Inter', body: 'Inter' },
+            spacing: 'normal',
+            borderRadius: 'md',
+          },
+          pages: Array.isArray(raw.pages) ? raw.pages as Store['pages'] : [],
+          products: Array.isArray(raw.products) ? raw.products as Store['products'] : [],
+          published: true,
+          publishedAt: raw.publishedAt != null ? String(raw.publishedAt) : undefined,
+          createdAt: String(raw.createdAt || new Date().toISOString()),
+          updatedAt: String(raw.updatedAt || new Date().toISOString()),
+          // Preserve design library metadata if present
+          ...(raw.designLibrary ? { designLibrary: raw.designLibrary as Store['designLibrary'] } : {}),
+        } as Store
+        if (!cancelled) setStore(normalized)
       } catch (err: unknown) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load store')
       } finally {

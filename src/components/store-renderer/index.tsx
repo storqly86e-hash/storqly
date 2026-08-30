@@ -69,8 +69,9 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
   cartCount: number;
   currentPageId: string;
 }) {
-  const cartPageId = store.pages.find((p) => p.type === 'cart')?.id;
-  const homePageId = store.pages.find((p) => p.isHomepage)?.id;
+  const pages = store.pages ?? [];
+  const cartPageId = pages.find((p) => p.type === 'cart')?.id;
+  const homePageId = pages.find((p) => p.isHomepage)?.id;
 
   return (
     <>
@@ -103,7 +104,7 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
           {store.name}
         </span>
         <nav className="hidden items-center gap-6 md:flex">
-          {store.pages
+          {(store.pages ?? [])
             .filter((p) => p.isHomepage || (p.type && p.type !== 'product'))
             .map((page) => (
               <button
@@ -120,7 +121,7 @@ function AutoHeader({ store, theme, onNavigate, cartCount, currentPageId }: {
         </nav>
         {/* Mobile nav: show all non-product pages */}
         <nav className="flex items-center gap-4 md:hidden">
-          {store.pages
+          {(store.pages ?? [])
             .filter((p) => p.isHomepage || (p.type && p.type !== 'product'))
             .slice(0, 4)
             .map((page) => (
@@ -168,8 +169,9 @@ function AutoFooter({ store, theme }: { store: Store; theme: Store['theme'] }) {
   const border = theme.colors.border;
 
   // Derive quick links from store pages
-  const homePage = store.pages.find(p => p.isHomepage);
-  const shopPage = store.pages.find(p => p.type === 'collection');
+  const pages = store.pages ?? [];
+  const homePage = pages.find(p => p.isHomepage);
+  const shopPage = pages.find(p => p.type === 'collection');
   const quickLinks = [
     { label: 'Home', href: homePage ? `#${homePage.slug || ''}` : '#' },
     ...(shopPage ? [{ label: 'Shop', href: `#${shopPage.slug}` }] : []),
@@ -394,11 +396,13 @@ export function StoreRenderer({
   onPageChange,
   onAddSectionClick,
 }: StoreRendererProps) {
+  // Defensive: ensure pages array exists (published stores may lack it after direct API publish)
+  const safePages = store.pages ?? [];
   // State for section picker visibility on empty pages
   const [showSectionPicker, setShowSectionPicker] = useState(false);
   // Internal page state (used when no external control)
   const [internalPageId, setInternalPageId] = useState<string>(
-    () => store.pages.find((p) => p.isHomepage)?.id || store.pages[0]?.id || ''
+    () => safePages.find((p) => p.isHomepage)?.id || safePages[0]?.id || ''
   );
 
   // Use external page ID when available, otherwise use internal state
@@ -434,8 +438,8 @@ export function StoreRenderer({
 
   // Merge store pages with dynamic product pages
   const effectivePages = useMemo(
-    () => [...store.pages, ...dynamicPages],
-    [store.pages, dynamicPages]
+    () => [...safePages, ...dynamicPages],
+    [safePages, dynamicPages]
   );
 
   const currentPage = useMemo(
@@ -490,10 +494,10 @@ export function StoreRenderer({
   // Home page: card click → navigate to Shop/Collection page
   const handleHomeCardClick = useCallback(
     (_productId: string) => {
-      const shopPage = store.pages.find((p) => p.type === 'collection');
+      const shopPage = safePages.find((p) => p.type === 'collection');
       if (shopPage) handleNavigate(shopPage.id);
     },
-    [store.pages, handleNavigate]
+    [safePages, handleNavigate]
   );
 
   if (!currentPage) {

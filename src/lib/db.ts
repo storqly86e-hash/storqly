@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client'
 /**
  * Lazy Prisma client singleton (SQLite).
  *
- * Returns null only when DATABASE_URL is not set.
+ * Returns null only when DATABASE_URL is not set or invalid.
  * With SQLite the file is local, so connection failures are rare.
  */
 
@@ -25,7 +25,7 @@ export function getDb(): PrismaClient | null {
 
   // Validate the URL format for SQLite
   if (!url.startsWith('file:')) {
-    console.error(`[db] DATABASE_URL must start with "file:" for SQLite. Got: ${url.slice(0, 30)}...`)
+    console.error(`[db] DATABASE_URL must start with "file:" for SQLite. Got: ${url.slice(0, 40)}...`)
     globalForDb._db = null
     return null
   }
@@ -42,6 +42,7 @@ export function getDb(): PrismaClient | null {
         },
       },
     })
+    console.log('[db] PrismaClient created successfully')
     return globalForDb._db
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
