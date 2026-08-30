@@ -426,10 +426,9 @@ function LandingPage() {
     const controller = new AbortController()
     abortRef.current = controller
 
-    // Hard timeout: 120 seconds — no request should ever take longer than this.
-    // If the server is hung or the proxy drops the connection, the user gets a
-    // clear message instead of waiting indefinitely.
-    const HARD_TIMEOUT_MS = 120_000
+    // Hard timeout: 330 seconds — must exceed server's 300s total time budget + safety margin.
+    // The server-side pipeline (AI call 90s × 3 retries + composeStore + normalize) can take up to 300s.
+    const HARD_TIMEOUT_MS = 330_000
     let timedOut = false
     const timeoutId = setTimeout(() => {
       timedOut = true
@@ -631,7 +630,7 @@ function LandingPage() {
       if (err instanceof Error) {
         if (err.name === 'AbortError') {
           message = timedOut
-            ? 'Generation timed out after 2 minutes. The server may be overloaded — please try again.'
+            ? 'Generation timed out after 5.5 minutes. The server may be overloaded — please try again with a shorter prompt.'
             : 'Generation was cancelled.'
           console.warn(`[Storqly] Request aborted: ${message}`)
         } else {

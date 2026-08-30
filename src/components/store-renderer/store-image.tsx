@@ -1,13 +1,22 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 /**
- * StoreImage — Renders <img> with automatic fallback to a colored placeholder.
- * Used everywhere images appear: ProductCard, CollectionPage, ProductDetail, Cart, Gallery, Categories.
+ * StoreImage — Renders <img> with progressive blur placeholder.
  *
- * On error (broken URL, CORS, 404), the image seamlessly falls back to a styled
+ * Loading flow:
+ * 1. Wrapper div renders immediately with blurred color placeholder
+ * 2. Real image loads in background (invisible)
+ * 3. On load: smooth crossfade from blurred placeholder → crisp image
+ *
+ * On error (broken URL, CORS, 404), falls back to a styled
  * placeholder div with an SVG icon.
+ *
+ * Performance:
+ * - `loading="lazy"` for below-fold images
+ * - `loading="eager"` can be passed for above-fold hero images
+ * - Blur placeholder prevents CLS and provides instant visual feedback
  */
 export function StoreImage({
   src,
@@ -15,6 +24,7 @@ export function StoreImage({
   fallbackColor,
   className = '',
   iconSize = 'md',
+  eager = false,
 }: {
   src: string;
   alt: string;
@@ -22,9 +32,14 @@ export function StoreImage({
   className?: string;
   /** Size of the placeholder icon */
   iconSize?: 'sm' | 'md' | 'lg';
+  /** If true, use loading="eager" for above-fold images */
+  eager?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
   const handleError = useCallback(() => setFailed(true), []);
+  const handleLoad = useCallback(() => setLoaded(true), []);
 
   const iconPx =
     iconSize === 'sm'
@@ -33,6 +48,7 @@ export function StoreImage({
         ? 'h-16 w-16'
         : 'h-10 w-10';
 
+  // ── Error / missing source: show SVG placeholder ──
   if (!src || failed) {
     return (
       <div
@@ -58,13 +74,61 @@ export function StoreImage({
     );
   }
 
+  // ── Detect if className has absolute positioning (used by product cards) ──
+  const isAbsolute = className.includes('absolute');
+
+  // ── Absolute-positioned images (product card hover zoom): wrap minimally ──
+  if (isAbsolute) {
+    return (
+      <>
+        {/* Blur placeholder — visible only while image loads */}
+        <div
+          className="absolute inset-0 transition-opacity duration-500 ease-out"
+          style={{
+            backgroundColor: fallbackColor,
+            filter: 'blur(20px)',
+            transform: 'scale(1.2)',
+            opacity: loaded ? 0 : 1,
+          }}
+          aria-hidden="true"
+        />
+        <img
+          src={src}
+          alt={alt}
+          className={className}
+          onError={handleError}
+          onLoad={handleLoad}
+          loading={eager ? 'eager' : 'lazy'}
+          style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.5s ease-out' }}
+        />
+      </>
+    );
+  }
+
+  // ── Normal flow images: use a wrapper div for blur placeholder ──
   return (
-    <img
-      src={src}
-      alt={alt}
-      className={className}
-      onError={handleError}
-      loading="lazy"
-    />
+    <div className={`relative overflow-hidden ${className}`}>
+      {/* Blur placeholder background */}
+      <div
+        className="absolute inset-0 bg-cover bg-center transition-opacity duration-500 ease-out"
+        style={{
+          backgroundColor: fallbackColor,
+          filter: 'blur(20px)',
+          transform: 'scale(1.2)',
+          opacity: loaded ? 0 : 1,
+        }}
+        aria-hidden="true"
+      />
+      {/* Real image */}
+      <img
+        src={src}
+        alt={alt}
+        className="relative z-10 h-full w-full object-cover"
+        onError={handleError}
+        onLoad={handleLoad}
+        loading={eager ? 'eager' : 'lazy'}
+        style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.5s ease-out' }}
+      />
+    </div>
   );
 }

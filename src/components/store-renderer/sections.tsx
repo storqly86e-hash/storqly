@@ -1,6 +1,7 @@
 'use client';
 
 import { Component, useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { motion } from 'framer-motion';
 import {
   parseColorToRGB,
   contrastTextColor,
@@ -117,6 +118,44 @@ class SectionErrorBoundary extends Component<
     return this.props.children;
   }
 }
+
+// ─── Scroll-triggered entrance animation (Framer Motion) ────────────
+// Lightweight fade-up that triggers when the element enters the viewport.
+// Uses `whileInView` for automatic intersection observer management.
+// `once: true` prevents re-animation on scroll back up.
+
+const fadeInUp = {
+  hidden: { opacity: 0, y: 24 },
+  visible: { opacity: 1, y: 0 },
+};
+
+function AnimateSection({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) {
+  return (
+    <motion.div
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, margin: '-40px' }}
+      transition={{ duration: 0.5, ease: 'easeOut', delay }}
+      variants={fadeInUp}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// Stagger container for product grids / testimonial cards
+const staggerContainer = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: { staggerChildren: 0.06, delayChildren: 0.1 },
+  },
+};
+
+const staggerItem = {
+  hidden: { opacity: 0, y: 16, scale: 0.97 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.4, ease: 'easeOut' } },
+};
 
 // ─── Section Wrapper ────────────────────────────────────────────────────
 
@@ -284,7 +323,11 @@ function SectionWrapper({
         {secDividerMode === 'border' && (
           <div className="absolute bottom-0 left-0 right-0 border-t" style={{ borderColor: theme.colors.border }} />
         )}
-        {children}
+        {children && (
+          <AnimateSection>
+            {children}
+          </AnimateSection>
+        )}
         {/* --section-image-ratio: expose as data attribute for child images */}
         {secImageRatio && (
           <style>{`.section-img-ratio [data-section-img] { aspect-ratio: ${secImageRatio}; }`}</style>
@@ -1443,22 +1486,29 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
           {content.subtitle}
         </p>
       )}
-      <div className={`grid ${gridCols(content.columns)} ${fpGap || 'gap-5 sm:gap-6 lg:gap-8'}`}>
+      <motion.div
+        className={`grid ${gridCols(content.columns)} ${fpGap || 'gap-5 sm:gap-6 lg:gap-8'}`}
+        variants={staggerContainer}
+        initial="hidden"
+        whileInView="visible"
+        viewport={{ once: true, margin: '-40px' }}
+      >
         {featuredProducts.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            theme={theme}
-            showAddToCart={content.showAddToCart && !forceHideAddToCart}
-            borderRadius={borderRadius}
-            buttonBgOverride={section.style.buttonBackgroundColor}
-            buttonTextOverride={section.style.buttonTextColor}
-            onViewProduct={onViewProduct}
-            cardStyle={cardStyle as CardStyle | undefined}
-            cardStyleVars={Object.keys(cardStyleVars).length > 0 ? cardStyleVars : undefined}
-          />
+          <motion.div key={product.id} variants={staggerItem}>
+            <ProductCard
+              product={product}
+              theme={theme}
+              showAddToCart={content.showAddToCart && !forceHideAddToCart}
+              borderRadius={borderRadius}
+              buttonBgOverride={section.style.buttonBackgroundColor}
+              buttonTextOverride={section.style.buttonTextColor}
+              onViewProduct={onViewProduct}
+              cardStyle={cardStyle as CardStyle | undefined}
+              cardStyleVars={Object.keys(cardStyleVars).length > 0 ? cardStyleVars : undefined}
+            />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
     </SectionWrapper>
   );
 }
@@ -1577,22 +1627,29 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
         )}
         {/* VARIANT: --grid-show-price hides price on cards via CSS */}
         {hidePrice && <style>{`.grid-hide-price [data-card-price] { display: none; }`}</style>}
-        <div className={`grid ${productGridClass}`}>
+        <motion.div
+          className={`grid ${productGridClass}`}
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '-40px' }}
+        >
         {filteredProducts.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            theme={theme}
-            showAddToCart={content.showAddToCart && !forceHideAddToCart}
-            borderRadius={borderRadius}
-            buttonBgOverride={section.style.buttonBackgroundColor}
-            buttonTextOverride={section.style.buttonTextColor}
-            onViewProduct={onViewProduct}
-            cardStyle={cardStyle as CardStyle | undefined}
-            cardStyleVars={Object.keys(cardStyleVars).length > 0 ? cardStyleVars : undefined}
-          />
+          <motion.div key={product.id} variants={staggerItem}>
+            <ProductCard
+              product={product}
+              theme={theme}
+              showAddToCart={content.showAddToCart && !forceHideAddToCart}
+              borderRadius={borderRadius}
+              buttonBgOverride={section.style.buttonBackgroundColor}
+              buttonTextOverride={section.style.buttonTextColor}
+              onViewProduct={onViewProduct}
+              cardStyle={cardStyle as CardStyle | undefined}
+              cardStyleVars={Object.keys(cardStyleVars).length > 0 ? cardStyleVars : undefined}
+            />
+          </motion.div>
         ))}
-        </div>
+        </motion.div>
       </div>
       {filteredProducts.length === 0 && (
         <div className="py-16 text-center opacity-65">
@@ -2362,11 +2419,13 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
                   <span className="text-sm font-semibold">
                     {item.question}
                   </span>
-                  {isOpen ? (
-                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65 transition-transform duration-300" />
-                  ) : (
-                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65 transition-transform duration-300" />
-                  )}
+                  <motion.span
+                    className="ml-2 flex-shrink-0 opacity-65"
+                    animate={{ rotate: isOpen ? 180 : 0 }}
+                    transition={{ duration: 0.3, ease: 'easeInOut' }}
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </motion.span>
                 </button>
                 {/* Smooth CSS grid height transition — no JS timing jumps */}
                 <div
