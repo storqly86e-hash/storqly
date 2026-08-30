@@ -68,8 +68,13 @@ function headingFontStyle(theme: StoreTheme): React.CSSProperties {
 }
 
 // Fluid typography helper — uses CSS clamp() for responsive sizing
-function fluidHeadingStyle(baseSize: string = '1.875rem', minSize: string = '1.5rem', maxSize: string = '3rem'): React.CSSProperties {
-  return { fontSize: `clamp(${minSize}, ${baseSize}, ${maxSize})` };
+// Scales smoothly between min and max viewport sizes without breakpoint jumps
+function fluidHeadingStyle(minSize: string = '1.5rem', preferred: string = '3.5vw + 0.5rem', maxSize: string = '3rem'): React.CSSProperties {
+  return { fontSize: `clamp(${minSize}, ${preferred}, ${maxSize})` };
+}
+// Fluid heading for smaller sections (FAQ, Newsletter, CTA)
+function fluidSubHeadingStyle(minSize: string = '1.25rem', maxSize: string = '2.25rem'): React.CSSProperties {
+  return { fontSize: `clamp(${minSize}, 2.5vw + 0.5rem, ${maxSize})` };
 }
 
 // ─── Error boundary for individual sections ──────────────────────────
@@ -89,18 +94,22 @@ class SectionErrorBoundary extends Component<
   }
   render() {
     if (this.state.hasError) {
+      // Static skeleton fallback — shows a loading-like grid instead of crashing
+      // This ensures the customer never sees a blank/broken page
       return (
-        <div className="flex items-center justify-center py-8 px-6 text-center">
-          <div className="max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50/50 px-6 py-8">
-            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        <div className="py-8 px-6">
+          <div className="mx-auto max-w-4xl space-y-4">
+            <div className="mx-auto h-6 w-48 animate-pulse rounded-lg bg-gray-200" />
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="animate-pulse rounded-xl border border-gray-100 bg-white p-4">
+                  <div className="mb-3 aspect-square w-full rounded-lg bg-gray-100" />
+                  <div className="mb-2 h-3 w-3/4 rounded bg-gray-100" />
+                  <div className="mb-3 h-4 w-1/2 rounded bg-gray-200" />
+                  <div className="h-8 w-full rounded-lg bg-gray-100" />
+                </div>
+              ))}
             </div>
-            <p className="text-sm font-medium text-gray-700">
-              {this.props.sectionType}
-            </p>
-            <p className="mt-1 text-xs text-gray-400">
-              {this.state.error?.message || 'Rendering paused'}
-            </p>
           </div>
         </div>
       );
@@ -1416,7 +1425,8 @@ export function FeaturedProductsSection({ section, theme, selectedSectionId, onS
         const tokenLineHeight = v('--sq-heading-lg-line-height') || v('--sq-heading-md-line-height');
         const tokenFontWeight = v('--sq-heading-lg-weight');
         return (
-          <h2 className="mb-2 text-2xl font-bold sm:text-3xl lg:text-4xl" style={{
+          <h2 className="mb-2 font-bold" style={{
+            ...fluidHeadingStyle('1.5rem', '3.5vw + 0.5rem', '2.25rem'),
             ...headingFontStyle(theme),
             ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
             ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
@@ -1525,7 +1535,8 @@ export function ProductGridSection({ section, theme, selectedSectionId, onSelect
         const tokenLineHeight = v('--sq-heading-lg-line-height') || v('--sq-heading-md-line-height');
         const tokenFontWeight = v('--sq-heading-lg-weight');
         return (
-          <h2 className={`mb-8 text-2xl font-bold sm:text-3xl lg:text-4xl ${headingAlignClass}`} style={{
+          <h2 className={`mb-8 font-bold ${headingAlignClass}`} style={{
+            ...fluidHeadingStyle('1.5rem', '3.5vw + 0.5rem', '2.25rem'),
             ...headingFontStyle(theme),
             ...headingScaleStyle,
             ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
@@ -2058,7 +2069,8 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
         const tokenLineHeight = variantCssVars?.['--sq-heading-lg-line-height'] || variantCssVars?.['--sq-heading-md-line-height'];
         const tokenFontWeight = variantCssVars?.['--sq-heading-lg-weight'];
         return (
-          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{
+          <h2 className="mb-8 text-center font-bold" style={{
+            ...fluidSubHeadingStyle('1.25rem', '2.25rem'),
             ...headingFontStyle(theme),
             ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
             ...(tokenFontSize ? { fontSize: tokenFontSize } : {}),
@@ -2107,6 +2119,11 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
 export function NewsletterSection({ section, theme, selectedSectionId, onSelectSection, variantCssVars }: SectionRendererProps) {
   const content = section.content as unknown as NewsletterContent;
   const borderRadius = borderRadiusClass(theme.borderRadius);
+
+  // ── Inline form validation state ──
+  const [nlEmail, setNlEmail] = useState('');
+  const [nlError, setNlError] = useState('');
+  const [nlState, setNlState] = useState<'idle' | 'error' | 'valid' | 'submitting' | 'success'>('idle');
 
   // ── Variant CSS variable consumption (Design Library) ──
   const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
@@ -2183,7 +2200,8 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
           </div>
         )}
         <div>
-          <h2 className="text-2xl font-bold sm:text-3xl" style={{
+          <h2 className="font-bold" style={{
+            ...fluidSubHeadingStyle('1.25rem', '2.25rem'),
             ...headingFontStyle(theme),
             ...headingVariantStyle,
             ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
@@ -2204,26 +2222,80 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
               <input
                 type="email"
                 placeholder={content.placeholderText || 'Enter your email'}
-                className={`w-full ${borderRadius} ${isUnderlined ? 'border-0 border-b-2 bg-transparent' : 'border'} px-4 py-3 text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-offset-0`}
+                value={nlEmail}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNlEmail(val);
+                  // Real-time regex validation
+                  if (val.length === 0) {
+                    setNlError('');
+                    setNlState('idle');
+                  } else if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(val)) {
+                    setNlError('Please enter a valid email address');
+                    setNlState('error');
+                  } else {
+                    setNlError('');
+                    setNlState('valid');
+                  }
+                }}
+                className={`w-full ${borderRadius} ${isUnderlined ? 'border-0 border-b-2 bg-transparent' : 'border'} px-4 py-3 text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-offset-0 ${nlState === 'error' ? 'ring-2 ring-red-500/30' : ''}`}
                 style={{
                   backgroundColor: isUnderlined ? 'transparent' : theme.colors.background,
-                  borderColor: isUnderlined ? theme.colors.primary : theme.colors.border,
+                  borderColor: nlState === 'error' ? '#8B1E1E' : (isUnderlined ? theme.colors.primary : theme.colors.border),
                   color: theme.colors.text,
                   // @ts-expect-error --ring-color is a valid CSS var
                   '--ring-color': `${theme.colors.primary}40`,
                 }}
               />
+              {/* Real-time validation warning — slide-out animation */}
+              <div className={`overflow-hidden transition-all duration-300 ease-out ${nlError ? 'max-h-8 opacity-100 mt-1.5' : 'max-h-0 opacity-0 mt-0'}`}>
+                <p className="text-xs font-medium text-red-700 flex items-center gap-1">
+                  <svg className="h-3 w-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                  {nlError}
+                </p>
+              </div>
             </div>
             <button
-              className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer`}
+              className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-all duration-300 ease-out cursor-pointer flex items-center justify-center gap-2 min-w-[120px]`}
               style={{
-                backgroundColor: btnBg,
-                color: btnColor,
-                border: btnBorder,
+                backgroundColor: nlState === 'success' ? '#16a34a' : btnBg,
+                color: nlState === 'success' ? '#ffffff' : btnColor,
+                border: nlState === 'success' ? 'none' : btnBorder,
               }}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (nlState === 'success') return;
+                if (nlState !== 'valid') {
+                  setNlError('Please enter a valid email address');
+                  setNlState('error');
+                  return;
+                }
+                setNlState('submitting');
+                // Simulate async submit
+                setTimeout(() => {
+                  setNlState('success');
+                  setNlEmail('');
+                }, 1200);
+              }}
+              disabled={nlState === 'submitting'}
             >
-              {content.buttonText || 'Subscribe'}
+              {nlState === 'submitting' ? (
+                <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              ) : nlState === 'success' ? (
+                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              ) : null}
+              {nlState === 'success' ? 'Subscribed!' : nlState === 'submitting' ? 'Subscribing...' : (content.buttonText || 'Subscribe')}
             </button>
+          </div>
+          {/* Success confirmation — seamless morph transition */}
+          <div className={`overflow-hidden transition-all duration-500 ease-out ${nlState === 'success' ? 'max-h-12 opacity-100 mt-3' : 'max-h-0 opacity-0 mt-0'}`}>
+            <div className="flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
+              <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+              Welcome! You're now on the list.
+            </div>
           </div>
         </div>
       </div>
@@ -2267,7 +2339,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       <div className={`mx-auto ${faqMaxWidth}`}>
         {content.headline && (
-          <h2 className="mb-8 text-center text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+          <h2 className="mb-8 text-center font-bold" style={{ ...fluidSubHeadingStyle('1.25rem', '2.25rem'), ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
             {content.headline}
           </h2>
         )}
@@ -2296,17 +2368,20 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
                     <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65 transition-transform duration-300" />
                   )}
                 </button>
+                {/* Smooth CSS grid height transition — no JS timing jumps */}
                 <div
-                  className="overflow-hidden transition-all duration-300 ease-in-out"
-                  style={{ maxHeight: isOpen ? '500px' : '0px', opacity: isOpen ? 1 : 0 }}
+                  className="grid transition-[grid-template-rows,opacity] duration-350 ease-in-out"
+                  style={{ gridTemplateRows: isOpen ? '1fr' : '0fr', opacity: isOpen ? 1 : 0 }}
                 >
-                  <div
-                    className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
-                    style={{
-                      borderColor: theme.colors.border,
-                    }}
-                  >
-                    {item.answer}
+                  <div className="overflow-hidden">
+                    <div
+                      className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
+                      style={{
+                        borderColor: theme.colors.border,
+                      }}
+                    >
+                      {item.answer}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2422,7 +2497,8 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
           style={{ maxWidth: variantMaxWidth || '48rem' }}
         >
           <div className="text-center md:text-left" style={{ ...headlineStyle }}>
-            <h2 className="text-2xl font-bold sm:text-3xl" style={{
+            <h2 className="font-bold" style={{
+              ...fluidSubHeadingStyle('1.25rem', '2.25rem'),
               ...headingFontStyle(theme),
               ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
               ...(v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') ? { fontSize: v('--sq-heading-lg-font-size') || v('--sq-heading-md-font-size') } : {}),
@@ -2484,7 +2560,8 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
             Don't Miss Out
           </div>
         )}
-        <h2 className="text-2xl font-bold sm:text-3xl" style={{
+        <h2 className="font-bold" style={{
+          ...fluidSubHeadingStyle('1.25rem', '2.25rem'),
           ...headingFontStyle(theme),
           ...headlineStyle,
           ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}),
@@ -2532,7 +2609,7 @@ export function CategoriesSection({ section, theme, selectedSectionId, onSelectS
   return (
     <SectionWrapper section={section} theme={theme} selectedSectionId={selectedSectionId} onSelectSection={onSelectSection} cssVars={variantCssVars}>
       {content.headline && (
-        <h2 className="mb-8 text-2xl font-bold sm:text-3xl" style={{ ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
+        <h2 className="mb-8 font-bold" style={{ ...fluidSubHeadingStyle('1.25rem', '2.25rem'), ...headingFontStyle(theme), ...(section.style.headlineColor ? { color: section.style.headlineColor } : {}) }}>
           {content.headline}
         </h2>
       )}

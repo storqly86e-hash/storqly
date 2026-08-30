@@ -67,16 +67,17 @@ model VerificationToken {
 // ═══════════════════════════════════════════════════════════════════
 
 model Store {
-  id          String        @id @default(cuid())
-  name        String
-  slug        String        @unique
-  description String?
-  schema      String        // JSON string of the full store schema
-  published   Boolean       @default(false)
-  publishedAt DateTime?
-  userId      String?       // nullable — existing anonymous stores stay valid, new saved stores require a user
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id            String        @id @default(cuid())
+  name          String
+  slug          String        @unique
+  description   String?
+  schema        String        // JSON string of the full store schema
+  themeSettings String?       // JSON string of theme configuration (CSS variables, colors, etc.)
+  published     Boolean       @default(false)
+  publishedAt   DateTime?
+  userId        String?       // nullable — existing anonymous stores stay valid, new saved stores require a user
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
   chatHistory ChatHistory[]
   orders      Order[]

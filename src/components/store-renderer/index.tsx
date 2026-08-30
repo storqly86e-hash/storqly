@@ -16,6 +16,7 @@ import {
   SECTION_TYPE_LABELS,
   ADDABLE_SECTION_TYPES,
 } from '@/lib/section-meta';
+import { CartDrawer, openCartDrawer, closeCartDrawer } from '@/components/cart-drawer';
 
 // Visible build ID for sync debugging — matches the one in page.tsx footer
 const BUILD_ID = 'dev';
@@ -554,11 +555,26 @@ export function StoreRenderer({
     ? `https://fonts.googleapis.com/css2?family=${[...fontFamilies].map(f => f.replace(/ /g, '+') + ':wght@300;400;500;600;700;800;900').join('&family=')}&display=swap`
     : null;
 
+  // ── Theme CSS Custom Properties (multi-tenant theming) ──
+  // Injects brand-level CSS variables that cascade to all child components.
+  // These can be overridden via the database's themeSettings JSON.
+  const themeCssVars: Record<string, string> = {
+    '--brand-bg-main': theme.colors.background,
+    '--brand-bg-surface': theme.colors.surface,
+    '--brand-accent': theme.colors.primary,
+    '--brand-accent-red': theme.colors.secondary || '#8B1E1E',
+    '--brand-primary-fill': theme.colors.text || '#1F2D24',
+    '--brand-text': theme.colors.text,
+    '--brand-text-muted': theme.colors.textMuted,
+    '--brand-border': theme.colors.border,
+    '--brand-radius': theme.borderRadius || '0.5rem',
+  };
+
   return (
     <div
       id="store-renderer-root"
       className="min-h-screen flex flex-col font-sans antialiased overflow-y-auto"
-      style={baseStyle as React.CSSProperties}
+      style={{ ...baseStyle, ...themeCssVars } as React.CSSProperties}
       onClick={() => onSelectSection?.(null)}
     >
       {/* Google Fonts — loaded dynamically per store theme */}
@@ -569,6 +585,8 @@ export function StoreRenderer({
           <link href={googleFontsUrl} rel="stylesheet" />
         </>
       )}
+      {/* Cart Drawer — slide-out panel with cross-sell */}
+      <CartDrawer storeId={store.id} storeProducts={products} />
       {/* Header */}
       {!isTemplatePage && header
         ? renderSection({ section: header, theme, selectedSectionId, onSelectSection, products, onViewProduct: handleViewProduct, onNavigate: handleNavigate, variantCssVars: tokenCssVars })

@@ -1,21 +1,23 @@
 // ═══════════════════════════════════════════════════════════════════
 // NextAuth v4 Configuration
 // ═══════════════════════════════════════════════════════════════════
-// Credentials-only provider with Prisma adapter for session storage.
+// Credentials-only provider with JWT strategy for session storage.
 // JWT callback embeds user.id; session callback exposes it to clients.
+//
+// NOTE: PrismaAdapter is intentionally NOT used here. We use JWT strategy,
+// so sessions live in the token, not the database. This prevents the
+// module from crashing at import time when DATABASE_URL is unavailable
+// (e.g., Railway cold start before env vars are injected).
 
 import type { NextAuthOptions } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { PrismaAdapter } from '@next-auth/prisma-adapter';
-import { db } from '@/lib/db';
+import { getDb } from '@/lib/db';
 import { verifyPassword } from '@/lib/password';
 
 export const authOptions: NextAuthOptions = {
-  // ── Adapter: Prisma handles Account/Session/VerificationToken ──
-  // Note: Credentials provider does NOT use the adapter for user
-  // creation — users are created via /api/auth/register.
-  // The adapter is only used for session persistence.
-  adapter: PrismaAdapter(db),
+  // ── NO adapter — using JWT strategy ──
+  // Sessions are stored in the JWT token, not the database.
+  // This eliminates the PrismaAdapter crash when DB is unavailable.
 
   // ── Providers ──────────────────────────────────────────────────
   providers: [
@@ -33,12 +35,14 @@ export const authOptions: NextAuthOptions = {
         const email = credentials.email as string;
         const password = credentials.password as string;
 
-        const user = await db.user.findUnique({
+        const dbClient = getDb();
+        if (!dbClient) return null;
+
+        const user = await dbClient.user.findUnique({
           where: { email: email.toLowerCase() },
         });
 
         if (!user || !user.password) {
-          // No user found, or user has no password (OAuth-only account)
           return null;
         }
 
@@ -47,7 +51,6 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        // Return the user object — NextAuth will encode it into the JWT
         return {
           id: user.id,
           email: user.email,
@@ -59,8 +62,6 @@ export const authOptions: NextAuthOptions = {
   ],
 
   // ── Session strategy: JWT ──────────────────────────────────────
-  // Using JWT strategy (not database sessions) because the Credentials
-  // provider doesn't work well with database sessions in NextAuth v4.
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 days
@@ -68,14 +69,12 @@ export const authOptions: NextAuthOptions = {
 
   // ── Callbacks ──────────────────────────────────────────────────
   callbacks: {
-    // Embed user.id into the JWT on sign-in
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
       return token;
     },
-    // Expose user.id from the JWT to the client session
     async session({ session, token }) {
       if (session.user && token.id) {
         session.user.id = token.id as string;
