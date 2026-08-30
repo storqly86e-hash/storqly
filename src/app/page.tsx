@@ -318,6 +318,10 @@ function LandingPage() {
   const abortRef = useRef<AbortController | null>(null)
   // Ref to track elapsed seconds in the catch block (state may be stale due to closure)
   const elapsedSecondsRef = useRef(0)
+  // Tracks whether the USER explicitly clicked Cancel (vs. programmatic abort from unmount/timeout)
+  const userCancelledRef = useRef(false)
+  // Tracks whether a generation is actively in progress (between start and finishOk/finishWithError)
+  const generationActiveRef = useRef(false)
 
   const {
     isGenerating,
@@ -394,6 +398,9 @@ function LandingPage() {
   }, [])
 
   const handleCancel = useCallback(() => {
+    console.warn('[GENERATE:CLIENT] User clicked Cancel — aborting generation')
+    userCancelledRef.current = true
+    generationActiveRef.current = false
     abortRef.current?.abort()
     clearTimers()
     setIsGenerating(false)
@@ -423,10 +430,16 @@ function LandingPage() {
     setIsGenerating(true)
     setGenerationStatus('Starting generation...')
     setElapsedSeconds(0)
+    userCancelledRef.current = false
+    generationActiveRef.current = true
 
     // Create abort controller for this request
     const controller = new AbortController()
     abortRef.current = controller
+
+    // Generate a unique request ID for end-to-end tracing
+    const requestId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    console.log(`[GENERATE:CLIENT][${requestId}] Request started. Prompt: "${trimmed.slice(0, 80)}..."`)
 
     // Hard timeout: 330 seconds — must exceed server's 300s total time budget + safety margin.
     // The server-side pipeline (AI call 90s × 3 retries + composeStore + normalize) can take up to 300s.
@@ -434,8 +447,8 @@ function LandingPage() {
     let timedOut = false
     const timeoutId = setTimeout(() => {
       timedOut = true
+      console.warn(`[GENERATE:CLIENT][${requestId}] Hard timeout (${HARD_TIMEOUT_MS / 1000}s) reached — aborting. elapsed=${elapsedSecondsRef.current}s`)
       controller.abort()
-      console.warn(`[Storqly] Hard timeout (${HARD_TIMEOUT_MS / 1000}s) reached — aborting generation`)
     }, HARD_TIMEOUT_MS)
 
     // Elapsed time counter
@@ -456,9 +469,11 @@ function LandingPage() {
     }, 3000)
 
     // ── Helper: clean up on any error path (no throw, no crash overlay) ──
-    const finishWithError = (message: string) => {
+    const finishWithError = (message: string, reason: string = 'unknown') => {
+      console.warn(`[GENERATE:CLIENT][${requestId}] finishWithError: reason=${reason}, message="${message}", elapsed=${elapsedSecondsRef.current}s, userCancelled=${userCancelledRef.current}`)
       clearTimeout(timeoutId)
       clearTimers()
+      generationActiveRef.current = false
       setError(message)
       setIsGenerating(false)
       setGenerationStatus('')
@@ -468,8 +483,10 @@ function LandingPage() {
     }
 
     const finishOk = () => {
+      console.log(`[GENERATE:CLIENT][${requestId}] finishOk: generation completed successfully. elapsed=${elapsedSecondsRef.current}s`)
       clearTimeout(timeoutId)
       clearTimers()
+      generationActiveRef.current = false
       setIsGenerating(false)
       setGenerationStatus('')
       setGenerationStage(null)
@@ -477,7 +494,7 @@ function LandingPage() {
     }
 
     try {
-      console.log('[Storqly] Starting SSE store generation for prompt:', trimmed)
+      console.log(`[GENERATE:CLIENT][${requestId}] Starting SSE fetch...`)
 
       // ── Fetch with auto-retry for transient gateway errors (502/503/504) ──
       const RETRYABLE_STATUSES = [502, 503, 504]
@@ -489,15 +506,17 @@ function LandingPage() {
         try {
           res = await fetch('/api/store/generate', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
             body: JSON.stringify({ prompt: trimmed }),
             signal: controller.signal,
           })
 
+          console.log(`[GENERATE:CLIENT][${requestId}] Fetch response: status=${res.status}, ok=${res.ok}`)
+
           // If the status is retryable, wait and loop again
           if (!res.ok && RETRYABLE_STATUSES.includes(res.status) && retryCount < maxRetries) {
             retryCount++
-            console.warn(`[Storqly] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 3s...`)
+            console.warn(`[GENERATE:CLIENT][${requestId}] Gateway error ${res.status}, retrying (${retryCount}/${maxRetries}) in 3s...`)
             setGenerationStatus('Connection issue — retrying...')
             await new Promise(r => setTimeout(r, 3000))
             continue
@@ -507,18 +526,23 @@ function LandingPage() {
           // Network-level error (DNS failure, connection refused, etc.)
           if (fetchErr instanceof TypeError && retryCount < maxRetries) {
             retryCount++
-            console.warn(`[Storqly] Network error, retrying (${retryCount}/${maxRetries}) in 3s...`)
+            console.warn(`[GENERATE:CLIENT][${requestId}] Network error, retrying (${retryCount}/${maxRetries}) in 3s...`)
             setGenerationStatus('Connection issue — retrying...')
             await new Promise(r => setTimeout(r, 3000))
             continue
           }
           // Out of retries or not a network error — handle gracefully
           const msg = fetchErr instanceof Error ? fetchErr.message : String(fetchErr)
+          const errName = fetchErr instanceof Error ? fetchErr.name : 'Unknown'
+          console.warn(`[GENERATE:CLIENT][${requestId}] Fetch failed: name=${errName}, msg="${msg}", aborted=${controller.signal.aborted}, userCancelled=${userCancelledRef.current}, elapsed=${elapsedSecondsRef.current}s`)
           if (controller.signal.aborted) {
-            finishWithError('Generation was cancelled.')
+            if (userCancelledRef.current) {
+              finishWithError('Generation was cancelled.', 'user_cancel')
+            } else {
+              finishWithError('Generation was interrupted (page may have reloaded or connection was lost). Please try again.', 'programmatic_abort_fetch')
+            }
           } else {
-            console.warn('[Storqly] Network error after retries:', msg)
-            finishWithError('Could not connect to the server. Please check your connection and try again.')
+            finishWithError('Could not connect to the server. Please check your connection and try again.', 'network_error')
           }
           return
         }
@@ -530,15 +554,16 @@ function LandingPage() {
           const errorData = await res!.json()
           errorMsg = errorData.error || errorMsg
         } catch { /* ignore parse error */ }
-        console.warn('[Storqly] HTTP error:', errorMsg)
-        finishWithError(errorMsg)
+        console.warn(`[GENERATE:CLIENT][${requestId}] HTTP error: ${errorMsg}`)
+        finishWithError(errorMsg, `http_${res!.status}`)
         return
       }
 
       // ── Consume SSE stream ──
+      console.log(`[GENERATE:CLIENT][${requestId}] SSE stream opened, starting reader loop...`)
       const reader = res.body?.getReader()
       if (!reader) {
-        finishWithError('No response stream received from server.')
+        finishWithError('No response stream received from server.', 'no_reader')
         return
       }
 
@@ -546,10 +571,20 @@ function LandingPage() {
       let buffer = ''
       let resolved = false
       let currentEvent = '' // CRITICAL: must persist across chunks — event: and data: lines can arrive in separate TCP segments
+      let eventCount = 0
+
+      // Listen for abort events on the controller (for diagnostics)
+      const onAbort = () => {
+        console.warn(`[GENERATE:CLIENT][${requestId}] AbortController.abort() fired. reason=${controller.signal.reason}, userCancelled=${userCancelledRef.current}, elapsed=${elapsedSecondsRef.current}s, resolved=${resolved}`)
+      }
+      controller.signal.addEventListener('abort', onAbort, { once: true })
 
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log(`[GENERATE:CLIENT][${requestId}] Stream reader done. resolved=${resolved}, events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
+          break
+        }
 
         buffer += decoder.decode(value, { stream: true })
 
@@ -566,6 +601,7 @@ function LandingPage() {
 
             if (currentEvent === 'progress') {
               receivedSSEProgress = true
+              eventCount++
               try {
                 const data = JSON.parse(dataStr)
                 setGenerationStatus(data.message || 'Processing...')
@@ -575,16 +611,22 @@ function LandingPage() {
                 }
               } catch { /* ignore */ }
             } else if (currentEvent === 'result') {
+              eventCount++
+              console.log(`[GENERATE:CLIENT][${requestId}] SSE result event received. events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
               try {
                 const data = JSON.parse(dataStr)
                 if (!data.store) {
-                  console.warn('[Storqly] Result event missing store data')
-                  finishWithError('The AI response was missing store data.')
+                  console.warn(`[GENERATE:CLIENT][${requestId}] Result event missing store data`)
+                  finishWithError('The AI response was missing store data.', 'missing_store_data')
                   return
                 }
-                console.log('[Storqly] Store generated via SSE. name:', data.store.name, 'products:', data.store.products?.length)
+                console.log(`[GENERATE:CLIENT][${requestId}] Store generated. name="${data.store.name}", products=${data.store.products?.length ?? 0}`)
                 resolved = true
 
+                // IMPORTANT: Call finishOk BEFORE setStore, because setStore changes
+                // the Zustand view to 'editor', which unmounts LandingPage and triggers
+                // the cleanup effect. We must mark generation as complete BEFORE that.
+                finishOk()
                 setStore(data.store)
                 // Trigger lazy background image enrichment (non-blocking)
                 triggerBackgroundImageEnrichment(data.store)
@@ -597,23 +639,23 @@ function LandingPage() {
                   )
                 }
 
-                finishOk()
                 return
               } catch (parseErr) {
                 const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
-                console.warn('[Storqly] Failed to parse result event:', msg)
-                finishWithError(msg)
+                console.warn(`[GENERATE:CLIENT][${requestId}] Failed to parse result event: ${msg}`)
+                finishWithError(msg, 'parse_result')
                 return
               }
             } else if (currentEvent === 'error') {
+              eventCount++
               try {
                 const data = JSON.parse(dataStr)
                 const serverMsg = data.message || 'Generation failed'
-                console.warn('[Storqly] Server error event:', serverMsg)
-                finishWithError(serverMsg)
+                console.warn(`[GENERATE:CLIENT][${requestId}] Server error event: "${serverMsg}"`)
+                finishWithError(serverMsg, 'server_error_event')
                 return
               } catch {
-                finishWithError('Generation failed')
+                finishWithError('Generation failed', 'server_error_parse')
                 return
               }
             }
@@ -623,31 +665,43 @@ function LandingPage() {
       }
 
       if (!resolved) {
-        console.warn('[Storqly] Stream ended without a result event')
-        finishWithError('Stream ended without a result. The server may have disconnected.')
+        console.warn(`[GENERATE:CLIENT][${requestId}] Stream ended without result. events=${eventCount}, elapsed=${elapsedSecondsRef.current}s`)
+        finishWithError('Stream ended without a result. The server may have disconnected.', 'stream_ended_no_result')
       }
     } catch (err: unknown) {
-      // Last-resort safety net — should rarely be reached now
+      // Last-resort safety net — reader.read() or JSON.parse threw
       clearTimeout(timeoutId)
       clearTimers()
+      generationActiveRef.current = false
       let message = 'Something went wrong. Please try again.'
+      let reason = 'unknown_catch'
       if (err instanceof Error) {
-        if (err.name === 'AbortError') {
+        const errName = err.name
+        const errMsg = err.message
+        if (errName === 'AbortError') {
           if (timedOut) {
             message = 'Generation timed out after 5.5 minutes. The server may be overloaded — please try again with a shorter prompt.'
-          } else if (elapsedSecondsRef.current > 10 && !resolved) {
-            // The request was aborted after significant time but before result was received.
-            // This typically means: proxy timeout, network drop, or server crash — NOT user cancel.
-            // A user cancel would happen quickly (within 1-2s of clicking the button).
-            message = `Connection lost after ${elapsedSecondsRef.current}s. The AI was still working — please try again. If this persists, the server may be restarting.`
-          } else {
+            reason = 'hard_timeout'
+          } else if (userCancelledRef.current) {
+            // User explicitly clicked Cancel button
             message = 'Generation was cancelled.'
+            reason = 'user_cancel'
+          } else if (elapsedSecondsRef.current > 10 && !resolved) {
+            // Aborted after significant time — proxy timeout, network drop, or component unmount
+            message = `Connection lost after ${elapsedSecondsRef.current}s. The AI was still working — please try again. If this persists, the server may be restarting.`
+            reason = 'connection_lost'
+          } else {
+            // Aborted early (<=10s) without user cancel — likely component unmount or page navigation
+            message = 'Generation was interrupted. Please try again.'
+            reason = 'early_abort'
           }
-          console.warn(`[Storqly] Request aborted: ${message} (elapsed=${elapsedSecondsRef.current}s, timedOut=${timedOut}, resolved=${resolved})`)
         } else {
-          console.warn('[Storqly] Unexpected error (caught by safety net):', err.message)
-          message = err.message
+          reason = `error_${errName}`
+          message = errMsg
         }
+        console.warn(`[GENERATE:CLIENT][${requestId}] CAUGHT: name=${errName}, reason=${reason}, message="${message}", elapsed=${elapsedSecondsRef.current}s, timedOut=${timedOut}, resolved=${resolved}, userCancelled=${userCancelledRef.current}, events=${eventCount}`)
+      } else {
+        console.warn(`[GENERATE:CLIENT][${requestId}] CAUGHT non-Error: ${String(err)}`)
       }
       setError(message)
       setIsGenerating(false)
@@ -658,11 +712,16 @@ function LandingPage() {
     }
   }, [promptText, session, setIsGenerating, setStore, clearTimers, setAuthOpen, dbAvailable])
 
-  // Cleanup on unmount
+  // Cleanup on unmount — abort ONLY if generation is still actively in progress.
+  // This prevents aborting a just-completed generation when setStore() triggers
+  // the view change to 'editor' and unmounts LandingPage.
   useEffect(() => {
     return () => {
       clearTimers()
-      abortRef.current?.abort()
+      if (generationActiveRef.current && abortRef.current) {
+        console.warn('[GENERATE:CLIENT] Component unmounting while generation active — aborting')
+        abortRef.current.abort()
+      }
     }
   }, [clearTimers])
 

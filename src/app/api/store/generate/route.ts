@@ -765,6 +765,12 @@ RULES:
 
 // ─── POST handler — SSE stream ──────────────────────────────────
 export async function POST(req: NextRequest) {
+  // ── Extract request ID from client for end-to-end tracing ──
+  const requestId = req.headers.get('x-request-id') || `srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  const reqLog = (msg: string) => log(`[GENERATE:SERVER][${requestId}] ${msg}`);
+  const reqWarn = (msg: string) => warn(`[GENERATE:SERVER][${requestId}] ${msg}`);
+  const reqErr = (msg: string, ...args: unknown[]) => logErr(`[GENERATE:SERVER][${requestId}] ${msg}`, ...args);
+
   // Auth: optional — allow anonymous generation.
   // Save/publish will require auth when accounts are set up.
   let userId: string | undefined;
@@ -773,7 +779,17 @@ export async function POST(req: NextRequest) {
     userId = session.user?.id;
   } catch {
     // Not logged in — proceed anonymously
-    console.warn('[Generate] No session, allowing anonymous generation');
+    reqWarn('No session, allowing anonymous generation');
+  }
+
+  // ── Monitor request signal for client disconnection ──
+  let clientDisconnected = false;
+  const reqStartTime = Date.now();
+  if (req.signal) {
+    req.signal.addEventListener('abort', () => {
+      clientDisconnected = true;
+      reqWarn(`Client disconnected (request.signal aborted). elapsed=${Date.now() - reqStartTime}ms`);
+    }, { once: true });
   }
 
   let prompt: string | undefined;
@@ -798,7 +814,7 @@ export async function POST(req: NextRequest) {
         } catch (e) {
           if (!sendFailed) {
             sendFailed = true;
-            logErr(`[Store Generate] send('${event}') failed — stream likely closed. Error: ${e instanceof Error ? e.message : e}`);
+            reqErr(`send('${event}') failed — stream likely closed. Error: ${e instanceof Error ? e.message : e}`);
           }
         }
       };
@@ -809,7 +825,7 @@ export async function POST(req: NextRequest) {
           clearInterval(heartbeat);
           if (!sendFailed) {
             sendFailed = true;
-            log(`[GENERATE] Heartbeat failed at ${elapsed()}ms — client likely disconnected`);
+            reqWarn(`Heartbeat failed at ${elapsed()}ms — client likely disconnected`);
           }
         }
       }, 4000);
@@ -826,12 +842,12 @@ export async function POST(req: NextRequest) {
 
         const trimmedPrompt = prompt.trim();
         const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
-        log(`[GENERATE] Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}`);
+        reqLog(`Stream started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}`);
         let requestedCount = extractProductCount(trimmedPrompt);
 
         const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
         if (wasCapped) {
-          console.log(`[Store Generate] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
+          console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] Soft cap: user requested ${requestedCount}, capped to ${MAX_PRACTICAL_PRODUCTS}`);
           requestedCount = MAX_PRACTICAL_PRODUCTS;
         }
 
@@ -841,17 +857,23 @@ export async function POST(req: NextRequest) {
           ? Math.ceil((requestedCount - PHASE1_BATCH_SIZE) / PHASE2_BATCH_SIZE)
           : 0;
 
-        log(`[Store Generate] Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
+        reqLog(`Requested: ${requestedCount} products. Phase 1: ${phase1Count}. Phase 2 batches: ${phase2BatchCount}.`);
 
         if (sanitizedPrompt.length < trimmedPrompt.length) {
-          log(`[Store Generate] Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
+          reqLog(`Prompt sanitized: ${trimmedPrompt.length} -> ${sanitizedPrompt.length} chars (long lists collapsed)`);
         }
 
         logGeneration({ event: 'generation_started', details: { prompt_length: sanitizedPrompt.length, product_count: requestedCount } });
 
         if (elapsed() > TOTAL_TIME_BUDGET_MS) {
-          warn(`[Store Generate] Time budget exceeded before AI call (${elapsed()}ms).`);
+          reqWarn(`Time budget exceeded before AI call (${elapsed()}ms).`);
           send('error', { message: 'Generation timed out before AI could respond. Please try again.' });
+          return;
+        }
+
+        // Early exit if client already disconnected before starting the expensive AI call
+        if (clientDisconnected) {
+          reqWarn('Client already disconnected before AI call — skipping generation');
           return;
         }
 
@@ -859,10 +881,10 @@ export async function POST(req: NextRequest) {
         // PHASE 1: Store Structure + First Batch of Products
         // ═══════════════════════════════════════════════════════════
         const providerChain = getProviders();
-        log(`[Store Generate] Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
+        reqLog(`Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
 
         send('progress', { stage: 'analyzing', message: 'Analyzing your store vision...' });
-        log(`[Store Generate] Phase 1: Generating store with ${phase1Count} products...`);
+        reqLog(`Phase 1: Generating store with ${phase1Count} products...`);
 
         // ── Library-aware composition ────────────────────────────────
         send('progress', { stage: 'design-direction', message: 'Creating design direction...' });
@@ -872,7 +894,7 @@ export async function POST(req: NextRequest) {
           ensureLibraryRegistered();
           libraryCtx = await composeStore(sanitizedPrompt);
           if (libraryCtx) {
-            log(`[Store Generate] Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
+            reqLog(`Library composition: ${libraryCtx.recipeName} (${libraryCtx.nodes.length} sections)`);
             libraryPromptSection = buildLibraryPromptContext(libraryCtx);
             // Append hero-specific architecture from the hero variant's summary
             const heroSummary = libraryCtx.variantSummaries.find(v => v.family === 'hero');
@@ -881,7 +903,7 @@ export async function POST(req: NextRequest) {
             }
           }
         } catch (e) {
-          warn(`[Store Generate] Library composition failed (non-fatal): ${e}. Using legacy generation.`);
+          reqWarn(`Library composition failed (non-fatal): ${e}. Using legacy generation.`);
         }
 
         const userMessage = `Generate an e-commerce store: ${sanitizedPrompt}`;
@@ -889,7 +911,7 @@ export async function POST(req: NextRequest) {
         const systemPrompt = libraryCtx
           ? buildPhase1SystemPrompt(phase1Count, sanitizedPrompt) + '\n\n' + libraryPromptSection
           : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
-        log(`[Store Generate] System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
+        reqLog(`System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
 
         send('progress', { stage: 'building-store', message: 'Building your store with AI...' });
         logGeneration({ event: 'generation_stage_changed', duration_ms: elapsed(), details: { stage: 'building-store' } });
@@ -907,7 +929,7 @@ export async function POST(req: NextRequest) {
         });
 
         if (!phase1Result.success || !phase1Result.content) {
-          logErr(`[Store Generate] Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
+          reqErr(`Phase 1 AI failed: ${phase1Result.error}. Attempts: ${phase1Result.attempts}`);
           const providerDetails = phase1Result.providerErrors
             ?.map(e => `* ${e.provider}: ${e.error}`)
             .join('\n') || phase1Result.error || 'Unknown error';
@@ -915,7 +937,7 @@ export async function POST(req: NextRequest) {
           return;
         }
 
-        log(`[Store Generate] Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
+        reqLog(`Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
 
         // ── Parse JSON ──
         send('progress', { stage: 'processing', message: 'Processing AI response...' });
@@ -924,7 +946,7 @@ export async function POST(req: NextRequest) {
         // Guard against oversized AI responses (potential OOM vector)
         const MAX_RESPONSE_CHARS = 500_000; // ~125K tokens — well above any reasonable store
         if (phase1Result.content.length > MAX_RESPONSE_CHARS) {
-          logErr(`[Store Generate] Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
+          reqErr(`Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
           logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { reason: 'response_too_large', size: phase1Result.content.length } });
           send('error', { message: 'AI response was too large. Please try again with a simpler prompt.' });
           return;
@@ -934,7 +956,7 @@ export async function POST(req: NextRequest) {
         try {
           parsed = JSON.parse(phase1Result.content);
         } catch (e) {
-          logErr(`[Store Generate] Phase 1 JSON parse failed:`, e);
+          reqErr(`Phase 1 JSON parse failed:`, e);
           send('error', { message: 'AI returned invalid data. Please try again.' });
           return;
         }
@@ -1193,7 +1215,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        log(`[Store Generate] Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
+        reqLog(`Phase 1 complete: ${store.products.length} products in ${elapsed()}ms`);
 
         // ═══════════════════════════════════════════════════════════
         // PHASE 2: Additional Product Batches
@@ -1202,7 +1224,7 @@ export async function POST(req: NextRequest) {
           const productsStillNeeded = requestedCount - store.products.length;
 
           if (productsStillNeeded > 0 && remaining() > MIN_REMAINING_MS) {
-            log(`[Store Generate] Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
+            reqLog(`Phase 2: Need ${productsStillNeeded} more products (${phase2BatchCount} batches). ${Math.round(remaining() / 1000)}s remaining.`);
 
             const existingNames = store.products.map(p => p.name);
             const storeDescription = store.description || 'e-commerce store';
@@ -1397,7 +1419,7 @@ export async function POST(req: NextRequest) {
         // ── Final result ──
         send('progress', { stage: 'finalizing', message: 'Finalizing your store...' });
         const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
-        log(`[Store Generate] Success in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
+        reqLog(`SUCCESS in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations, clientDisconnected=${clientDisconnected})`);
         logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
 
         send('result', {
@@ -1410,13 +1432,15 @@ export async function POST(req: NextRequest) {
         logGeneration({ event: 'store_saved', storeId: store.id, duration_ms: elapsed() });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        logErr(`[GENERATE ERROR] Unexpected error after ${elapsed()}ms:`, msg);
-        logErr(`[GENERATE ERROR] step=unknown`);
+        const stack = err instanceof Error ? err.stack : undefined;
+        reqErr(`Unexpected error after ${elapsed()}ms: ${msg}`);
+        if (stack) reqErr(`Stack: ${stack}`);
+        reqErr(`step=unknown, clientDisconnected=${clientDisconnected}`);
         logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
         send('error', { message: `An unexpected error occurred: ${msg.substring(0, 120)}. Please try again.` });
       } finally {
         clearInterval(heartbeat);
-        log(`[GENERATE] Stream closing after ${elapsed()}ms (sendFailed=${sendFailed})`);
+        reqLog(`Stream closing after ${elapsed()}ms (sendFailed=${sendFailed}, clientDisconnected=${clientDisconnected})`);
         try { controller.close(); } catch { /* already closed */ }
       }
     },
