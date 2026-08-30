@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, Fragment, useCallback } from 'react';
 import type { Store, Section, PageType, StorePage, SectionType } from '@/lib/store-schema';
 import { renderSection, SocialIcon } from './sections';
+import { lightenHex } from './helpers';
 import {
   CollectionPage,
   ProductDetailPage,
@@ -555,7 +556,8 @@ export function StoreRenderer({
 
   return (
     <div
-      className="min-h-screen flex flex-col font-sans antialiased"
+      id="store-renderer-root"
+      className="min-h-screen flex flex-col font-sans antialiased overflow-y-auto"
       style={baseStyle as React.CSSProperties}
       onClick={() => onSelectSection?.(null)}
     >
@@ -586,10 +588,28 @@ export function StoreRenderer({
           />
         ) : (
           <>
-            {body.map((section) => {
+            {body.map((section, bodyIndex) => {
+              // Alternating section backgrounds for visual rhythm
+              const isEven = bodyIndex % 2 === 0;
+              const altBg = isEven
+                ? undefined // inherit base background
+                : lightenHex(theme.colors.background, 0.025) || '#f7f7f5';
               return (
                 <Fragment key={section.id}>
-                  {renderSection({
+                  {altBg && !section.style?.backgroundColor && !section.style?.backgroundImage && section.type !== 'hero' && (
+                    <div style={{ backgroundColor: altBg }}>{renderSection({
+                      section,
+                      theme,
+                      selectedSectionId,
+                      onSelectSection,
+                      products,
+                      onViewProduct: handleHomeCardClick,
+                      onNavigate: handleNavigate,
+                      forceHideAddToCart: true,
+                      variantCssVars: tokenCssVars,
+                    })}</div>
+                  )}
+                  {(!altBg || section.style?.backgroundColor || section.style?.backgroundImage || section.type === 'hero') && renderSection({
                     section,
                     theme,
                     selectedSectionId,

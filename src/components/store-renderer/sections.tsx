@@ -67,6 +67,11 @@ function headingFontStyle(theme: StoreTheme): React.CSSProperties {
   return {};
 }
 
+// Fluid typography helper — uses CSS clamp() for responsive sizing
+function fluidHeadingStyle(baseSize: string = '1.875rem', minSize: string = '1.5rem', maxSize: string = '3rem'): React.CSSProperties {
+  return { fontSize: `clamp(${minSize}, ${baseSize}, ${maxSize})` };
+}
+
 // ─── Error boundary for individual sections ──────────────────────────
 // Prevents a malformed section from crashing the entire page.
 
@@ -86,12 +91,15 @@ class SectionErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <div className="flex items-center justify-center py-8 px-6 text-center">
-          <div className="max-w-sm">
-            <p className="text-sm font-medium" style={{ color: '#888' }}>
-              Section render error ({this.props.sectionType})
+          <div className="max-w-sm rounded-xl border border-dashed border-gray-300 bg-gray-50/50 px-6 py-8">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
+              <svg className="h-5 w-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <p className="text-sm font-medium text-gray-700">
+              {this.props.sectionType}
             </p>
-            <p className="mt-1 text-xs" style={{ color: '#aaa' }}>
-              {this.state.error?.message || 'Unknown error'}
+            <p className="mt-1 text-xs text-gray-400">
+              {this.state.error?.message || 'Rendering paused'}
             </p>
           </div>
         </div>
@@ -574,13 +582,13 @@ function ProductCard({
             </span>
           )}
         </div>
-        {/* Standard add-to-cart button (non-quick-add styles, or if --card-show-quick-add is true) */}
+        {/* Standard add-to-cart button — always visible on hover, slide-up animation */}
         {(showAddToCart || cvShowQuickAdd === true) && product.inStock && !isQuickAdd && (
           <button
-            className={`mt-4 w-full rounded-lg py-2.5 text-sm font-semibold transition-all duration-200 cursor-pointer ${
+            className={`mt-3 w-full rounded-lg py-2.5 text-sm font-semibold transition-all duration-300 ease-out cursor-pointer ${
               hovered
                 ? 'opacity-100 translate-y-0'
-                : 'opacity-0 translate-y-1 pointer-events-none'
+                : 'opacity-0 translate-y-2 pointer-events-none'
             }`}
             style={{
               backgroundColor: addedFeedback ? '#16a34a' : (buttonBgOverride || theme.colors.primary),
@@ -588,7 +596,7 @@ function ProductCard({
             }}
             onClick={handleAddToCart}
           >
-            {addedFeedback ? 'Added!' : 'Add to Cart'}
+            {addedFeedback ? '✓ Added' : 'Add to Cart'}
           </button>
         )}
       </div>
@@ -612,6 +620,20 @@ export function HeaderSection({
 }: SectionRendererProps) {
   const content = section.content as unknown as HeaderContent;
   const isSelected = selectedSectionId === section.id;
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Sticky scroll listener for micro-shrink effect
+  useEffect(() => {
+    const container = document.getElementById('store-renderer-root');
+    const target = container || window;
+    const handleScroll = () => {
+      const scrollY = container ? container.scrollTop : window.scrollY;
+      setScrolled(scrollY > 40);
+    };
+    target.addEventListener('scroll', handleScroll, { passive: true });
+    return () => target.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // ── Variant CSS variable consumption (Design Library) ──
   const v = (key: string, fallback: string = '') => variantCssVars?.[key] ?? fallback;
@@ -624,9 +646,13 @@ export function HeaderSection({
   const effectiveHeaderText = headerTextColor || theme.colors.text;
   const isSticky = headerPosition !== 'static';
 
+  const logoScale = scrolled ? 'scale(0.92)' : 'scale(1)';
+  const headerHeight = scrolled ? 'h-12' : 'h-16';
+  const headerShadow = scrolled ? 'shadow-md' : 'shadow-none';
+
   return (
     <header
-      className={`${isSticky ? 'sticky top-0' : 'relative'} z-40 border-b transition-all duration-200 ${
+      className={`${isSticky ? 'sticky top-0' : 'relative'} z-40 border-b transition-all duration-300 ease-in-out ${headerShadow} ${
         isSelected
           ? 'ring-2 ring-[#a855f7] ring-offset-2'
           : 'cursor-pointer hover:ring-1 hover:ring-[#a855f7]/40'
@@ -642,9 +668,9 @@ export function HeaderSection({
       data-section-id={section.id}
       data-section-type={section.type}
     >
-      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
+      <div className={`mx-auto flex ${headerHeight} max-w-6xl items-center justify-between px-6 transition-all duration-300`}>
         {/* Logo / Store Name */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3" style={{ transform: logoScale, transition: 'transform 0.3s ease' }}>
           {content.logo ? (
             <img
               src={content.logo}
@@ -654,19 +680,19 @@ export function HeaderSection({
             />
           ) : null}
           <span
-            className={`text-lg font-bold tracking-tight ${content.logo ? 'hidden' : ''}`}
+            className={`text-lg font-bold tracking-tight transition-all duration-300 ${content.logo ? 'hidden' : ''}`}
             style={{ color: effectiveHeaderText }}
           >
             {content.storeName}
           </span>
         </div>
 
-        {/* Navigation */}
+        {/* Desktop Navigation */}
         <nav className="hidden items-center gap-6 md:flex">
           {content.menuItems.map((item) => (
             <span
               key={item.label}
-              className="text-sm font-medium transition-colors hover:opacity-70"
+              className="text-sm font-medium transition-all duration-200 hover:opacity-70 cursor-pointer relative after:absolute after:bottom-[-2px] after:left-0 after:h-[1.5px] after:w-0 after:bg-current after:transition-all after:duration-300 hover:after:w-full"
               style={{ color: headerTextColor || theme.colors.textMuted }}
             >
               {item.label}
@@ -677,26 +703,52 @@ export function HeaderSection({
         {/* Right icons */}
         <div className="flex items-center gap-4">
           {content.showSearch && (
-            <button style={{ color: headerTextColor || theme.colors.textMuted }} aria-label="Search">
+            <button style={{ color: headerTextColor || theme.colors.textMuted }} aria-label="Search" className="transition-transform duration-200 hover:scale-110">
               <Search className="h-5 w-5" />
             </button>
           )}
           {content.showCart && (
-            <button className="relative" style={{ color: headerTextColor || theme.colors.textMuted }} aria-label="Cart">
+            <button className="relative transition-transform duration-200 hover:scale-110" style={{ color: headerTextColor || theme.colors.textMuted }} aria-label="Cart">
               <ShoppingCart className="h-5 w-5" />
               <span className="absolute -right-1.5 -top-1.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: theme.colors.primary }}>
                 0
               </span>
             </button>
           )}
-          {/* Mobile menu toggle placeholder */}
-          <button className="md:hidden" style={{ color: headerTextColor || theme.colors.textMuted }} aria-label="Menu">
+          {/* Mobile menu toggle */}
+          <button
+            className="md:hidden transition-transform duration-200 hover:scale-110"
+            style={{ color: headerTextColor || theme.colors.textMuted }}
+            aria-label="Menu"
+            onClick={(e) => { e.stopPropagation(); setMobileMenuOpen(v => !v); }}
+          >
             <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              {mobileMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              )}
             </svg>
           </button>
         </div>
       </div>
+      {/* Mobile dropdown menu */}
+      {mobileMenuOpen && (
+        <nav className="border-t px-6 py-4 md:hidden" style={{ borderColor: theme.colors.border, backgroundColor: effectiveHeaderBg }}>
+          <div className="flex flex-col gap-3">
+            {content.menuItems.map((item) => (
+              <span
+                key={item.label}
+                className="text-sm font-medium py-1 transition-colors hover:opacity-70"
+                style={{ color: effectiveHeaderText }}
+                onClick={(e) => { e.stopPropagation(); setMobileMenuOpen(false); }}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </nav>
+      )}
     </header>
   );
 }
@@ -1976,8 +2028,12 @@ export function TestimonialsSection({ section, theme, selectedSectionId, onSelec
           </div>
         )}
         <div className={isAttributionUsernameHandle ? 'text-right' : ''}>
-          <p className="text-sm font-semibold">
+          <p className="text-sm font-semibold flex items-center gap-1.5">
             {item.author}
+            <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700" title="Verified Buyer">
+              <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+              Verified
+            </span>
           </p>
           {item.role && isAttributionNameRole && (
             <p className="text-xs opacity-65">
@@ -2144,19 +2200,22 @@ export function NewsletterSection({ section, theme, selectedSectionId, onSelectS
         </div>
         <div className={isSplit ? '' : 'mt-6'}>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              type="email"
-              placeholder={content.placeholderText || 'Enter your email'}
-              className={`flex-1 ${borderRadius} ${isUnderlined ? 'border-0 border-b-2 bg-transparent' : 'border'} px-4 py-3 text-sm outline-none transition-colors`}
-              style={{
-                backgroundColor: isUnderlined ? 'transparent' : theme.colors.background,
-                borderColor: isUnderlined ? theme.colors.primary : theme.colors.border,
-                color: theme.colors.text,
-              }}
-              readOnly
-            />
+            <div className="relative flex-1">
+              <input
+                type="email"
+                placeholder={content.placeholderText || 'Enter your email'}
+                className={`w-full ${borderRadius} ${isUnderlined ? 'border-0 border-b-2 bg-transparent' : 'border'} px-4 py-3 text-sm outline-none transition-all duration-200 focus:ring-2 focus:ring-offset-0`}
+                style={{
+                  backgroundColor: isUnderlined ? 'transparent' : theme.colors.background,
+                  borderColor: isUnderlined ? theme.colors.primary : theme.colors.border,
+                  color: theme.colors.text,
+                  // @ts-expect-error --ring-color is a valid CSS var
+                  '--ring-color': `${theme.colors.primary}40`,
+                }}
+              />
+            </div>
             <button
-              className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-transform hover:scale-[1.02]`}
+              className={`${borderRadius} px-6 py-3 text-sm font-semibold transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] cursor-pointer`}
               style={{
                 backgroundColor: btnBg,
                 color: btnColor,
@@ -2232,12 +2291,15 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
                     {item.question}
                   </span>
                   {isOpen ? (
-                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+                    <ChevronUp className="ml-2 h-4 w-4 flex-shrink-0 opacity-65 transition-transform duration-300" />
                   ) : (
-                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65" />
+                    <ChevronDown className="ml-2 h-4 w-4 flex-shrink-0 opacity-65 transition-transform duration-300" />
                   )}
                 </button>
-                {isOpen && (
+                <div
+                  className="overflow-hidden transition-all duration-300 ease-in-out"
+                  style={{ maxHeight: isOpen ? '500px' : '0px', opacity: isOpen ? 1 : 0 }}
+                >
                   <div
                     className="border-t px-5 pb-4 pt-3 text-sm leading-relaxed opacity-65"
                     style={{
@@ -2246,7 +2308,7 @@ export function FAQSection({ section, theme, selectedSectionId, onSelectSection,
                   >
                     {item.answer}
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
@@ -2383,13 +2445,14 @@ export function CTASection({ section, theme, selectedSectionId, onSelectSection,
           <div className={`hidden md:block w-full overflow-hidden rounded-xl bg-gradient-to-br ${isHighContrast ? 'from-white/10 to-white/5' : 'from-primary/10 to-secondary/5'}`} style={{ aspectRatio: v('--promo-image-ratio') || '4/5' }} />
         </div>
       ) : (
-      <div className={`mx-auto text-center ${ctaPaddingClass}`}
+      <div className={`mx-auto text-center ${ctaPaddingClass} transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl`}
         style={{
           backgroundColor: isHighContrast ? '#0f0f0f' : (section.style.backgroundColor || theme.colors.surface),
           color: isHighContrast ? '#ffffff' : undefined,
           borderRadius: theme.borderRadius === 'none' ? '0' : '1rem',
           maxWidth: variantMaxWidth || undefined,
           borderTop: urgencyBorder,
+          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05), 0 10px 15px -3px rgb(0 0 0 / 0.05)',
         }}
       >
         {/* VARIANT: --cta-proof-style avatar row */}
