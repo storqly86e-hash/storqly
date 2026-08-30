@@ -4,17 +4,26 @@
 // POST /api/store/publish
 // Takes { store: Store } body, saves to the database with published=true
 // and publishedAt=now(). Returns the slug for the published store URL.
+//
+// Auth: optional — anonymous users can publish stores (userId=null).
+// Signed-in users get ownership enforcement.
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 import type { Store } from '@/lib/store-schema';
-import { requireAuth, AuthError, authErrorResponse } from '@/lib/auth-utils';
+import { getServerAuthSession, AuthError, authErrorResponse } from '@/lib/auth-utils';
 
 // ─── POST handler ───────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const session = await requireAuth();
-    const userId = session.user.id;
+    // Auth is optional — allow anonymous publishing
+    let userId: string | undefined;
+    try {
+      const session = await getServerAuthSession();
+      userId = session?.user?.id;
+    } catch {
+      // No session — proceed anonymously
+    }
 
     const dbClient = getDb();
     if (!dbClient) {
@@ -41,7 +50,7 @@ export async function POST(req: NextRequest) {
     const existing = await dbClient.store.findUnique({
       where: { id: store.id },
     });
-    if (existing?.userId && existing.userId !== userId) {
+    if (existing?.userId && userId && existing.userId !== userId) {
       return NextResponse.json(
         { error: 'You do not have permission to publish this store.' },
         { status: 403 }
@@ -68,7 +77,7 @@ export async function POST(req: NextRequest) {
         schema: serializedStore,
         published: true,
         publishedAt: now,
-        userId,
+        userId: userId || null,
       },
     });
 
