@@ -304,6 +304,13 @@ type StoreListItem = {
 }
 
 function LandingPage() {
+  // ── Build architecture marker (verifiable in browser console) ──
+  useEffect(() => {
+    console.log('[STORQLY_BUILD] GENERATION_ARCHITECTURE=POST_POLL_V2')
+    console.log('[STORQLY_BUILD] SSE_GENERATION=false')
+    console.log('[STORQLY_BUILD] No EventSource, no getReader, no ReadableStream in generation flow')
+  }, [])
+
   const { data: session } = useSession()
   const [promptText, setPromptText] = useState('')
   const [mkOpen, setMkOpen] = useState(false)
