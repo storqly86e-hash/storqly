@@ -40,7 +40,7 @@ import {
   markJobInactive,
   JOB_STATUS,
 } from '@/lib/generation-job';
-import { cleanupOldJobs } from '@/lib/generation-job';
+import { cleanupOldJobs, sweepOrphanedJobs } from '@/lib/generation-job';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -1430,7 +1430,9 @@ export async function POST(req: NextRequest) {
   console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] POST received → jobId=${jobId}, starting background generation`);
 
   // Periodically clean up old completed/failed jobs
+  // Also sweep orphaned jobs from previous server session
   cleanupOldJobs().catch(() => {});
+  sweepOrphanedJobs().catch(() => {});
 
   // Fire-and-forget: generation runs in background, client polls for status
   runGeneration(jobId, prompt.trim(), userId, requestId).catch(err => {

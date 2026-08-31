@@ -253,3 +253,47 @@ export async function cleanupOldJobs(): Promise<number> {
     return 0;
   }
 }
+
+// ─── Startup Orphan Sweep ──────────────────────────────────
+// On server start, any non-terminal job is an orphan (the
+// background Promise was killed by the restart). Mark them
+// FAILED_TIMEOUT immediately so clients don't poll forever.
+
+let orphanSweepDone = false;
+
+export async function sweepOrphanedJobs(): Promise<number> {
+  if (orphanSweepDone) return 0;
+  orphanSweepDone = true;
+
+  try {
+    const orphans = await db.generationJob.findMany({
+      where: {
+        status: { notIn: [JOB_STATUS.COMPLETED, JOB_STATUS.CANCELLED, ...Object.values(JOB_STATUS).filter(s => s.startsWith('FAILED_'))] },
+      },
+    });
+
+    if (orphans.length === 0) return 0;
+
+    console.log(`[GEN_JOB] Startup sweep: found ${orphans.length} orphaned job(s) from previous server session`);
+
+    for (const job of orphans) {
+      await db.generationJob.update({
+        where: { id: job.id },
+        data: {
+          status: JOB_STATUS.FAILED_TIMEOUT,
+          stage: 'orphaned',
+          progress: 'Server restarted during generation',
+          errorCode: JOB_STATUS.FAILED_TIMEOUT,
+          errorMessage: 'Generation was interrupted because the server restarted. Please try again.',
+          completedAt: new Date(),
+        },
+      });
+      console.log(`[GEN_JOB] Marked orphaned job ${job.id} (was ${job.status} for ${Math.round((Date.now() - job.updatedAt.getTime()) / 1000)}s)`);
+    }
+
+    return orphans.length;
+  } catch (err) {
+    console.error('[GEN_JOB] Orphan sweep failed:', err);
+    return 0;
+  }
+}

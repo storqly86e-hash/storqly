@@ -3,16 +3,24 @@
 // ========================================
 // GET /api/store/generate/status?jobId=xxx
 //
-// Response:
-//   { status: 'QUEUED'|'GENERATING'|'COMPLETED'|'FAILED_AI'|... }
-//   { progress?: { stage, message } }
-//   { store?, meta? }  (when status=COMPLETED)
-//   { error? }         (when status=FAILED_*)
+// Detects orphaned jobs: if a job has been in a non-terminal state
+// for > 5 minutes with no active generation, marks it as FAILED_TIMEOUT.
+// This handles server restarts mid-generation.
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getJobStatus, JOB_STATUS } from '@/lib/generation-job';
+import { getJobStatus, failJob, isJobActive, JOB_STATUS, sweepOrphanedJobs } from '@/lib/generation-job';
 
 export const dynamic = 'force-dynamic';
+
+// ─── Orphan detection threshold ─────────────────────────────
+// If a job is in a non-terminal state for longer than this
+// and no active generation is running, it's considered orphaned.
+const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
+const isTerminalStatus = (status: string) =>
+  status === JOB_STATUS.COMPLETED ||
+  status.startsWith('FAILED_') ||
+  status === JOB_STATUS.CANCELLED;
 
 export async function GET(req: NextRequest) {
   const jobId = req.nextUrl.searchParams.get('jobId');
@@ -24,11 +32,36 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Run orphan sweep on first request after server start
+  await sweepOrphanedJobs().catch(() => {});
+
   try {
     const job = await getJobStatus(jobId);
 
     if (!job) {
       return NextResponse.json({ status: 'not_found' as const });
+    }
+
+    // ── Orphan detection ──────────────────────────────────────
+    // If the job is non-terminal, not actively being generated,
+    // and has been stuck for > ORPHAN_THRESHOLD_MS, mark it failed.
+    // This handles the server-restart-mid-generation scenario.
+    if (!isTerminalStatus(job.status) && !isJobActive(jobId)) {
+      const stuckDuration = Date.now() - job.updatedAt.getTime();
+      if (stuckDuration > ORPHAN_THRESHOLD_MS) {
+        console.log(
+          `[GEN_STATUS] Orphaned job detected: ${jobId} stuck in '${job.status}' for ${Math.round(stuckDuration / 1000)}s. Marking FAILED_TIMEOUT.`
+        );
+        await failJob(jobId, {
+          errorCode: 'FAILED_TIMEOUT',
+          errorMessage: 'Generation was interrupted (server may have restarted). Please try again.',
+        });
+        return NextResponse.json({
+          status: 'failed' as const,
+          errorCode: 'FAILED_TIMEOUT',
+          error: 'Generation was interrupted (server may have restarted). Please try again.',
+        });
+      }
     }
 
     // Build response based on status
