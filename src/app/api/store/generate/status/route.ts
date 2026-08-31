@@ -1,20 +1,25 @@
 // ========================================
-// Generation Status Polling API (Database-Backed)
+// Generation Status Polling API [V3] (Database-Backed)
 // ========================================
 // GET /api/store/generate/status?jobId=xxx
 //
-// Detects orphaned jobs: if a job has been in a non-terminal state
-// for > 5 minutes with no active generation, marks it as FAILED_TIMEOUT.
-// This handles server restarts mid-generation.
+// V3 Changes:
+// - Explicit JOB_NOT_FOUND error code (not generic 'not_found')
+// - DB identity logged on every request for diagnostics
+// - Orphan detection uses DB timestamps only (no in-memory set)
+// - Orphan threshold raised to 5 min (only long-stuck jobs)
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getJobStatus, failJob, isJobActive, JOB_STATUS, sweepOrphanedJobs } from '@/lib/generation-job';
+import { getJobStatus, failJob, JOB_STATUS, sweepOrphanedJobs } from '@/lib/generation-job';
+import { getDatabaseIdentity } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
 // ─── Orphan detection threshold ─────────────────────────────
-// If a job is in a non-terminal state for longer than this
-// and no active generation is running, it's considered orphaned.
+// If a job is non-terminal and stuck for > 5 minutes, it's orphaned.
+// The 2-minute guard in sweepOrphanedJobs() handles startup sweeps.
+// This handles the case where the server stays up but the
+// background Promise silently dies.
 const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
 
 const isTerminalStatus = (status: string) =>
@@ -27,37 +32,47 @@ export async function GET(req: NextRequest) {
 
   if (!jobId) {
     return NextResponse.json(
-      { error: 'jobId is required.', status: 'not_found' as const },
+      { status: 'NOT_FOUND', errorCode: 'MISSING_JOB_ID', error: 'jobId is required.' },
       { status: 400 }
     );
   }
 
   // Run orphan sweep on first request after server start
+  // (has 2-minute age guard — won't kill fresh jobs)
   await sweepOrphanedJobs().catch(() => {});
+
+  // Log DB identity for diagnostics (safe — no secrets)
+  const identity = getDatabaseIdentity();
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[${ts}][GENERATION_V3][STATUS_READ] jobId=${jobId} dbPath=${identity.resolvedPath} dbExists=${identity.fileExists} dbSize=${identity.fileSizeBytes} pid=${identity.processPid}`);
 
   try {
     const job = await getJobStatus(jobId);
 
     if (!job) {
-      return NextResponse.json({ status: 'not_found' as const });
+      console.log(`[${ts}][GENERATION_V3][JOB_NOT_FOUND] jobId=${jobId} dbPath=${identity.resolvedPath} dbExists=${identity.fileExists}`);
+      return NextResponse.json({
+        status: 'NOT_FOUND',
+        errorCode: 'JOB_NOT_FOUND',
+        error: 'Generation job not found.',
+      });
     }
 
-    // ── Orphan detection ──────────────────────────────────────
-    // If the job is non-terminal, not actively being generated,
-    // and has been stuck for > ORPHAN_THRESHOLD_MS, mark it failed.
-    // This handles the server-restart-mid-generation scenario.
-    if (!isTerminalStatus(job.status) && !isJobActive(jobId)) {
+    // ── Orphan detection (DB timestamps only) ────────────────
+    // If the job is non-terminal and has been stuck for > 5 min,
+    // the background process is dead. Mark it failed.
+    if (!isTerminalStatus(job.status)) {
       const stuckDuration = Date.now() - job.updatedAt.getTime();
       if (stuckDuration > ORPHAN_THRESHOLD_MS) {
         console.log(
-          `[GEN_STATUS] Orphaned job detected: ${jobId} stuck in '${job.status}' for ${Math.round(stuckDuration / 1000)}s. Marking FAILED_TIMEOUT.`
+          `[GENERATION_V3] ORPHAN_DETECTED: ${jobId} stuck in '${job.status}' for ${Math.round(stuckDuration / 1000)}s. Marking FAILED_TIMEOUT.`
         );
         await failJob(jobId, {
           errorCode: 'FAILED_TIMEOUT',
           errorMessage: 'Generation was interrupted (server may have restarted). Please try again.',
         });
         return NextResponse.json({
-          status: 'failed' as const,
+          status: 'FAILED',
           errorCode: 'FAILED_TIMEOUT',
           error: 'Generation was interrupted (server may have restarted). Please try again.',
         });
@@ -72,15 +87,17 @@ export async function GET(req: NextRequest) {
         store = JSON.parse(job.storeData);
       } catch {
         return NextResponse.json({
-          status: 'failed' as const,
+          status: 'FAILED',
+          errorCode: 'CORRUPTED_DATA',
           error: 'Generated store data was corrupted. Please try again.',
         });
       }
       if (job.storeMeta) {
         try { meta = JSON.parse(job.storeMeta); } catch { /* ignore */ }
       }
+      console.log(`[${ts}][GENERATION_V3][JOB_COMPLETED_RETURNED] jobId=${jobId} storeName=${typeof store === 'object' && store ? (store as Record<string, unknown>).name : 'unknown'}`);
       return NextResponse.json({
-        status: 'completed' as const,
+        status: 'COMPLETED',
         store,
         ...(meta ? { meta } : {}),
       });
@@ -88,22 +105,22 @@ export async function GET(req: NextRequest) {
 
     if (job.status === JOB_STATUS.CANCELLED) {
       return NextResponse.json({
-        status: 'cancelled' as const,
+        status: 'CANCELLED',
         error: 'Generation was cancelled.',
       });
     }
 
     if (job.status.startsWith('FAILED_')) {
       return NextResponse.json({
-        status: 'failed' as const,
-        error: job.errorMessage || 'Generation failed.',
+        status: 'FAILED',
         errorCode: job.errorCode || job.status,
+        error: job.errorMessage || 'Generation failed.',
       });
     }
 
     // Job is still in progress (QUEUED, GENERATING, COMPOSING, etc.)
     return NextResponse.json({
-      status: 'processing' as const,
+      status: 'PROCESSING',
       progress: {
         stage: job.stage || null,
         message: job.progress || 'Processing...',
@@ -111,9 +128,10 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error(`[GEN_STATUS] Error fetching job ${jobId}:`, err);
+    console.error(`[GENERATION_V3] STATUS_ENDPOINT_ERROR jobId=${jobId}:`, err);
     return NextResponse.json({
-      status: 'not_found' as const,
+      status: 'NOT_FOUND',
+      errorCode: 'INTERNAL_ERROR',
       error: 'Failed to check job status. The server may be restarting.',
     });
   }

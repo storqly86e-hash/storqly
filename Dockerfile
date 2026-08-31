@@ -1,5 +1,9 @@
 # ═══════════════════════════════════════════════════════════════
-# Storqly — Production Dockerfile for Railway [v5]
+# Storqly — Production Dockerfile for Railway [v6]
+# ═══════════════════════════════════════════════════════════════
+# V6: Added persistent volume mount at /data for SQLite.
+# Railway ephemeral filesystem wipes /app on restart.
+# GenerationJob data MUST live on a Railway Volume mounted at /data.
 # ═══════════════════════════════════════════════════════════════
 
 # ── Stage 1: Build ──────────────────────────────────────────
@@ -58,9 +62,19 @@ ENV NODE_OPTIONS="--max-old-space-size=384"
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
+# ═══ PERSISTENT DATA VOLUME ═══
+# Railway Volume must be mounted at /data.
+# DATABASE_URL should be set to: file:/data/storqly.db
+# If DATABASE_URL is not set, the app defaults to /data/storqly.db
+# so that Railway Volume persistence works out of the box.
+VOLUME ["/data"]
+
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
+
+# Create the /data directory with write permissions
+RUN mkdir -p /data && chown -R nextjs:nodejs /data
 
 # Copy public folder first (before standalone overwrites)
 COPY --from=builder /app/public ./public

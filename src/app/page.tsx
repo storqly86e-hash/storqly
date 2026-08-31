@@ -402,7 +402,7 @@ function LandingPage() {
   const activeJobIdRef = useRef<string | null>(null)
 
   const handleCancel = useCallback(async () => {
-    console.log('[GENERATION_V2:CLIENT] User clicked Cancel')
+    console.log('[GENERATION_V3:CLIENT] User clicked Cancel')
     cancelledRef.current = true
     generationActiveRef.current = false
     clearTimers()
@@ -442,7 +442,7 @@ function LandingPage() {
 
     // Generate a unique request ID for logging
     const requestId = `gen_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
-    console.log(`[GENERATION_V2:CLIENT][${requestId}] CLICK → Request started. Prompt: "${trimmed.slice(0, 80)}..."`)
+    console.log(`[GENERATION_V3:CLIENT][${requestId}] CLICK → Request started. Prompt: "${trimmed.slice(0, 80)}..."`)
 
     // Start elapsed time counter
     elapsedTimerRef.current = setInterval(() => {
@@ -454,7 +454,7 @@ function LandingPage() {
 
     try {
       // ── Step 1: POST to start generation ──
-      console.log(`[GENERATION_V2:CLIENT][${requestId}] POST → Starting generation job...`)
+      console.log(`[GENERATION_V3:CLIENT][${requestId}] POST → Starting generation job...`)
       let res: Response
       try {
         res = await fetch('/api/store/generate', {
@@ -464,7 +464,7 @@ function LandingPage() {
         })
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
-        console.warn(`[GENERATION_V2:CLIENT][${requestId}] POST_FAILED: network error: ${msg}`)
+        console.warn(`[GENERATION_V3:CLIENT][${requestId}] POST_FAILED: network error: ${msg}`)
         clearTimers()
         generationActiveRef.current = false
         setIsGenerating(false)
@@ -474,7 +474,7 @@ function LandingPage() {
         return
       }
 
-      console.log(`[GENERATION_V2:CLIENT][${requestId}] POST_RESPONSE: status=${res.status}, ok=${res.ok}`)
+      console.log(`[GENERATION_V3:CLIENT][${requestId}] POST_RESPONSE: status=${res.status}, ok=${res.ok}`)
 
       if (!res.ok) {
         let errorMsg = `Server error (${res.status})`
@@ -482,7 +482,7 @@ function LandingPage() {
           const errorData = await res.json()
           errorMsg = errorData.error || errorMsg
         } catch { /* ignore parse error */ }
-        console.warn(`[GENERATION_V2:CLIENT][${requestId}] POST_ERROR: ${errorMsg}`)
+        console.warn(`[GENERATION_V3:CLIENT][${requestId}] POST_ERROR: ${errorMsg}`)
         clearTimers()
         generationActiveRef.current = false
         setIsGenerating(false)
@@ -498,7 +498,7 @@ function LandingPage() {
         const data = await res.json()
         jobId = data.jobId
         if (!jobId) {
-          console.warn(`[GENERATION_V2:CLIENT][${requestId}] POST_RESPONSE: missing jobId`)
+          console.warn(`[GENERATION_V3:CLIENT][${requestId}] POST_RESPONSE: missing jobId`)
           clearTimers()
           generationActiveRef.current = false
           setIsGenerating(false)
@@ -507,7 +507,7 @@ function LandingPage() {
           toast.error('Generation failed', { description: 'Server did not return a job ID.' })
           return
         }
-        console.log(`[GENERATION_V2:CLIENT][${requestId}] jobId received: ${jobId}`)
+        console.log(`[GENERATION_V3:CLIENT][${requestId}] jobId received: ${jobId}`)
         // Persist jobId for refresh recovery
         activeJobIdRef.current = jobId
         sessionStorage.setItem('storqly_active_jobId', JSON.stringify({ jobId, requestId }))
@@ -522,7 +522,7 @@ function LandingPage() {
       }
 
       // ── Step 2: Poll for status ──
-      console.log(`[GENERATION_V2:CLIENT][${requestId}] POLL → Starting poll loop for jobId=${jobId}`)
+      console.log(`[GENERATION_V3:CLIENT][${requestId}] POLL → Starting poll loop for jobId=${jobId}`)
       let consecutiveErrors = 0
       const MAX_POLL_ERRORS = 10 // Resilient: tolerate transient network issues
 
@@ -531,7 +531,7 @@ function LandingPage() {
 
         // Check if user cancelled
         if (cancelledRef.current) {
-          console.log(`[GENERATION_V2:CLIENT][${requestId}] POLL_CANCELLED: user cancelled generation`)
+          console.log(`[GENERATION_V3:CLIENT][${requestId}] POLL_CANCELLED: user cancelled generation`)
           break
         }
 
@@ -540,7 +540,10 @@ function LandingPage() {
           const pollData = await pollRes.json()
           consecutiveErrors = 0 // Reset on successful poll
 
-          if (pollData.status === 'processing') {
+          // Normalize status to uppercase for V3 API compatibility
+          const status = (pollData.status || '').toUpperCase()
+
+          if (status === 'PROCESSING') {
             // Update progress UI from server-reported progress
             if (pollData.progress?.message) {
               setGenerationStatus(pollData.progress.message)
@@ -548,9 +551,9 @@ function LandingPage() {
             if (pollData.progress?.stage && STAGE_INDEX_MAP.has(pollData.progress.stage)) {
               setGenerationStage(pollData.progress.stage)
             }
-          } else if (pollData.status === 'completed') {
+          } else if (status === 'COMPLETED') {
             // Generation succeeded
-            console.log(`[GENERATION_V2:CLIENT][${requestId}] POLL_COMPLETED: store="${pollData.store?.name}", products=${pollData.store?.products?.length ?? 0}`)
+            console.log(`[GENERATION_V3:CLIENT][${requestId}] POLL_COMPLETED: store="${pollData.store?.name}", products=${pollData.store?.products?.length ?? 0}`)
             generationActiveRef.current = false
             clearTimers()
             sessionStorage.removeItem('storqly_active_jobId')
@@ -570,8 +573,8 @@ function LandingPage() {
               toast.success('Store generated!', { description: `"${pollData.store.name}" is ready to customize.` })
             }
             return
-          } else if (pollData.status === 'failed') {
-            console.warn(`[GENERATION_V2:CLIENT][${requestId}] POLL_FAILED: ${pollData.errorCode || 'unknown'} — ${pollData.error?.slice(0, 200)}`)
+          } else if (status === 'FAILED') {
+            console.warn(`[GENERATION_V3:CLIENT][${requestId}] POLL_FAILED: ${pollData.errorCode || 'unknown'} — ${pollData.error?.slice(0, 200)}`)
             const errorCode = pollData.errorCode || ''
             let title = 'Generation failed'
             let desc = pollData.error || 'Something went wrong. Please try again.'
@@ -587,23 +590,23 @@ function LandingPage() {
             }
             toast.error(title, { description: desc })
             break
-          } else if (pollData.status === 'cancelled') {
-            console.log(`[GENERATION_V2:CLIENT][${requestId}] POLL_CANCELLED: server confirmed cancellation`)
+          } else if (status === 'CANCELLED') {
+            console.log(`[GENERATION_V3:CLIENT][${requestId}] POLL_CANCELLED: server confirmed cancellation`)
             toast.info('Generation was cancelled.')
             break
-          } else if (pollData.status === 'not_found') {
-            console.warn(`[GENERATION_V2:CLIENT][${requestId}] POLL_NOT_FOUND: jobId=${jobId}`)
+          } else if (status === 'NOT_FOUND') {
+            console.warn(`[GENERATION_V3:CLIENT][${requestId}] POLL_NOT_FOUND: jobId=${jobId} errorCode=${pollData.errorCode || 'unknown'}`)
             toast.error('Generation job not found', { description: 'The server may have restarted. Please try again.' })
             break
           }
         } catch (pollErr) {
           consecutiveErrors++
           const msg = pollErr instanceof Error ? pollErr.message : String(pollErr)
-          console.warn(`[GENERATION_V2:CLIENT][${requestId}] POLL_ERROR: attempt ${consecutiveErrors}/${MAX_POLL_ERRORS}: ${msg}`)
+          console.warn(`[GENERATION_V3:CLIENT][${requestId}] POLL_ERROR: attempt ${consecutiveErrors}/${MAX_POLL_ERRORS}: ${msg}`)
           setGenerationStatus(consecutiveErrors > 1 ? 'Reconnecting to generation...' : 'Checking generation status...')
 
           if (consecutiveErrors >= MAX_POLL_ERRORS) {
-            console.warn(`[GENERATION_V2:CLIENT][${requestId}] POLL_MAX_ERRORS: giving up after ${MAX_POLL_ERRORS} consecutive errors`)
+            console.warn(`[GENERATION_V3:CLIENT][${requestId}] POLL_MAX_ERRORS: giving up after ${MAX_POLL_ERRORS} consecutive errors`)
             toast.error('Connection lost', { description: 'Connection lost during generation. The store may still be generating — refresh the page to check.' })
             break
           }
@@ -631,7 +634,7 @@ function LandingPage() {
       setGenerationStage(null)
       setElapsedSeconds(0)
       const msg = err instanceof Error ? err.message : String(err)
-      console.warn(`[GENERATION_V2:CLIENT][${requestId}] UNEXPECTED_ERROR: ${msg}`)
+      console.warn(`[GENERATION_V3:CLIENT][${requestId}] UNEXPECTED_ERROR: ${msg}`)
       toast.error('Generation failed', { description: msg || 'Something went wrong. Please try again.' })
     }
   }, [promptText, setIsGenerating, setStore, clearTimers])
@@ -651,7 +654,7 @@ function LandingPage() {
         if (!stored) return
 
         const { jobId, requestId } = JSON.parse(stored) as { jobId: string; requestId: string }
-        console.log(`[GENERATION_V2:CLIENT][${requestId}] RECOVER: Found active jobId=${jobId} in sessionStorage`)
+        console.log(`[GENERATION_V3:CLIENT][${requestId}] RECOVER: Found active jobId=${jobId} in sessionStorage`)
 
         // Check the recover endpoint for the job's current state
         const res = await fetch(`/api/store/generate/recover?jobId=${encodeURIComponent(jobId)}`)
@@ -661,22 +664,24 @@ function LandingPage() {
         }
 
         const data = await res.json()
+        const recoverStatus = (data.status || '').toUpperCase()
+
         if (!data.found) {
           sessionStorage.removeItem('storqly_active_jobId')
           return
         }
 
-        if (data.status === 'completed' && data.store) {
+        if (recoverStatus === 'COMPLETED' && data.store) {
           // Job completed while we were away — load the store
-          console.log(`[GENERATION_V2:CLIENT][${requestId}] RECOVER_COMPLETED: store="${data.store.name}"`)
+          console.log(`[GENERATION_V3:CLIENT][${requestId}] RECOVER_COMPLETED: store="${data.store.name}"`)
           if (cancelled) return
           setStore(data.store)
           triggerBackgroundImageEnrichment(data.store)
           toast.success('Store recovered!', { description: `"${data.store.name}" was generated while you were away.` })
           sessionStorage.removeItem('storqly_active_jobId')
-        } else if (data.status === 'processing') {
+        } else if (recoverStatus === 'PROCESSING') {
           // Job is still running — resume polling
-          console.log(`[GENERATION_V2:CLIENT][${requestId}] RECOVER_RESUME: job still processing, resuming poll`)
+          console.log(`[GENERATION_V3:CLIENT][${requestId}] RECOVER_RESUME: job still processing, resuming poll`)
           if (cancelled) return
           setIsGenerating(true)
           setGenerationStatus(data.progress?.message || 'Recovering generation...')
@@ -699,11 +704,13 @@ function LandingPage() {
               const pollData = await pollRes.json()
               consecutiveErrors = 0
 
-              if (pollData.status === 'processing') {
+              const pollStatus = (pollData.status || '').toUpperCase()
+
+              if (pollStatus === 'PROCESSING') {
                 if (pollData.progress?.message) setGenerationStatus(pollData.progress.message)
                 if (pollData.progress?.stage && STAGE_INDEX_MAP.has(pollData.progress.stage)) setGenerationStage(pollData.progress.stage)
-              } else if (pollData.status === 'completed') {
-                console.log(`[GENERATION_V2:CLIENT][${requestId}] RECOVER_POLL_COMPLETED: store="${pollData.store?.name}"`)
+              } else if (pollStatus === 'COMPLETED') {
+                console.log(`[GENERATION_V3:CLIENT][${requestId}] RECOVER_POLL_COMPLETED: store="${pollData.store?.name}"`)
                 clearTimers()
                 sessionStorage.removeItem('storqly_active_jobId')
                 activeJobIdRef.current = null
@@ -716,8 +723,8 @@ function LandingPage() {
                 triggerBackgroundImageEnrichment(pollData.store)
                 toast.success('Store generated!', { description: `"${pollData.store.name}" is ready to customize.` })
                 return
-              } else if (pollData.status === 'failed') {
-                console.warn(`[GENERATION_V2:CLIENT][${requestId}] RECOVER_POLL_FAILED: ${pollData.error}`)
+              } else if (pollStatus === 'FAILED') {
+                console.warn(`[GENERATION_V3:CLIENT][${requestId}] RECOVER_POLL_FAILED: ${pollData.error}`)
                 clearTimers()
                 sessionStorage.removeItem('storqly_active_jobId')
                 activeJobIdRef.current = null
@@ -728,7 +735,7 @@ function LandingPage() {
                 setElapsedSeconds(0)
                 toast.error('Generation failed', { description: pollData.error || 'Something went wrong.' })
                 return
-              } else if (pollData.status === 'cancelled') {
+              } else if (pollStatus === 'CANCELLED') {
                 clearTimers()
                 sessionStorage.removeItem('storqly_active_jobId')
                 activeJobIdRef.current = null
@@ -737,6 +744,18 @@ function LandingPage() {
                 setGenerationStatus('')
                 setGenerationStage(null)
                 setElapsedSeconds(0)
+                return
+              } else if (pollStatus === 'NOT_FOUND') {
+                console.warn(`[GENERATION_V3:CLIENT][${requestId}] RECOVER_POLL_NOT_FOUND: jobId=${jobId}`)
+                clearTimers()
+                sessionStorage.removeItem('storqly_active_jobId')
+                activeJobIdRef.current = null
+                generationActiveRef.current = false
+                setIsGenerating(false)
+                setGenerationStatus('')
+                setGenerationStage(null)
+                setElapsedSeconds(0)
+                toast.error('Job not found', { description: 'The server may have restarted. Please try again.' })
                 return
               }
             } catch {
@@ -756,14 +775,14 @@ function LandingPage() {
               }
             }
           }
-        } else if (data.status === 'failed') {
+        } else if (recoverStatus === 'FAILED') {
           sessionStorage.removeItem('storqly_active_jobId')
           toast.error('Generation failed', { description: data.error || 'The previous generation failed.' })
-        } else if (data.status === 'cancelled') {
+        } else if (recoverStatus === 'CANCELLED') {
           sessionStorage.removeItem('storqly_active_jobId')
         }
       } catch (err) {
-        console.warn('[GENERATION_V2:CLIENT] RECOVER_ERROR:', err)
+        console.warn('[GENERATION_V3:CLIENT] RECOVER_ERROR:', err)
         sessionStorage.removeItem('storqly_active_jobId')
       }
     }

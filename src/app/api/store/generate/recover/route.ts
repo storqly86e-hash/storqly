@@ -1,5 +1,5 @@
 // ========================================
-// Generation Recovery API (Database-Backed)
+// Generation Recovery API [V3] (Database-Backed)
 // ========================================
 // GET /api/store/generate/recover?jobId=xxx
 //
@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getJobStatus, JOB_STATUS } from '@/lib/generation-job';
+import { getDatabaseIdentity } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,18 +18,19 @@ export async function GET(req: NextRequest) {
 
   if (!jobId) {
     return NextResponse.json(
-      { error: 'jobId is required.', found: false },
+      { status: 'NOT_FOUND', errorCode: 'MISSING_JOB_ID', error: 'jobId is required.', found: false },
       { status: 400 }
     );
   }
 
-  console.log(`[GENERATION_V2] RECOVER request for jobId=${jobId}`);
+  const identity = getDatabaseIdentity();
+  console.log(`[GENERATION_V3][RECOVER_REQUEST] jobId=${jobId} dbPath=${identity.resolvedPath} dbExists=${identity.fileExists} pid=${identity.processPid}`);
 
   const job = await getJobStatus(jobId);
 
   if (!job) {
     return NextResponse.json(
-      { error: 'Job not found. It may have expired (30 min TTL) or the jobId is invalid.', found: false },
+      { status: 'NOT_FOUND', errorCode: 'JOB_NOT_FOUND', error: 'Job not found.', found: false },
       { status: 404 }
     );
   }
@@ -42,7 +44,8 @@ export async function GET(req: NextRequest) {
     } catch {
       return NextResponse.json({
         found: true,
-        success: false,
+        status: 'FAILED',
+        errorCode: 'CORRUPTED_DATA',
         error: 'Generated store data was corrupted. Please try again.',
       });
     }
@@ -51,8 +54,7 @@ export async function GET(req: NextRequest) {
     }
     return NextResponse.json({
       found: true,
-      success: true,
-      status: 'completed',
+      status: 'COMPLETED',
       store,
       ...(meta ? { meta } : {}),
     });
@@ -61,8 +63,7 @@ export async function GET(req: NextRequest) {
   if (job.status === JOB_STATUS.CANCELLED) {
     return NextResponse.json({
       found: true,
-      success: false,
-      status: 'cancelled',
+      status: 'CANCELLED',
       error: 'Generation was cancelled.',
     });
   }
@@ -70,8 +71,7 @@ export async function GET(req: NextRequest) {
   if (job.status.startsWith('FAILED_')) {
     return NextResponse.json({
       found: true,
-      success: false,
-      status: 'failed',
+      status: 'FAILED',
       errorCode: job.errorCode || job.status,
       error: job.errorMessage || 'Generation failed.',
     });
@@ -80,8 +80,7 @@ export async function GET(req: NextRequest) {
   // Job is still in progress — tell client to poll
   return NextResponse.json({
     found: true,
-    success: false,
-    status: 'processing',
+    status: 'PROCESSING',
     progress: {
       stage: job.stage || null,
       message: job.progress || 'Processing...',

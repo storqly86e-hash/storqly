@@ -1,5 +1,5 @@
 // ========================================
-// Generation Cancel API
+// Generation Cancel API [V3]
 // ========================================
 // POST /api/store/generate/cancel?jobId=xxx
 //
@@ -8,6 +8,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { cancelJob } from '@/lib/generation-job';
+import { getDatabaseIdentity } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,8 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  console.log(`[GENERATION_V2] CANCEL request for jobId=${jobId}`);
+  const identity = getDatabaseIdentity();
+  console.log(`[GENERATION_V3][CANCEL_REQUEST] jobId=${jobId} dbPath=${identity.resolvedPath} pid=${identity.processPid}`);
 
   const cancelled = await cancelJob(jobId);
 

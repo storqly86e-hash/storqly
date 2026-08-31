@@ -1,14 +1,22 @@
 // ========================================
-// Generation Job Manager — Database-Backed
+// Generation Job Manager — Database-Backed [V3]
 // ========================================
 // All job state is persisted to SQLite via Prisma.
 // Survives server restarts, page refreshes, network disconnects.
 // The generated store is persisted in the database, making
 // the result independent of any HTTP connection state.
 //
+// V3 Changes:
+// - Removed in-memory activeJobIds (DB is sole source of truth)
+// - Fixed orphan sweep: uses 2-minute time guard to avoid
+//   killing freshly-created jobs on fast restarts
+// - All logging uses [GENERATION_V3] prefix with jobId
+// - getDatabaseIdentity() called for diagnostics on every operation
+//
 // This is a server-side-only module. Do not import on the client.
 
 import { db } from '@/lib/db';
+import { getDatabaseIdentity } from '@/lib/db';
 import type { Store } from '@/lib/store-schema';
 
 // ─── Job Status Constants ──────────────────────────────────
@@ -31,6 +39,18 @@ export const JOB_STATUS = {
 
 export type JobStatus = (typeof JOB_STATUS)[keyof typeof JOB_STATUS];
 
+const TERMINAL_STATUSES = new Set([
+  JOB_STATUS.COMPLETED,
+  JOB_STATUS.CANCELLED,
+  JOB_STATUS.FAILED_AI,
+  JOB_STATUS.FAILED_COMPOSITION,
+  JOB_STATUS.FAILED_VALIDATION,
+  JOB_STATUS.FAILED_PERSISTENCE,
+  JOB_STATUS.FAILED_TIMEOUT,
+]);
+
+const isTerminalStatus = (status: string) => TERMINAL_STATUSES.has(status);
+
 export interface GenerationJobRow {
   id: string;
   requestId: string;
@@ -48,17 +68,14 @@ export interface GenerationJobRow {
   completedAt: Date | null;
 }
 
-const isTerminalStatus = (status: string) =>
-  status === JOB_STATUS.COMPLETED ||
-  status.startsWith('FAILED_') ||
-  status === JOB_STATUS.CANCELLED;
+// ─── V3 Structured Logger ──────────────────────────────────
+const v3log = (event: string, jobId: string, details?: Record<string, unknown>) => {
+  const identity = getDatabaseIdentity();
+  const ts = new Date().toISOString().slice(11, 23);
+  console.log(`[${ts}][GENERATION_V3][${event}] jobId=${jobId} dbPath=${identity.resolvedPath} pid=${identity.processPid}${details ? ' ' + JSON.stringify(details) : ''}`);
+};
 
-// ─── In-memory active set (fast lookup for polling) ───────
-// The DB is the source of truth. This is just an optimization
-// so the status endpoint doesn't hit the DB on every poll.
-const activeJobIds = new Set<string>();
-
-// ─── Create / Resume ───────────────────────────────────────
+// ─── Create / Resume (Idempotent) ──────────────────────────
 
 /**
  * Create a new generation job. If a job with the same requestId
@@ -75,10 +92,7 @@ export async function createJob(params: {
     where: { requestId: params.requestId },
   });
   if (existing) {
-    console.log(`[GEN_JOB] Idempotent: returning existing job ${existing.id} for requestId=${params.requestId}`);
-    if (!isTerminalStatus(existing.status)) {
-      activeJobIds.add(existing.id);
-    }
+    v3log('JOB_CREATED_IDEMPOTENT', existing.id, { requestId: params.requestId, existingStatus: existing.status });
     return existing as GenerationJobRow;
   }
 
@@ -94,25 +108,28 @@ export async function createJob(params: {
     },
   });
 
-  activeJobIds.add(job.id);
-  console.log(`[GEN_JOB] Created job ${job.id} (requestId=${params.requestId})`);
+  v3log('JOB_CREATED', job.id, { requestId: params.requestId, userId: params.userId ?? 'anonymous' });
   return job as GenerationJobRow;
 }
 
 // ─── Update Progress ───────────────────────────────────────
 
 export async function updateJobProgress(jobId: string, params: {
+  status?: string;
   stage?: string;
   progress?: string;
 }): Promise<void> {
   const data: Record<string, unknown> = { updatedAt: new Date() };
+  if (params.status) data.status = params.status;
   if (params.stage) data.stage = params.stage;
   if (params.progress) data.progress = params.progress;
 
   try {
     await db.generationJob.update({ where: { id: jobId }, data });
+    v3log('STAGE', jobId, { status: params.status, stage: params.stage, progress: params.progress });
   } catch (err) {
-    console.error(`[GEN_JOB] Failed to update progress for ${jobId}:`, err);
+    const identity = getDatabaseIdentity();
+    console.error(`[GENERATION_V3] DB_WRITE_ERROR jobId=${jobId} dbPath=${identity.resolvedPath}:`, err);
   }
 }
 
@@ -134,10 +151,10 @@ export async function completeJob(jobId: string, store: Store, meta?: Record<str
         completedAt: new Date(),
       },
     });
-    activeJobIds.delete(jobId);
-    console.log(`[GEN_JOB] Job ${jobId} COMPLETED. Store: "${store.name}" (${storeData.length} chars persisted)`);
+    v3log('JOB_COMPLETED', jobId, { storeName: store.name, storeDataBytes: storeData.length });
   } catch (err) {
-    console.error(`[GEN_JOB] FAILED TO PERSIST job ${jobId}:`, err);
+    const identity = getDatabaseIdentity();
+    console.error(`[GENERATION_V3] PERSIST_ERROR jobId=${jobId} dbPath=${identity.resolvedPath}:`, err);
     // If persistence fails, update status to FAILED_PERSISTENCE
     try {
       await db.generationJob.update({
@@ -151,8 +168,9 @@ export async function completeJob(jobId: string, store: Store, meta?: Record<str
           completedAt: new Date(),
         },
       });
+      v3log('JOB_FAILED', jobId, { errorCode: 'FAILED_PERSISTENCE' });
     } catch (err2) {
-      console.error(`[GEN_JOB] CRITICAL: Could not update job to FAILED_PERSISTENCE:`, err2);
+      console.error(`[GENERATION_V3] CRITICAL: Could not update job to FAILED_PERSISTENCE:`, err2);
     }
   }
 }
@@ -176,10 +194,10 @@ export async function failJob(jobId: string, params: {
         completedAt: new Date(),
       },
     });
-    activeJobIds.delete(jobId);
-    console.log(`[GEN_JOB] Job ${jobId} FAILED: ${params.errorCode} — ${params.errorMessage.slice(0, 100)}`);
+    v3log('JOB_FAILED', jobId, { errorCode: params.errorCode, errorMessage: params.errorMessage.slice(0, 100) });
   } catch (err) {
-    console.error(`[GEN_JOB] Failed to update job ${jobId} to failed state:`, err);
+    const identity = getDatabaseIdentity();
+    console.error(`[GENERATION_V3] FAIL_WRITE_ERROR jobId=${jobId} dbPath=${identity.resolvedPath}:`, err);
   }
 }
 
@@ -199,40 +217,25 @@ export async function cancelJob(jobId: string): Promise<boolean> {
         completedAt: new Date(),
       },
     });
-    activeJobIds.delete(jobId);
-    console.log(`[GEN_JOB] Job ${jobId} CANCELLED`);
+    v3log('JOB_CANCELLED', jobId, { previousStatus: job.status });
     return true;
   } catch {
     return false;
   }
 }
 
-// ─── Get Status ────────────────────────────────────────────
+// ─── Get Status (DB-only, no in-memory) ────────────────────
 
 export async function getJobStatus(jobId: string): Promise<GenerationJobRow | null> {
   try {
     const job = await db.generationJob.findUnique({ where: { id: jobId } });
+    v3log('STATUS_READ', jobId, { found: !!job, status: job?.status ?? 'NOT_FOUND' });
     return job as GenerationJobRow | null;
   } catch (err) {
-    console.error(`[GEN_JOB] Failed to get status for ${jobId}:`, err);
+    const identity = getDatabaseIdentity();
+    console.error(`[GENERATION_V3] STATUS_READ_ERROR jobId=${jobId} dbPath=${identity.resolvedPath}:`, err);
     return null;
   }
-}
-
-// ─── Check if Active (fast in-memory check) ───────────────
-
-export function isJobActive(jobId: string): boolean {
-  return activeJobIds.has(jobId);
-}
-
-/** Mark job as no longer active (called when generation function exits) */
-export function markJobInactive(jobId: string): void {
-  activeJobIds.delete(jobId);
-}
-
-/** Mark job as active */
-export function markJobActive(jobId: string): void {
-  activeJobIds.add(jobId);
 }
 
 // ─── Cleanup old jobs (TTL) ────────────────────────────────
@@ -246,7 +249,7 @@ export async function cleanupOldJobs(): Promise<number> {
       where: { createdAt: { lt: cutoff } },
     });
     if (result.count > 0) {
-      console.log(`[GEN_JOB] Cleaned up ${result.count} old jobs (older than 30 min)`);
+      console.log(`[GENERATION_V3] CLEANUP: deleted ${result.count} jobs older than 30 min`);
     }
     return result.count;
   } catch {
@@ -255,28 +258,46 @@ export async function cleanupOldJobs(): Promise<number> {
 }
 
 // ─── Startup Orphan Sweep ──────────────────────────────────
-// On server start, any non-terminal job is an orphan (the
-// background Promise was killed by the restart). Mark them
-// FAILED_TIMEOUT immediately so clients don't poll forever.
+// On server start, any non-terminal job that has been stuck
+// for > 2 minutes is an orphan (the background Promise was
+// killed by the restart). Jobs < 2 min old are left alone
+// because the server may have just restarted and a fresh
+// POST → background generation is still warming up.
+//
+// V3 FIX: Added time guard (2 min). Previously, ALL non-terminal
+// jobs were marked FAILED_TIMEOUT on first request after restart,
+// which killed freshly-created jobs.
 
 let orphanSweepDone = false;
+
+const ORPHAN_MIN_AGE_MS = 2 * 60 * 1000; // 2 minutes — only sweep jobs stuck this long
 
 export async function sweepOrphanedJobs(): Promise<number> {
   if (orphanSweepDone) return 0;
   orphanSweepDone = true;
 
+  const identity = getDatabaseIdentity();
+  console.log(`[GENERATION_V3] ORPHAN_SWEEP_START dbPath=${identity.resolvedPath} pid=${identity.processPid}`);
+
   try {
+    const cutoff = new Date(Date.now() - ORPHAN_MIN_AGE_MS);
+
     const orphans = await db.generationJob.findMany({
       where: {
-        status: { notIn: [JOB_STATUS.COMPLETED, JOB_STATUS.CANCELLED, ...Object.values(JOB_STATUS).filter(s => s.startsWith('FAILED_'))] },
+        status: { notIn: [...TERMINAL_STATUSES] },
+        updatedAt: { lt: cutoff }, // V3 FIX: only sweep old enough jobs
       },
     });
 
-    if (orphans.length === 0) return 0;
+    if (orphans.length === 0) {
+      console.log(`[GENERATION_V3] ORPHAN_SWEEP: no orphaned jobs found (cutoff: ${ORPHAN_MIN_AGE_MS / 1000}s ago)`);
+      return 0;
+    }
 
-    console.log(`[GEN_JOB] Startup sweep: found ${orphans.length} orphaned job(s) from previous server session`);
+    console.log(`[GENERATION_V3] ORPHAN_SWEEP: found ${orphans.length} orphaned job(s) older than 2 min`);
 
     for (const job of orphans) {
+      const stuckSeconds = Math.round((Date.now() - job.updatedAt.getTime()) / 1000);
       await db.generationJob.update({
         where: { id: job.id },
         data: {
@@ -288,12 +309,29 @@ export async function sweepOrphanedJobs(): Promise<number> {
           completedAt: new Date(),
         },
       });
-      console.log(`[GEN_JOB] Marked orphaned job ${job.id} (was ${job.status} for ${Math.round((Date.now() - job.updatedAt.getTime()) / 1000)}s)`);
+      v3log('JOB_ORPHANED', job.id, { previousStatus: job.status, stuckSeconds });
     }
 
     return orphans.length;
   } catch (err) {
-    console.error('[GEN_JOB] Orphan sweep failed:', err);
+    console.error(`[GENERATION_V3] ORPHAN_SWEEP_ERROR:`, err);
     return 0;
   }
+}
+
+// ─── Stubs for backward compat (no-op, DB is source of truth) ──
+// These are kept so existing imports don't break.
+export function isJobActive(_jobId: string): boolean {
+  // V3: Always return false. DB is the sole source of truth.
+  // The in-memory set was unreliable across restarts and caused
+  // false orphan detection.
+  return false;
+}
+
+export function markJobInactive(_jobId: string): void {
+  // V3: No-op. The in-memory active set has been removed.
+}
+
+export function markJobActive(_jobId: string): void {
+  // V3: No-op. The in-memory active set has been removed.
 }

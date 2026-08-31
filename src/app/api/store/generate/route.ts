@@ -36,11 +36,11 @@ import {
   updateJobProgress,
   completeJob,
   failJob,
-  markJobActive,
   markJobInactive,
   JOB_STATUS,
 } from '@/lib/generation-job';
 import { cleanupOldJobs, sweepOrphanedJobs } from '@/lib/generation-job';
+import { getDatabaseIdentity } from '@/lib/db';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -782,19 +782,26 @@ async function runGeneration(
   userId: string | undefined,
   requestId: string,
 ): Promise<void> {
-  const reqLog = (msg: string) => log(`[GENERATE:SERVER][${requestId}] ${msg}`);
-  const reqWarn = (msg: string) => warn(`[GENERATE:SERVER][${requestId}] ${msg}`);
-  const reqErr = (msg: string, ...args: unknown[]) => logErr(`[GENERATE:SERVER][${requestId}] ${msg}`, ...args);
+  const reqLog = (msg: string) => log(`[GENERATION_V3][${requestId}] ${msg}`);
+  const reqWarn = (msg: string) => warn(`[GENERATION_V3][${requestId}] ${msg}`);
+  const reqErr = (msg: string, ...args: unknown[]) => logErr(`[GENERATION_V3][${requestId}] ${msg}`, ...args);
 
   const startTime = Date.now();
   const elapsed = () => Date.now() - startTime;
   const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
 
   // Create DB record (idempotent — if same requestId exists, returns existing)
-  await createJob({ jobId, requestId, prompt, userId }).catch(err => {
+  const createdJob = await createJob({ jobId, requestId, prompt, userId }).catch(err => {
     reqErr(`Failed to create job in database: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
   });
-  markJobActive(jobId);
+
+  // If this is a duplicate requestId, the job already exists.
+  // Don't re-run generation — return immediately.
+  if (createdJob && createdJob.id !== jobId) {
+    reqLog(`IDEMPOTENT_SKIP: requestId=${requestId} already has job ${createdJob.id} (status=${createdJob.status}). Returning existing job.`);
+    return;
+  }
 
   try {
     const trimmedPrompt = prompt;
@@ -1398,15 +1405,15 @@ async function runGeneration(
     // Cache the error so the client can get a meaningful error message on polling
     failJob(jobId, { errorCode: 'FAILED_VALIDATION', errorMessage: msg.substring(0, 200) });
   } finally {
-    markJobInactive(jobId);
     reqLog(`Generation completed after ${elapsed()}ms`);
   }
 }
 
 // ─── POST handler — background job + polling ──────────────────
 export async function POST(req: NextRequest) {
-  console.log(`[GENERATION_V2] POST-POLL ARCHITECTURE ACTIVE — DB-backed generation`);
+  const identity = getDatabaseIdentity();
   const requestId = req.headers.get('x-request-id') || `srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+  console.log(`[GENERATION_V3][REQUEST] POST received requestId=${requestId} dbPath=${identity.resolvedPath} dbExists=${identity.fileExists} dbSize=${identity.fileSizeBytes} pid=${identity.processPid}`);
 
   let userId: string | undefined;
   try {
@@ -1427,7 +1434,7 @@ export async function POST(req: NextRequest) {
   }
 
   const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-  console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] POST received → jobId=${jobId}, starting background generation`);
+  console.log(`[${ts()}] [GENERATION_V3][JOB_STARTED] requestId=${requestId} jobId=${jobId} prompt="${prompt.trim().slice(0, 60)}..."`);
 
   // Periodically clean up old completed/failed jobs
   // Also sweep orphaned jobs from previous server session
@@ -1436,8 +1443,7 @@ export async function POST(req: NextRequest) {
 
   // Fire-and-forget: generation runs in background, client polls for status
   runGeneration(jobId, prompt.trim(), userId, requestId).catch(err => {
-    console.error(`[${ts()}] [GENERATE:SERVER][${requestId}] Unhandled error in runGeneration:`, err);
-    markJobInactive(jobId);
+    console.error(`[GENERATION_V3] UNHANDLED_ERROR requestId=${requestId} jobId=${jobId}:`, err);
   });
 
   return NextResponse.json({ jobId });
