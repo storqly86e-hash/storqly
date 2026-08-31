@@ -546,8 +546,25 @@ function LandingPage() {
             }
             return
           } else if (pollData.status === 'failed') {
-            console.warn(`[GENERATE:CLIENT][${requestId}] POLL_FAILED: ${pollData.error?.slice(0, 200)}`)
-            toast.error('Generation failed', { description: pollData.error || 'The AI failed to generate a store. Please try again.' })
+            console.warn(`[GENERATE:CLIENT][${requestId}] POLL_FAILED: ${pollData.errorCode || 'unknown'} — ${pollData.error?.slice(0, 200)}`)
+            const errorCode = pollData.errorCode || ''
+            let title = 'Generation failed'
+            let desc = pollData.error || 'Something went wrong. Please try again.'
+            if (errorCode === 'FAILED_AI') {
+              title = 'AI generation failed'
+              desc = 'The AI provider could not generate a response. Please try again.'
+            } else if (errorCode === 'FAILED_TIMEOUT') {
+              title = 'Generation timed out'
+              desc = 'The generation took too long. Please try a simpler prompt.'
+            } else if (errorCode === 'FAILED_PERSISTENCE') {
+              title = 'Save failed'
+              desc = 'The store was generated but could not be saved. Please try again.'
+            }
+            toast.error(title, { description: desc })
+            break
+          } else if (pollData.status === 'cancelled') {
+            console.log(`[GENERATE:CLIENT][${requestId}] POLL_CANCELLED: server confirmed cancellation`)
+            toast.info('Generation was cancelled.')
             break
           } else if (pollData.status === 'not_found') {
             console.warn(`[GENERATE:CLIENT][${requestId}] POLL_NOT_FOUND: jobId=${jobId}`)
@@ -558,10 +575,11 @@ function LandingPage() {
           consecutiveErrors++
           const msg = pollErr instanceof Error ? pollErr.message : String(pollErr)
           console.warn(`[GENERATE:CLIENT][${requestId}] POLL_ERROR: attempt ${consecutiveErrors}/${MAX_POLL_ERRORS}: ${msg}`)
+          setGenerationStatus(consecutiveErrors > 1 ? 'Reconnecting to generation...' : 'Checking generation status...')
 
           if (consecutiveErrors >= MAX_POLL_ERRORS) {
             console.warn(`[GENERATE:CLIENT][${requestId}] POLL_MAX_ERRORS: giving up after ${MAX_POLL_ERRORS} consecutive errors`)
-            toast.error('Connection lost', { description: 'Connection lost during generation. Please check your connection and try again.' })
+            toast.error('Connection lost', { description: 'Connection lost during generation. The store may still be generating — refresh the page to check.' })
             break
           }
           // Continue polling — will retry on next iteration

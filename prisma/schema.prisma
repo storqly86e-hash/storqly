@@ -63,6 +63,30 @@ model VerificationToken {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// GENERATION JOB — Persistent background generation tracking
+// ═══════════════════════════════════════════════════════════════════
+// Survives server restarts, page refreshes, and network disconnects.
+// The generated store is persisted here as JSON, making the result
+// independent of any HTTP connection state.
+
+model GenerationJob {
+  id          String    @id // jobId (e.g. job_1788110646932_mtrenv)
+  requestId   String    @unique // client-provided request ID for idempotency + tracing
+  status      String    @default("QUEUED") // QUEUED|GENERATING|COMPOSING|NORMALIZING|DESIGN_LIBRARY|VALIDATING|PERSISTING|COMPLETED|FAILED_AI|FAILED_COMPOSITION|FAILED_VALIDATION|FAILED_PERSISTENCE|FAILED_TIMEOUT|CANCELLED
+  stage       String    @default("") // human-readable current stage
+  progress    String    @default("") // human-readable progress message
+  storeData   String?   // JSON — complete generated Store object (persisted on completion)
+  storeMeta   String?   // JSON — metadata (normalizations, product counts, etc.)
+  errorCode   String?   // failure code (e.g. FAILED_AI)
+  errorMessage String?  // human-readable error message
+  prompt      String    // original user prompt (for debugging/resume)
+  userId      String?   // optional user ID
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // STORE — E-commerce store data
 // ═══════════════════════════════════════════════════════════════════
 

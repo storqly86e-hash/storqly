@@ -32,12 +32,15 @@ import { attemptAutoRepair } from '@/lib/design-library/auto-repair';
 import type { ComponentMeta } from '@/lib/store-schema';
 import { logGeneration } from '@/lib/logger';
 import {
-  cacheGenerationResult,
-  cacheGenerationError,
-  markJobStarted,
-  markJobCompleted,
+  createJob,
   updateJobProgress,
-} from '@/lib/generation-cache';
+  completeJob,
+  failJob,
+  markJobActive,
+  markJobInactive,
+  JOB_STATUS,
+} from '@/lib/generation-job';
+import { cleanupOldJobs } from '@/lib/generation-job';
 
 // ─── Timestamped logging helper (for debugging timing issues) ─
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
@@ -787,13 +790,17 @@ async function runGeneration(
   const elapsed = () => Date.now() - startTime;
   const remaining = () => TOTAL_TIME_BUDGET_MS - elapsed();
 
-  markJobStarted(jobId);
+  // Create DB record (idempotent — if same requestId exists, returns existing)
+  await createJob({ jobId, requestId, prompt, userId }).catch(err => {
+    reqErr(`Failed to create job in database: ${err instanceof Error ? err.message : String(err)}`);
+  });
+  markJobActive(jobId);
 
   try {
     const trimmedPrompt = prompt;
     const sanitizedPrompt = sanitizePrompt(trimmedPrompt);
     reqLog(`Background generation started — prompt ${sanitizedPrompt.length} chars, user=${userId ?? 'anonymous'}, jobId=${jobId}`);
-    updateJobProgress(jobId, 'starting', 'Starting generation...');
+    updateJobProgress(jobId, { stage: 'starting', progress: 'Starting generation...' });
     let requestedCount = extractProductCount(trimmedPrompt);
 
     const wasCapped = requestedCount > MAX_PRACTICAL_PRODUCTS;
@@ -818,7 +825,7 @@ async function runGeneration(
 
     if (elapsed() > TOTAL_TIME_BUDGET_MS) {
       reqWarn(`Time budget exceeded before AI call (${elapsed()}ms).`);
-      cacheGenerationError(jobId, 'Generation timed out before AI could respond. Please try again.');
+      failJob(jobId, { errorCode: 'FAILED_TIMEOUT', errorMessage: 'Generation timed out before AI could respond. Please try again.' });
       return;
     }
 
@@ -828,11 +835,11 @@ async function runGeneration(
     const providerChain = getProviders();
     reqLog(`Provider chain: ${providerChain.map(p => p.name).join(' -> ')} (${providerChain.length} providers, NODE_ENV=${process.env.NODE_ENV || 'not set'})`);
 
-    updateJobProgress(jobId, 'analyzing', 'Analyzing your store vision...');
+    updateJobProgress(jobId, { stage: 'analyzing', progress: 'Analyzing your store vision...' });
     reqLog(`Phase 1: Generating store with ${phase1Count} products...`);
 
     // ── Library-aware composition ────────────────────────────────
-    updateJobProgress(jobId, 'design-direction', 'Creating design direction...');
+    updateJobProgress(jobId, { stage: 'design-direction', progress: 'Creating design direction...' });
     let libraryCtx: CompositionResult | null = null;
     let libraryPromptSection = '';
     try {
@@ -858,7 +865,7 @@ async function runGeneration(
       : buildPhase1SystemPrompt(phase1Count, sanitizedPrompt);
     reqLog(`System prompt: ${systemPrompt.length} chars (~${Math.round(systemPrompt.length / 4)} tokens). Library context: ${libraryPromptSection.length > 0 ? libraryPromptSection.length + ' chars' : 'none'}`);
 
-    updateJobProgress(jobId, 'building-store', 'Building your store with AI...');
+    updateJobProgress(jobId, { stage: 'building-store', progress: 'Building your store with AI...' });
     logGeneration({ event: 'generation_stage_changed', duration_ms: elapsed(), details: { stage: 'building-store' } });
 
     const phase1Result = await executeAI('store-generation', [
@@ -879,14 +886,14 @@ async function runGeneration(
         ?.map(e => `* ${e.provider}: ${e.error}`)
         .join('\n') || phase1Result.error || 'Unknown error';
       const aiErrorMsg = `AI generation failed. Each provider error:\n${providerDetails}`;
-      cacheGenerationError(jobId, aiErrorMsg);
+      failJob(jobId, { errorCode: 'FAILED_AI', errorMessage: aiErrorMsg });
       return;
     }
 
     reqLog(`Phase 1 AI returned ${phase1Result.content.length} chars in ${elapsed()}ms (${phase1Result.attempts} API attempts, provider: ${phase1Result.provider})`);
 
     // ── Parse JSON ──
-    updateJobProgress(jobId, 'processing', 'Processing AI response...');
+    updateJobProgress(jobId, { stage: 'processing', progress: 'Processing AI response...' });
     logGeneration({ event: 'generation_ai_completed', duration_ms: elapsed(), details: { chars: phase1Result.content.length, attempts: phase1Result.attempts, provider: phase1Result.provider } });
 
     // Guard against oversized AI responses (potential OOM vector)
@@ -894,7 +901,7 @@ async function runGeneration(
     if (phase1Result.content.length > MAX_RESPONSE_CHARS) {
       reqErr(`Phase 1 response too large: ${phase1Result.content.length} chars (max ${MAX_RESPONSE_CHARS})`);
       logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { reason: 'response_too_large', size: phase1Result.content.length } });
-      cacheGenerationError(jobId, 'AI response was too large. Please try again with a simpler prompt.');
+      failJob(jobId, { errorCode: 'FAILED_AI', errorMessage: 'AI response was too large. Please try again with a simpler prompt.' });
       return;
     }
 
@@ -903,7 +910,7 @@ async function runGeneration(
       parsed = JSON.parse(phase1Result.content);
     } catch (e) {
       reqErr(`Phase 1 JSON parse failed:`, e);
-      cacheGenerationError(jobId, 'AI returned invalid data. Please try again.');
+      failJob(jobId, { errorCode: 'FAILED_AI', errorMessage: 'AI returned invalid data. Please try again.' });
       return;
     }
 
@@ -911,7 +918,7 @@ async function runGeneration(
     // IMPORTANT: Bridge runs BEFORE normalize because normalize strips
     // non-standard style fields (density, typographySystem, headingAlignment,
     // cardVariant, etc.) that the bridge needs to read and transform.
-    updateJobProgress(jobId, 'applying-design', 'Applying design system...');
+    updateJobProgress(jobId, { stage: 'applying-design', progress: 'Applying design system...' });
     const preBridgeStore = typeof parsed === 'object' && parsed !== null ? parsed as Store : null;
     let bridgedData = parsed;
     if (preBridgeStore?.pages) {
@@ -928,7 +935,7 @@ async function runGeneration(
     if (!normResult) {
       warn(`[Store Generate] normalizeStore returned null.`);
       logGeneration({ event: 'normalization_failed', duration_ms: elapsed(), details: { reason: 'normalizeStore returned null' } });
-      cacheGenerationError(jobId, 'AI response could not be processed into a valid store. Please try again.');
+      failJob(jobId, { errorCode: 'FAILED_VALIDATION', errorMessage: 'AI response could not be processed into a valid store. Please try again.' });
       return;
     }
 
@@ -1187,7 +1194,7 @@ async function runGeneration(
             break;
           }
 
-          updateJobProgress(jobId, 'generating', `Generating products ${batchRange}...`);
+          updateJobProgress(jobId, { stage: 'generating', progress: `Generating products ${batchRange}...` });
           log(`[Store Generate] Phase 2 batch ${batchNum}: Generating ${thisBatchSize} products (range ${batchRange})...`);
 
           try {
@@ -1295,7 +1302,7 @@ async function runGeneration(
     }
 
     // ── Quality guardrails + genericity detection + auto-repair ──
-    updateJobProgress(jobId, 'quality-check', 'Running quality checks...');
+    updateJobProgress(jobId, { stage: 'quality-check', progress: 'Running quality checks...' });
     let finalQualityScore = 0;
     try {
       const qualityReport = validateStoreQuality(store);
@@ -1364,7 +1371,7 @@ async function runGeneration(
     }
 
     // ── Final result ──
-    updateJobProgress(jobId, 'finalizing', 'Finalizing your store...');
+    updateJobProgress(jobId, { stage: 'finalizing', progress: 'Finalizing your store...' });
     const sectionCount = store.pages.reduce((sum, p) => sum + p.sections.length, 0);
     reqLog(`SUCCESS in ${elapsed()}ms. Store: "${store.name}" (${store.products.length} products, ${sectionCount} sections, ${normResult.normalizationCount} normalizations)`);
 
@@ -1376,9 +1383,9 @@ async function runGeneration(
       _generatedCount: store.products.length,
     };
     try {
-      cacheGenerationResult(jobId, store, resultMeta);
+      await completeJob(jobId, store, resultMeta);
     } catch (cacheErr) {
-      reqWarn(`Failed to cache generation result (non-fatal): ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`);
+      reqWarn(`Failed to persist generation result: ${cacheErr instanceof Error ? cacheErr.message : String(cacheErr)}`);
     }
 
     logGeneration({ event: 'generation_completed', storeId: store.id, duration_ms: elapsed(), details: { section_count: sectionCount, product_count: store.products.length, quality_score: finalQualityScore, recipe_name: libraryCtx?.recipeName ?? 'legacy' } });
@@ -1389,11 +1396,9 @@ async function runGeneration(
     if (stack) reqErr(`Stack: ${stack}`);
     logGeneration({ event: 'generation_failed', duration_ms: elapsed(), details: { error_message: msg } });
     // Cache the error so the client can get a meaningful error message on polling
-    try {
-      cacheGenerationError(jobId, msg.substring(0, 200));
-    } catch { /* non-fatal */ }
+    failJob(jobId, { errorCode: 'FAILED_VALIDATION', errorMessage: msg.substring(0, 200) });
   } finally {
-    markJobCompleted(jobId);
+    markJobInactive(jobId);
     reqLog(`Generation completed after ${elapsed()}ms`);
   }
 }
@@ -1423,10 +1428,13 @@ export async function POST(req: NextRequest) {
   const jobId = `job_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   console.log(`[${ts()}] [GENERATE:SERVER][${requestId}] POST received → jobId=${jobId}, starting background generation`);
 
+  // Periodically clean up old completed/failed jobs
+  cleanupOldJobs().catch(() => {});
+
   // Fire-and-forget: generation runs in background, client polls for status
   runGeneration(jobId, prompt.trim(), userId, requestId).catch(err => {
     console.error(`[${ts()}] [GENERATE:SERVER][${requestId}] Unhandled error in runGeneration:`, err);
-    markJobCompleted(jobId);
+    markJobInactive(jobId);
   });
 
   return NextResponse.json({ jobId });
