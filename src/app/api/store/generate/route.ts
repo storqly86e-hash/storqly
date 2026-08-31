@@ -1405,6 +1405,7 @@ async function runGeneration(
 
 // ─── POST handler — background job + polling ──────────────────
 export async function POST(req: NextRequest) {
+  console.log(`[GENERATION_V2] POST-POLL ARCHITECTURE ACTIVE — DB-backed generation`);
   const requestId = req.headers.get('x-request-id') || `srv_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
   let userId: string | undefined;
